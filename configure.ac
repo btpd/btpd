@@ -1,4 +1,4 @@
-AC_INIT(btpd, 0.1, rnyberg@gmail.com)
+AC_INIT(btpd, 0.1+, btpd@murmeldjur.se)
 
 AC_CANONICAL_TARGET
 
@@ -54,12 +54,17 @@ if test x$CURLCONF == x; then
    AC_PATH_PROG(CURLCONF, curl-config)
 fi
 
-if test x$CURLCONF == x ; then
-   echo Must have curl-config
+if test x$CURLCONF == x -o \! \( -r $CURLCONF -a -x $CURLCONF \); then
+   echo Must have the curl-config script
    exit 1
 else
    AC_SUBST(CURL_CFLAGS, `$CURLCONF --cflags`)
    AC_SUBST(CURL_LDFLAGS, `$CURLCONF --libs`)
 fi
+
+old_LDFLAGS="$LDFLAGS"
+LDFLAGS="$LDFLAGS $CURL_LDFLAGS"
+AC_CHECK_LIB(curl, curl_easy_strerror, :, echo Must have recent curl; exit 1)
+LDFLAGS=$old_LDFLAGS
 
 AC_OUTPUT
