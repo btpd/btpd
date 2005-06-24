@@ -26,6 +26,7 @@
 
 struct child {
     pid_t pid;
+    void *data;
     void (*child_done)(struct child *child);
     TAILQ_ENTRY(child) entry;
 };

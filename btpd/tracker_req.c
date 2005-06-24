@@ -24,7 +24,6 @@
 #define REQ_SIZE (getpagesize() * 2)
 
 struct tracker_req {
-    struct child child;
     enum tr_event tr_event;
     uint8_t info_hash[20];
     struct io_buffer *res;
@@ -66,7 +65,7 @@ out:
 static void
 tracker_done(struct child *child)
 {
-    struct tracker_req *req = (struct tracker_req *)child;
+    struct tracker_req *req = child->data;
     int failed = 0;
     char *buf;
     const char *peers;
@@ -260,20 +259,19 @@ void
 tracker_req(struct torrent *tp, enum tr_event tr_event)
 {
     struct tracker_req *req;
+    struct child *child;
 
     btpd_log(BTPD_L_TRACKER,
         "request for %s, event: %s.\n",
 	tp->relpath, event2str(tr_event));
 
-    req = (struct tracker_req *)btpd_calloc(1, sizeof(*req));
+    req = (struct tracker_req *)btpd_calloc(1, sizeof(*req) + sizeof(*child));
 
     req->res = mmap(NULL, REQ_SIZE, PROT_READ | PROT_WRITE,
         MAP_ANON | MAP_SHARED, -1, 0);
 
-    if (req->res == MAP_FAILED) {
-	free(req);
+    if (req->res == MAP_FAILED)
 	btpd_err("Failed mmap: %s\n", strerror(errno));
-    }
 
     req->res->buf_len = REQ_SIZE - sizeof(*req->res);
     req->res->buf_off = 0;
@@ -284,12 +282,15 @@ tracker_req(struct torrent *tp, enum tr_event tr_event)
 
     fflush(NULL);
 
-    req->child.child_done = tracker_done;
-    TAILQ_INSERT_TAIL(&btpd.kids, &req->child, entry);
-    req->child.pid = fork();
-    if (req->child.pid < 0) {
+    child = (struct child *)(req + 1);
+    child->data = req;
+    child->child_done = tracker_done;
+    TAILQ_INSERT_TAIL(&btpd.kids, child, entry);
+
+    child->pid = fork();
+    if (child->pid < 0) {
 	btpd_err("Couldn't fork (%s).\n", strerror(errno));
-    } else if (req->child.pid == 0) { // Child
+    } else if (child->pid == 0) { // Child
 	int nfiles = getdtablesize();
 	for (int i = 0; i < nfiles; i++)
 	    close(i);
