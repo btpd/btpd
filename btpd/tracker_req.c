@@ -159,12 +159,10 @@ create_url(struct tracker_req *req, struct torrent *tp, char **url)
     qc = (strchr(tp->meta.announce, '?') == NULL) ? '?' : '&';
 
     for (i = 0; i < 20; i++)
-	sprintf(e_hash + i * 3, "%%%.2x", tp->meta.info_hash[i]);
-    e_hash[61] = '\0';
+	snprintf(e_hash + i * 3, 4, "%%%.2x", tp->meta.info_hash[i]);
 
     for (i = 0; i < 20; i++)
-	sprintf(e_id + i * 3, "%%%.2x", btpd.peer_id[i]);
-    e_id[61] = '\0';
+	snprintf(e_id + i * 3, 4, "%%%.2x", btpd.peer_id[i]);
 
     left = torrent_bytes_left(tp);
 
