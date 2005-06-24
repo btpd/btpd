@@ -1,0 +1,21 @@
+1.0 - TODO
+
+Better code for missing c99 int types. Evil OgreBSD!
+Fix spelling errors
+Should be able to listen on IPv6 too
+Calculate number of bytes left better
+Should pick random pieces, not rarest, at download start
+Man pages and other documentation.
+Do checksums in child process.
+Send keep alives
+Convert file names from UTF-8 to user locale
+Much, much,  better cli. Both code and usage wise.
+Close connections to seeders if we are seeding
+Better data structures
+General code cleanup, esp. the cli
+Improve build scripts
+Intelligent logging
+Better handling of unresponsive trackers
+Send multiple have messages instead of bitfield, when it's better
+Bitfields could be handled as a whole in policy.c.
+Other temporarily or permanently forgotten things...

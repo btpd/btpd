@@ -1,0 +1,59 @@
++ PROGRAMS
+
+btpd consists of the following programs:
+* btpd     - The BitTorrent client.
+* btcli    - Command line interface to btpd.
+* btinfo   - Shows information from a torrent file.
+
+All programs takes the "--help" option.
+
++ DIRECTORY STRUCTURE
+
+foo.torrent
+        The torrent metainfo file.
+
+foo.torrent.d
+        Content will be downloaded to, and uploaded from, this dir.
+        It and its subdirectories and files will be created by
+        btpd as it downloads them.
+
+foo.torrent.i
+        Created by 'btcli add'. Contains info on downloaded pieces.
+
++ SAMPLE USAGE
+
+NOTE: Don't start one instance of btpd per torrent. You should only
+need one instance regardless of how many torrents you want to share.
+
+Start btpd:
+# btpd
+
+Start downloading or seeding bar.torrent:
+# btcli add /path/to/bar.torrent
+
+List active torrents (only bar.torrent atm):
+# btcli list
+
+Show some stats:
+# btcli stat
+
+Stop downloading/seeding bar.torrent:
+# btcli del /path/to/bar.torrent
+
+Shut down btpd (Why would you do such a thing?):
+# btcli die
+
++ BUILDING
+
+Make sure you have recent versions of the following software:
+* curl      - Get at <URL:http://curl.haxx.se/>
+* openssl   - Get at <URL:http://www.openssl.org/>
+* libevent  - Get at <URL:http://www.monkey.org/~provos/libevent/>
+
+You also need a c99 compiler. A non antique GCC should do.
+
+# ./configure
+# make
+# make install
+
+See ./configure --help for options if it fails.
