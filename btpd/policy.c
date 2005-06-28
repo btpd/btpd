@@ -43,7 +43,7 @@ static void
 cm_assign_requests_eg(struct peer *peer)
 {
     struct piece *piece;
-    TAILQ_FOREACH(piece, &peer->tp->getlst, entry) {
+    BTPDQ_FOREACH(piece, &peer->tp->getlst, entry) {
 	if (has_bit(peer->piece_field, piece->index)) {
 	    peer_want(peer, piece->index);
 	    if ((peer->flags & PF_P_CHOKE) == 0)
@@ -55,13 +55,13 @@ cm_assign_requests_eg(struct peer *peer)
 static void
 cm_unassign_requests_eg(struct peer *peer)
 {
-    struct piece_req *req = TAILQ_FIRST(&peer->my_reqs);
+    struct piece_req *req = BTPDQ_FIRST(&peer->my_reqs);
     while (req != NULL) {
-	struct piece_req *next = TAILQ_NEXT(req, entry);
+	struct piece_req *next = BTPDQ_NEXT(req, entry);
 	free(req);
 	req = next;
     }
-    TAILQ_INIT(&peer->my_reqs);
+    BTPDQ_INIT(&peer->my_reqs);
 }
 
 static void
@@ -70,7 +70,7 @@ cm_enter_endgame(struct torrent *tp)
     struct peer *peer;
     btpd_log(BTPD_L_POL, "Entering end game\n");
     tp->endgame = 1;
-    TAILQ_FOREACH(peer, &tp->peers, cm_entry)
+    BTPDQ_FOREACH(peer, &tp->peers, cm_entry)
 	cm_assign_requests_eg(peer);
 }
 
@@ -85,13 +85,13 @@ cm_should_schedule(struct torrent *tp)
 {
     if (!tp->endgame) {
 	int should = 1;
-	struct piece *p = TAILQ_FIRST(&tp->getlst);
+	struct piece *p = BTPDQ_FIRST(&tp->getlst);
 	while (p != NULL) {
 	    if (!piece_full(p)) {
 		should = 0;
 		break;
 	    }
-	    p = TAILQ_NEXT(p, entry);
+	    p = BTPDQ_NEXT(p, entry);
 	}
 	return should;
     } else
@@ -105,7 +105,7 @@ cm_on_peerless_piece(struct torrent *tp, struct piece *piece)
 	assert(tp->piece_count[piece->index] == 0);
 	btpd_log(BTPD_L_POL, "peerless piece %u\n", piece->index);
 	msync(tp->imem, tp->isiz, MS_ASYNC);
-	TAILQ_REMOVE(&tp->getlst, piece, entry);
+	BTPDQ_REMOVE(&tp->getlst, piece, entry);
 	free(piece);
 	if (cm_should_schedule(tp))
 	    cm_schedule_piece(tp);
@@ -150,7 +150,7 @@ choke_alg(struct torrent *tp)
 
     psort = (struct peer **)btpd_malloc(tp->npeers * sizeof(p));
     i = 0;
-    TAILQ_FOREACH(p, &tp->peers, cm_entry)
+    BTPDQ_FOREACH(p, &tp->peers, cm_entry)
 	psort[i++] = p;
     
     if (tp->have_npieces == tp->meta.npieces)
@@ -190,13 +190,13 @@ next_optimistic(struct torrent *tp, struct peer *np)
     if (np != NULL)
 	tp->optimistic = np;
     else if (tp->optimistic == NULL)
-	tp->optimistic = TAILQ_FIRST(&tp->peers);
+	tp->optimistic = BTPDQ_FIRST(&tp->peers);
     else {
-	np = TAILQ_NEXT(tp->optimistic, cm_entry);
+	np = BTPDQ_NEXT(tp->optimistic, cm_entry);
 	if (np != NULL)
 	    tp->optimistic = np;
 	else
-	    tp->optimistic = TAILQ_FIRST(&tp->peers);
+	    tp->optimistic = BTPDQ_FIRST(&tp->peers);
     }
     assert(tp->optimistic != NULL);
     choke_alg(tp);
@@ -257,9 +257,9 @@ cm_on_piece_ann(struct peer *peer, uint32_t piece)
     if (has_bit(tp->piece_field, piece))
 	return;
 
-    p = TAILQ_FIRST(&tp->getlst);
+    p = BTPDQ_FIRST(&tp->getlst);
     while (p != NULL && p->index != piece)
-	p = TAILQ_NEXT(p, entry);
+	p = BTPDQ_NEXT(p, entry);
 
     if (p != NULL && tp->endgame) {
 	peer_want(peer, p->index);
@@ -267,7 +267,7 @@ cm_on_piece_ann(struct peer *peer, uint32_t piece)
 	    cm_on_download(peer);
     } else if (p != NULL && !piece_full(p)) {
 	peer_want(peer, p->index);
-	if ((peer->flags & PF_P_CHOKE) == 0 && TAILQ_EMPTY(&peer->my_reqs))
+	if ((peer->flags & PF_P_CHOKE) == 0 && BTPDQ_EMPTY(&peer->my_reqs))
 	    cm_on_download(peer);
     } else if (p == NULL && cm_should_schedule(tp))
 	cm_schedule_piece(tp);
@@ -282,18 +282,18 @@ cm_on_lost_peer(struct peer *peer)
     tp->npeers--;
     peer->flags &= ~PF_ATTACHED;
     if (tp->npeers == 0) {
-	TAILQ_REMOVE(&tp->peers, peer, cm_entry);
+	BTPDQ_REMOVE(&tp->peers, peer, cm_entry);
 	tp->optimistic = NULL;
 	tp->choke_time = tp->opt_time = 0;
     } else if (tp->optimistic == peer) {
-	struct peer *next = TAILQ_NEXT(peer, cm_entry);
-	TAILQ_REMOVE(&tp->peers, peer, cm_entry);
+	struct peer *next = BTPDQ_NEXT(peer, cm_entry);
+	BTPDQ_REMOVE(&tp->peers, peer, cm_entry);
 	next_optimistic(peer->tp, next);
     } else if ((peer->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT) {
-	TAILQ_REMOVE(&tp->peers, peer, cm_entry);
+	BTPDQ_REMOVE(&tp->peers, peer, cm_entry);
 	cm_on_unupload(peer);
     } else {
-	TAILQ_REMOVE(&tp->peers, peer, cm_entry);
+	BTPDQ_REMOVE(&tp->peers, peer, cm_entry);
     }
 
     for (size_t i = 0; i < peer->tp->meta.npieces; i++)
@@ -303,8 +303,8 @@ cm_on_lost_peer(struct peer *peer)
     if ((peer->flags & (PF_I_WANT|PF_P_CHOKE)) == PF_I_WANT)
 	cm_on_undownload(peer);
 
-    for (piece = TAILQ_FIRST(&tp->getlst); piece;
-	 piece = TAILQ_NEXT(piece, entry)) {
+    for (piece = BTPDQ_FIRST(&tp->getlst); piece;
+	 piece = BTPDQ_NEXT(piece, entry)) {
 	if (has_bit(peer->piece_field, piece->index) &&
 	    tp->piece_count[piece->index] == 0)
 	    cm_on_peerless_piece(tp, piece);
@@ -320,13 +320,13 @@ cm_on_new_peer(struct peer *peer)
     peer->flags |= PF_ATTACHED;
 
     if (tp->npeers == 1) {
-	TAILQ_INSERT_HEAD(&tp->peers, peer, cm_entry);
+	BTPDQ_INSERT_HEAD(&tp->peers, peer, cm_entry);
 	next_optimistic(peer->tp, peer);
     } else {
 	if (random() > RAND_MAX / 3)
-	    TAILQ_INSERT_AFTER(&tp->peers, tp->optimistic, peer, cm_entry);
+	    BTPDQ_INSERT_AFTER(&tp->peers, tp->optimistic, peer, cm_entry);
 	else
-	    TAILQ_INSERT_TAIL(&tp->peers, peer, cm_entry);
+	    BTPDQ_INSERT_TAIL(&tp->peers, peer, cm_entry);
     }
 }
 
@@ -336,7 +336,7 @@ missing_piece(struct torrent *tp, uint32_t index)
     struct piece *p;
     if (has_bit(tp->piece_field, index))
 	return 0;
-    TAILQ_FOREACH(p, &tp->getlst, entry)
+    BTPDQ_FOREACH(p, &tp->getlst, entry)
 	if (p->index == index)
 	    return 0;
     return 1;
@@ -380,17 +380,17 @@ activate_piece_peers(struct torrent *tp, struct piece *piece)
 {
     struct peer *peer;
     assert(!piece_full(piece) && tp->endgame == 0);
-    TAILQ_FOREACH(peer, &tp->peers, cm_entry)
+    BTPDQ_FOREACH(peer, &tp->peers, cm_entry)
 	if (has_bit(peer->piece_field, piece->index))
 	    peer_want(peer, piece->index);
-    peer = TAILQ_FIRST(&tp->peers);
+    peer = BTPDQ_FIRST(&tp->peers);
     while (peer != NULL && !piece_full(piece)) {
 	if ((peer->flags & (PF_P_CHOKE|PF_I_WANT)) == PF_I_WANT &&
-	    TAILQ_EMPTY(&peer->my_reqs)) {
+	    BTPDQ_EMPTY(&peer->my_reqs)) {
 	    //
 	    cm_on_download(peer);
 	}
-	peer = TAILQ_NEXT(peer, cm_entry);
+	peer = BTPDQ_NEXT(peer, cm_entry);
     }
 }
 
@@ -444,7 +444,7 @@ cm_schedule_piece(struct torrent *tp)
 
     btpd_log(BTPD_L_POL, "scheduled piece: %u.\n", min_i);
     piece = alloc_piece(tp, min_i);
-    TAILQ_INSERT_HEAD(&tp->getlst, piece, entry);
+    BTPDQ_INSERT_HEAD(&tp->getlst, piece, entry);
     if (piece->ngot == piece->nblocks) {
 	cm_on_piece(tp, piece);
 	if (cm_should_schedule(tp))
@@ -466,7 +466,7 @@ cm_on_piece_full(struct torrent *tp, struct piece *piece)
 
     if (cm_should_schedule(tp))
 	cm_schedule_piece(tp);
-    TAILQ_FOREACH(p, &tp->peers, cm_entry) {
+    BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
 	if (has_bit(p->piece_field, piece->index))
 	    peer_unwant(p, piece->index);
     }
@@ -479,11 +479,11 @@ cm_assign_request(struct peer *peer)
     unsigned i;
     uint32_t start, len;
 
-    piece = TAILQ_FIRST(&peer->tp->getlst);
+    piece = BTPDQ_FIRST(&peer->tp->getlst);
     while (piece != NULL) {
 	if (!piece_full(piece) && has_bit(peer->piece_field, piece->index))
 	    break;
-	piece = TAILQ_NEXT(piece, entry);
+	piece = BTPDQ_NEXT(piece, entry);
     }
 
     if (piece == NULL)
@@ -531,20 +531,20 @@ void
 cm_unassign_requests(struct peer *peer)
 {
     struct torrent *tp = peer->tp;
-    struct piece *piece = TAILQ_FIRST(&tp->getlst);
+    struct piece *piece = BTPDQ_FIRST(&tp->getlst);
 
     while (piece != NULL) {
 	int was_full = piece_full(piece);
 
-	struct piece_req *req = TAILQ_FIRST(&peer->my_reqs);
+	struct piece_req *req = BTPDQ_FIRST(&peer->my_reqs);
 	while (req != NULL) {
-	    struct piece_req *next = TAILQ_NEXT(req, entry);
+	    struct piece_req *next = BTPDQ_NEXT(req, entry);
 
 	    if (piece->index == req->index) {
 		assert(has_bit(piece->down_field, req->begin / BLOCKLEN));
 		clear_bit(piece->down_field, req->begin / BLOCKLEN);
 		piece->nbusy--;
-		TAILQ_REMOVE(&peer->my_reqs, req, entry);
+		BTPDQ_REMOVE(&peer->my_reqs, req, entry);
 		free(req);
 	    }
 	    
@@ -554,10 +554,10 @@ cm_unassign_requests(struct peer *peer)
 	if (was_full && !piece_full(piece))
 	    cm_on_piece_unfull(tp, piece);
 
-	piece = TAILQ_NEXT(piece, entry);
+	piece = BTPDQ_NEXT(piece, entry);
     }
 
-    assert(TAILQ_EMPTY(&peer->my_reqs));
+    assert(BTPDQ_EMPTY(&peer->my_reqs));
 }
 
 static int
@@ -631,12 +631,12 @@ cm_on_piece(struct torrent *tp, struct piece *piece)
 	    tracker_req(tp, TR_COMPLETED);
 	}
 	msync(tp->imem, tp->isiz, MS_ASYNC);
-	TAILQ_FOREACH(p, &tp->peers, cm_entry)
+	BTPDQ_FOREACH(p, &tp->peers, cm_entry)
 	    peer_have(p, piece->index);
 	if (tp->endgame)
-	    TAILQ_FOREACH(p, &tp->peers, cm_entry)
+	    BTPDQ_FOREACH(p, &tp->peers, cm_entry)
 		peer_unwant(p, piece->index);
-	TAILQ_REMOVE(&tp->getlst, piece, entry);
+	BTPDQ_REMOVE(&tp->getlst, piece, entry);
 	free(piece);
     } else if (tp->endgame) {
 	struct peer *p;
@@ -645,7 +645,7 @@ cm_on_piece(struct torrent *tp, struct piece *piece)
 	for (unsigned i = 0; i < piece->nblocks; i++)
 	    clear_bit(piece->have_field, i);
 	piece->ngot = 0;
-	TAILQ_FOREACH(p, &tp->peers, cm_entry)
+	BTPDQ_FOREACH(p, &tp->peers, cm_entry)
 	    if (has_bit(p->piece_field, piece->index) &&
 		(p->flags & PF_P_CHOKE) == 0) {
 		//
@@ -659,7 +659,7 @@ cm_on_piece(struct torrent *tp, struct piece *piece)
 	    assert(!has_bit(piece->down_field, i));
 	}
 	msync(tp->imem, tp->isiz, MS_ASYNC);
-	TAILQ_REMOVE(&tp->getlst, piece, entry);
+	BTPDQ_REMOVE(&tp->getlst, piece, entry);
 	free(piece);
 	if (cm_should_schedule(tp))
 	    cm_schedule_piece(tp);
@@ -670,11 +670,11 @@ void
 cm_on_block(struct peer *peer)
 {
     struct torrent *tp = peer->tp;
-    struct piece_req *req = TAILQ_FIRST(&peer->my_reqs);
-    struct piece *piece = TAILQ_FIRST(&tp->getlst);
+    struct piece_req *req = BTPDQ_FIRST(&peer->my_reqs);
+    struct piece *piece = BTPDQ_FIRST(&tp->getlst);
     unsigned block = req->begin / BLOCKLEN;
     while (piece != NULL && piece->index != req->index)
-        piece = TAILQ_NEXT(piece, entry);
+        piece = BTPDQ_NEXT(piece, entry);
     set_bit(piece->have_field, block);
     clear_bit(piece->down_field, block);
     piece->ngot++;
@@ -685,10 +685,10 @@ cm_on_block(struct peer *peer)
 	uint32_t length = req->length;
 	struct peer *p;
 
-	TAILQ_REMOVE(&peer->my_reqs, req, entry);
+	BTPDQ_REMOVE(&peer->my_reqs, req, entry);
 	free(req);
 
-	TAILQ_FOREACH(p, &tp->peers, cm_entry) {
+	BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
 	    if (has_bit(p->piece_field, index) &&
 		(peer->flags & PF_P_CHOKE) == 0)
 		peer_cancel(p, index, begin, length);
@@ -696,7 +696,7 @@ cm_on_block(struct peer *peer)
 	if (piece->ngot == piece->nblocks)
 	    cm_on_piece(tp, piece);
     } else {
-	TAILQ_REMOVE(&peer->my_reqs, req, entry);
+	BTPDQ_REMOVE(&peer->my_reqs, req, entry);
 	free(req);
 	if (piece->ngot == piece->nblocks)
 	    cm_on_piece(tp, piece);

@@ -35,13 +35,13 @@ struct peer {
     unsigned long rate_to_me[RATEHISTORY];
     unsigned long rate_from_me[RATEHISTORY];
 
-    TAILQ_ENTRY(peer) cm_entry;
+    BTPDQ_ENTRY(peer) cm_entry;
 
-    TAILQ_ENTRY(peer) rq_entry;
-    TAILQ_ENTRY(peer) wq_entry;
+    BTPDQ_ENTRY(peer) rq_entry;
+    BTPDQ_ENTRY(peer) wq_entry;
 };
 
-TAILQ_HEAD(peer_tq, peer);
+BTPDQ_HEAD(peer_tq, peer);
 
 void peer_unchoke(struct peer *p);
 void peer_choke(struct peer *p);

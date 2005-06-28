@@ -28,10 +28,10 @@ struct child {
     pid_t pid;
     void *data;
     void (*child_done)(struct child *child);
-    TAILQ_ENTRY(child) entry;
+    BTPDQ_ENTRY(child) entry;
 };
 
-TAILQ_HEAD(child_tq, child);
+BTPDQ_HEAD(child_tq, child);
 
 struct btpd {
     uint8_t peer_id[20];

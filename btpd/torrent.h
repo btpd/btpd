@@ -11,16 +11,16 @@ struct piece {
     uint8_t *have_field;
     uint8_t *down_field;
 
-    TAILQ_ENTRY(piece) entry;
+    BTPDQ_ENTRY(piece) entry;
 };
 
-TAILQ_HEAD(piece_tq, piece);
+BTPDQ_HEAD(piece_tq, piece);
 
 struct torrent {
     const char *relpath;
     struct metainfo meta;
 
-    TAILQ_ENTRY(torrent) entry;
+    BTPDQ_ENTRY(torrent) entry;
 
     void *imem;
     size_t isiz;
@@ -48,7 +48,7 @@ struct torrent {
     struct piece_tq getlst;
 };
 
-TAILQ_HEAD(torrent_tq, torrent);
+BTPDQ_HEAD(torrent_tq, torrent);
 
 off_t torrent_bytes_left(struct torrent *tp);
 

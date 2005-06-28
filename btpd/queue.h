@@ -9,73 +9,73 @@
 /*
  * Tail queue declarations.
  */
-#define	TAILQ_HEAD(name, type)						\
+#define	BTPDQ_HEAD(name, type)						\
 struct name {								\
 	struct type *tqh_first;	/* first element */			\
 	struct type **tqh_last;	/* addr of last next element */		\
 }
 
-#define	TAILQ_HEAD_INITIALIZER(head)					\
+#define	BTPDQ_HEAD_INITIALIZER(head)					\
 	{ NULL, &(head).tqh_first }
 
-#define	TAILQ_ENTRY(type)						\
+#define	BTPDQ_ENTRY(type)						\
 struct {								\
 	struct type *tqe_next;	/* next element */			\
 	struct type **tqe_prev;	/* address of previous next element */	\
 }
 
-#define	TAILQ_EMPTY(head)	((head)->tqh_first == NULL)
+#define	BTPDQ_EMPTY(head)	((head)->tqh_first == NULL)
 
-#define	TAILQ_FIRST(head)	((head)->tqh_first)
+#define	BTPDQ_FIRST(head)	((head)->tqh_first)
 
-#define	TAILQ_NEXT(elm, field) ((elm)->field.tqe_next)
+#define	BTPDQ_NEXT(elm, field) ((elm)->field.tqe_next)
 
-#define	TAILQ_FOREACH(var, head, field)					\
-	for ((var) = TAILQ_FIRST((head));				\
+#define	BTPDQ_FOREACH(var, head, field)					\
+	for ((var) = BTPDQ_FIRST((head));				\
 	    (var);							\
-	    (var) = TAILQ_NEXT((var), field))
+	    (var) = BTPDQ_NEXT((var), field))
 
-#define	TAILQ_INIT(head) do {						\
-	TAILQ_FIRST((head)) = NULL;					\
-	(head)->tqh_last = &TAILQ_FIRST((head));			\
+#define	BTPDQ_INIT(head) do {						\
+	BTPDQ_FIRST((head)) = NULL;					\
+	(head)->tqh_last = &BTPDQ_FIRST((head));			\
 } while (0)
 
-#define	TAILQ_INSERT_AFTER(head, listelm, elm, field) do {		\
-	if ((TAILQ_NEXT((elm), field) = TAILQ_NEXT((listelm), field)) != NULL)\
-		TAILQ_NEXT((elm), field)->field.tqe_prev = 		\
-		    &TAILQ_NEXT((elm), field);				\
+#define	BTPDQ_INSERT_AFTER(head, listelm, elm, field) do {		\
+	if ((BTPDQ_NEXT((elm), field) = BTPDQ_NEXT((listelm), field)) != NULL)\
+		BTPDQ_NEXT((elm), field)->field.tqe_prev = 		\
+		    &BTPDQ_NEXT((elm), field);				\
 	else {								\
-		(head)->tqh_last = &TAILQ_NEXT((elm), field);		\
+		(head)->tqh_last = &BTPDQ_NEXT((elm), field);		\
 	}								\
-	TAILQ_NEXT((listelm), field) = (elm);				\
-	(elm)->field.tqe_prev = &TAILQ_NEXT((listelm), field);		\
+	BTPDQ_NEXT((listelm), field) = (elm);				\
+	(elm)->field.tqe_prev = &BTPDQ_NEXT((listelm), field);		\
 } while (0)
 
-#define	TAILQ_INSERT_HEAD(head, elm, field) do {			\
-	if ((TAILQ_NEXT((elm), field) = TAILQ_FIRST((head))) != NULL)	\
-		TAILQ_FIRST((head))->field.tqe_prev =			\
-		    &TAILQ_NEXT((elm), field);				\
+#define	BTPDQ_INSERT_HEAD(head, elm, field) do {			\
+	if ((BTPDQ_NEXT((elm), field) = BTPDQ_FIRST((head))) != NULL)	\
+		BTPDQ_FIRST((head))->field.tqe_prev =			\
+		    &BTPDQ_NEXT((elm), field);				\
 	else								\
-		(head)->tqh_last = &TAILQ_NEXT((elm), field);		\
-	TAILQ_FIRST((head)) = (elm);					\
-	(elm)->field.tqe_prev = &TAILQ_FIRST((head));			\
+		(head)->tqh_last = &BTPDQ_NEXT((elm), field);		\
+	BTPDQ_FIRST((head)) = (elm);					\
+	(elm)->field.tqe_prev = &BTPDQ_FIRST((head));			\
 } while (0)
 
-#define	TAILQ_INSERT_TAIL(head, elm, field) do {			\
-	TAILQ_NEXT((elm), field) = NULL;				\
+#define	BTPDQ_INSERT_TAIL(head, elm, field) do {			\
+	BTPDQ_NEXT((elm), field) = NULL;				\
 	(elm)->field.tqe_prev = (head)->tqh_last;			\
 	*(head)->tqh_last = (elm);					\
-	(head)->tqh_last = &TAILQ_NEXT((elm), field);			\
+	(head)->tqh_last = &BTPDQ_NEXT((elm), field);			\
 } while (0)
 
-#define	TAILQ_REMOVE(head, elm, field) do {				\
-	if ((TAILQ_NEXT((elm), field)) != NULL)				\
-		TAILQ_NEXT((elm), field)->field.tqe_prev = 		\
+#define	BTPDQ_REMOVE(head, elm, field) do {				\
+	if ((BTPDQ_NEXT((elm), field)) != NULL)				\
+		BTPDQ_NEXT((elm), field)->field.tqe_prev = 		\
 		    (elm)->field.tqe_prev;				\
 	else {								\
 		(head)->tqh_last = (elm)->field.tqe_prev;		\
 	}								\
-	*(elm)->field.tqe_prev = TAILQ_NEXT((elm), field);		\
+	*(elm)->field.tqe_prev = BTPDQ_NEXT((elm), field);		\
 } while (0)
 
 #endif

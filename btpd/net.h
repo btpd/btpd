@@ -12,12 +12,12 @@
 #define MSG_CANCEL	8
 
 struct iob_link {
-    TAILQ_ENTRY(iob_link) entry;
+    BTPDQ_ENTRY(iob_link) entry;
     void (*kill_buf)(struct io_buffer *);
     struct io_buffer iob;
 };
 
-TAILQ_HEAD(io_tq, iob_link);
+BTPDQ_HEAD(io_tq, iob_link);
 
 struct peer;
 
@@ -67,10 +67,10 @@ struct generic_reader {
 struct piece_req {
     uint32_t index, begin, length;
     struct iob_link *head; /* Pointer to outgoing piece. */
-    TAILQ_ENTRY(piece_req) entry;
+    BTPDQ_ENTRY(piece_req) entry;
 };
 
-TAILQ_HEAD(piece_req_tq, piece_req);
+BTPDQ_HEAD(piece_req_tq, piece_req);
 
 void net_connection_cb(int sd, short type, void *arg);
 void net_by_second(void);

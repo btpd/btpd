@@ -285,7 +285,7 @@ tracker_req(struct torrent *tp, enum tr_event tr_event)
     child = (struct child *)(req + 1);
     child->data = req;
     child->child_done = tracker_done;
-    TAILQ_INSERT_TAIL(&btpd.kids, child, entry);
+    BTPDQ_INSERT_TAIL(&btpd.kids, child, entry);
 
     child->pid = fork();
     if (child->pid < 0) {

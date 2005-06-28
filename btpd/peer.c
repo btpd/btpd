@@ -24,30 +24,30 @@ peer_kill(struct peer *p)
     if (p->flags & PF_ATTACHED)
 	cm_on_lost_peer(p);
     if (p->flags & PF_ON_READQ)
-	TAILQ_REMOVE(&btpd.readq, p, rq_entry);
+	BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
     if (p->flags & PF_ON_WRITEQ)
-	TAILQ_REMOVE(&btpd.writeq, p, wq_entry);
+	BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
 
     close(p->sd);
     event_del(&p->in_ev);
     event_del(&p->out_ev);
 
-    iol = TAILQ_FIRST(&p->outq);
+    iol = BTPDQ_FIRST(&p->outq);
     while (iol != NULL) {
-	struct iob_link *next = TAILQ_NEXT(iol, entry);
+	struct iob_link *next = BTPDQ_NEXT(iol, entry);
 	iol->kill_buf(&iol->iob);
 	free(iol);
 	iol = next;
     }
-    req = TAILQ_FIRST(&p->p_reqs);
+    req = BTPDQ_FIRST(&p->p_reqs);
     while (req != NULL) {
-	struct piece_req *next = TAILQ_NEXT(req, entry);
+	struct piece_req *next = BTPDQ_NEXT(req, entry);
 	free(req);
 	req = next;
     }
-    req = TAILQ_FIRST(&p->my_reqs);
+    req = BTPDQ_FIRST(&p->my_reqs);
     while (req != NULL) {
-	struct piece_req *next = TAILQ_NEXT(req, entry);
+	struct piece_req *next = BTPDQ_NEXT(req, entry);
 	free(req);
 	req = next;
     }
@@ -66,7 +66,7 @@ peer_request(struct peer *p, uint32_t index, uint32_t begin, uint32_t len)
     req->index = index;
     req->begin = begin;
     req->length = len;
-    TAILQ_INSERT_TAIL(&p->my_reqs, req, entry);
+    BTPDQ_INSERT_TAIL(&p->my_reqs, req, entry);
     net_send_request(p, req);
 }
 
@@ -75,15 +75,15 @@ peer_cancel(struct peer *p, uint32_t index, uint32_t begin, uint32_t len)
 {
     struct piece_req *req;
 again:
-    req = TAILQ_FIRST(&p->my_reqs);
+    req = BTPDQ_FIRST(&p->my_reqs);
     while (req != NULL &&
 	   !(index == req->index &&
 	     begin == req->begin &&
 	     len == req->length))
-	req = TAILQ_NEXT(req, entry);
+	req = BTPDQ_NEXT(req, entry);
     if (req != NULL) {
 	net_send_cancel(p, req);
-	TAILQ_REMOVE(&p->my_reqs, req, entry);
+	BTPDQ_REMOVE(&p->my_reqs, req, entry);
 	free(req);
 	goto again;
     }
@@ -107,7 +107,7 @@ peer_choke(struct peer *p)
 {
     struct piece_req *req;
 
-    while ((req = TAILQ_FIRST(&p->p_reqs)) != NULL)
+    while ((req = BTPDQ_FIRST(&p->p_reqs)) != NULL)
 	net_unsend_piece(p, req);
 
     p->flags |= PF_I_CHOKE;
@@ -141,9 +141,9 @@ peer_create_common(int sd)
 
     p->sd = sd;
     p->flags = PF_I_CHOKE | PF_P_CHOKE;
-    TAILQ_INIT(&p->p_reqs);
-    TAILQ_INIT(&p->my_reqs);
-    TAILQ_INIT(&p->outq);
+    BTPDQ_INIT(&p->p_reqs);
+    BTPDQ_INIT(&p->my_reqs);
+    BTPDQ_INIT(&p->outq);
 
     event_set(&p->out_ev, p->sd, EV_WRITE, net_write_cb, p);
     event_set(&p->in_ev, p->sd, EV_READ, net_read_cb, p);

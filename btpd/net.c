@@ -33,7 +33,7 @@ net_read_cb(int sd, short type, void *arg)
 	btpd.ibw_left -= p->reader->read(p, btpd.ibw_left);
     } else {
 	p->flags |= PF_ON_READQ;
-	TAILQ_INSERT_TAIL(&btpd.readq, p, rq_entry);
+	BTPDQ_INSERT_TAIL(&btpd.readq, p, rq_entry);
     }
 }
 
@@ -47,7 +47,7 @@ net_write_cb(int sd, short type, void *arg)
 	btpd.obw_left -= net_write(p, btpd.obw_left);
     } else {
 	p->flags |= PF_ON_WRITEQ;
-	TAILQ_INSERT_TAIL(&btpd.writeq, p, wq_entry);
+	BTPDQ_INSERT_TAIL(&btpd.writeq, p, wq_entry);
     }
 }
 
@@ -92,21 +92,21 @@ net_unsend_piece(struct peer *p, struct piece_req *req)
 {
     struct iob_link *piece;
 
-    TAILQ_REMOVE(&p->p_reqs, req, entry);
+    BTPDQ_REMOVE(&p->p_reqs, req, entry);
 
-    piece = TAILQ_NEXT(req->head, entry);
-    TAILQ_REMOVE(&p->outq, piece, entry);
+    piece = BTPDQ_NEXT(req->head, entry);
+    BTPDQ_REMOVE(&p->outq, piece, entry);
     piece->kill_buf(&piece->iob);
     free(piece);
 
-    TAILQ_REMOVE(&p->outq, req->head, entry);
+    BTPDQ_REMOVE(&p->outq, req->head, entry);
     req->head->kill_buf(&req->head->iob);
     free(req->head);
     free(req);
 
-    if (TAILQ_EMPTY(&p->outq)) {
+    if (BTPDQ_EMPTY(&p->outq)) {
 	if (p->flags & PF_ON_WRITEQ) {
-	    TAILQ_REMOVE(&btpd.writeq, p, wq_entry);
+	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
 	    p->flags &= ~PF_ON_WRITEQ;
 	} else
 	    event_del(&p->out_ev);
@@ -135,7 +135,7 @@ net_write(struct peer *p, unsigned long wmax)
     limited = wmax > 0;
 
     niov = 0;
-    assert((iol = TAILQ_FIRST(&p->outq)) != NULL);
+    assert((iol = BTPDQ_FIRST(&p->outq)) != NULL);
     while (niov < NIOV && iol != NULL
 	   && (!limited || (limited && wmax > 0))) {
 	iov[niov].iov_base = iol->iob.buf + iol->iob.buf_off;
@@ -146,7 +146,7 @@ net_write(struct peer *p, unsigned long wmax)
 	    wmax -= iov[niov].iov_len;
 	}
 	niov++;
-	iol = TAILQ_NEXT(iol, entry);
+	iol = BTPDQ_NEXT(iol, entry);
     }
 
 again:
@@ -167,29 +167,29 @@ again:
     bcount = nwritten;
     p->rate_from_me[btpd.seconds % RATEHISTORY] += nwritten;
 
-    req = TAILQ_FIRST(&p->p_reqs);
-    iol = TAILQ_FIRST(&p->outq);
+    req = BTPDQ_FIRST(&p->p_reqs);
+    iol = BTPDQ_FIRST(&p->outq);
     while (bcount > 0) {
 	if (req != NULL && req->head == iol) {
-	    struct iob_link *piece = TAILQ_NEXT(req->head, entry);
-	    struct piece_req *next = TAILQ_NEXT(req, entry);
-	    TAILQ_REMOVE(&p->p_reqs, req, entry);
+	    struct iob_link *piece = BTPDQ_NEXT(req->head, entry);
+	    struct piece_req *next = BTPDQ_NEXT(req, entry);
+	    BTPDQ_REMOVE(&p->p_reqs, req, entry);
 	    free(req);
 	    req = next;
 	    p->tp->uploaded += piece->iob.buf_len;
 	}
 	if (bcount >= iol->iob.buf_len - iol->iob.buf_off) {
 	    bcount -= iol->iob.buf_len - iol->iob.buf_off;
-	    TAILQ_REMOVE(&p->outq, iol, entry);
+	    BTPDQ_REMOVE(&p->outq, iol, entry);
 	    iol->kill_buf(&iol->iob);
 	    free(iol);
-	    iol = TAILQ_FIRST(&p->outq);
+	    iol = BTPDQ_FIRST(&p->outq);
 	} else {
 	    iol->iob.buf_off += bcount;
 	    bcount = 0;
 	}
     }
-    if (!TAILQ_EMPTY(&p->outq))
+    if (!BTPDQ_EMPTY(&p->outq))
 	event_add(&p->out_ev, NULL);
     else if (p->flags & PF_WRITE_CLOSE) {
 	btpd_log(BTPD_L_CONN, "Closed because of write flag.\n");
@@ -202,9 +202,9 @@ again:
 void
 net_send(struct peer *p, struct iob_link *iol)
 {
-    if (TAILQ_EMPTY(&p->outq))
+    if (BTPDQ_EMPTY(&p->outq))
 	event_add(&p->out_ev, NULL);
-    TAILQ_INSERT_TAIL(&p->outq, iol, entry);
+    BTPDQ_INSERT_TAIL(&p->outq, iol, entry);
 }
 
 void
@@ -243,7 +243,7 @@ net_send_piece(struct peer *p, uint32_t index, uint32_t begin,
     req->begin = begin;
     req->length = blen;
     req->head = head;
-    TAILQ_INSERT_TAIL(&p->p_reqs, req, entry);
+    BTPDQ_INSERT_TAIL(&p->p_reqs, req, entry);
 }
 
 void
@@ -368,7 +368,7 @@ net_read(struct peer *p, char *buf, size_t len)
 	}
     } else if (nread == 0) {
 	btpd_log(BTPD_L_CONN, "conn closed by other side.\n");
-	if (!TAILQ_EMPTY(&p->outq))
+	if (!BTPDQ_EMPTY(&p->outq))
 	    p->flags |= PF_WRITE_CLOSE;
 	else
 	    peer_kill(p);
@@ -437,7 +437,7 @@ read_piece(struct peer *p, unsigned long rmax)
     p->rate_to_me[btpd.seconds % RATEHISTORY] += nread;
     p->tp->downloaded += nread;
     if (rd->iob.buf_off == rd->iob.buf_len) {
-	struct piece_req *req = TAILQ_FIRST(&p->my_reqs);
+	struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
 	if (req != NULL &&
 	    req->index == rd->index &&
 	    req->begin == rd->begin &&
@@ -619,7 +619,7 @@ net_generic_read(struct peer *p, unsigned long rmax)
 		uint32_t begin = net_read32(buf + off + 9);
 		uint32_t length = msg_len - 9;
 #if 0
-		struct piece_req *req = TAILQ_FIRST(&p->my_reqs);
+		struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
 		if (req == NULL)
 		    goto bad_data;
 		if (!(index == req->index &&
@@ -631,7 +631,7 @@ net_generic_read(struct peer *p, unsigned long rmax)
 		    off_t cbegin = index * p->tp->meta.piece_length + begin;
 		    p->tp->downloaded += length;
 		    p->rate_to_me[btpd.seconds % RATEHISTORY] += length;
-		    struct piece_req *req = TAILQ_FIRST(&p->my_reqs);
+		    struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
 		    if (req != NULL &&
 			req->index == index &&
 			req->begin == begin &&
@@ -677,7 +677,7 @@ net_generic_read(struct peer *p, unsigned long rmax)
 		btpd_log(BTPD_L_MSG, "cancel: %u, %u, %u\n",
 		    index, begin, length);
 
-		req = TAILQ_FIRST(&p->p_reqs);
+		req = BTPDQ_FIRST(&p->p_reqs);
 		while (req != NULL) {
 		    if (req->index == index &&
 			req->begin == begin &&
@@ -686,7 +686,7 @@ net_generic_read(struct peer *p, unsigned long rmax)
 			net_unsend_piece(p, req);
 			break;
 		    }
-		    req = TAILQ_NEXT(req, entry);
+		    req = BTPDQ_NEXT(req, entry);
 		}
 	    } else
 		got_part = 1;
@@ -771,12 +771,12 @@ net_shake_read(struct peer *p, unsigned long rmax)
 	else if (hs->incoming) {
 	    struct torrent *tp = torrent_get_by_hash(in->buf + 28);
 #if 0
-	    tp = TAILQ_FIRST(&btpd.cm_list);
+	    tp = BTPDQ_FIRST(&btpd.cm_list);
 	    while (tp != NULL) {
 		if (bcmp(in->buf + 28, tp->meta.info_hash, 20) == 0)
 		    break;
 		else
-		    tp = TAILQ_NEXT(tp, entry);
+		    tp = BTPDQ_NEXT(tp, entry);
 	    }
 #endif
 	    if (tp != NULL) {
@@ -920,8 +920,8 @@ net_by_second(void)
     struct torrent *tp;
     int ri = btpd.seconds % RATEHISTORY;
 
-    TAILQ_FOREACH(tp, &btpd.cm_list, entry) {
-	TAILQ_FOREACH(p, &tp->peers, cm_entry) {
+    BTPDQ_FOREACH(tp, &btpd.cm_list, entry) {
+	BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
 	    p->rate_to_me[ri] = 0;
 	    p->rate_from_me[ri] = 0;
 	}
@@ -931,28 +931,28 @@ net_by_second(void)
     btpd.ibw_left = btpd.ibwlim;
 
     if (btpd.ibwlim > 0) {
-	while ((p = TAILQ_FIRST(&btpd.readq)) != NULL && btpd.ibw_left > 0) {
-	    TAILQ_REMOVE(&btpd.readq, p, rq_entry);
+	while ((p = BTPDQ_FIRST(&btpd.readq)) != NULL && btpd.ibw_left > 0) {
+	    BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
 	    p->flags &= ~PF_ON_READQ;
 	    btpd.ibw_left -= p->reader->read(p, btpd.ibw_left);
 	}
     } else {
-	while ((p = TAILQ_FIRST(&btpd.readq)) != NULL) {
-	    TAILQ_REMOVE(&btpd.readq, p, rq_entry);
+	while ((p = BTPDQ_FIRST(&btpd.readq)) != NULL) {
+	    BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
 	    p->flags &= ~PF_ON_READQ;
 	    p->reader->read(p, 0);
 	}
     }
 
     if (btpd.obwlim) {
-	while ((p = TAILQ_FIRST(&btpd.writeq)) != NULL && btpd.obw_left > 0) {
-	    TAILQ_REMOVE(&btpd.writeq, p, wq_entry);
+	while ((p = BTPDQ_FIRST(&btpd.writeq)) != NULL && btpd.obw_left > 0) {
+	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
 	    p->flags &= ~PF_ON_WRITEQ;
 	    btpd.obw_left -=  net_write(p, btpd.obw_left);
 	}
     } else {
-	while ((p = TAILQ_FIRST(&btpd.writeq)) != NULL) {
-	    TAILQ_REMOVE(&btpd.writeq, p, wq_entry);
+	while ((p = BTPDQ_FIRST(&btpd.writeq)) != NULL) {
+	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
 	    p->flags &= ~PF_ON_WRITEQ;
 	    net_write(p, 0);
 	}

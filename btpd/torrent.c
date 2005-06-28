@@ -44,8 +44,8 @@ torrent_load3(const char *file, struct metainfo *mi, char *mem, size_t memsiz)
 
     tp->piece_count = btpd_calloc(mi->npieces, sizeof(tp->piece_count[0]));
  
-    TAILQ_INIT(&tp->peers);
-    TAILQ_INIT(&tp->getlst);
+    BTPDQ_INIT(&tp->peers);
+    BTPDQ_INIT(&tp->getlst);
 
     tp->imem = mem;
     tp->isiz = memsiz;
@@ -61,7 +61,7 @@ torrent_load3(const char *file, struct metainfo *mi, char *mem, size_t memsiz)
     tp->meta = *mi;
     free(mi);
 
-    TAILQ_INSERT_TAIL(&btpd.cm_list, tp, entry);
+    BTPDQ_INSERT_TAIL(&btpd.cm_list, tp, entry);
 
     tracker_req(tp, TR_STARTED);
     btpd.ntorrents++;
@@ -153,17 +153,17 @@ torrent_unload(struct torrent *tp)
 
     tracker_req(tp, TR_STOPPED);
 
-    peer = TAILQ_FIRST(&tp->peers);
+    peer = BTPDQ_FIRST(&tp->peers);
     while (peer != NULL) {
-        struct peer *next = TAILQ_NEXT(peer, cm_entry);
+        struct peer *next = BTPDQ_NEXT(peer, cm_entry);
         peer->flags &= ~PF_ATTACHED;
         peer_kill(peer);
         peer = next;
     }
 
-    piece = TAILQ_FIRST(&tp->getlst);
+    piece = BTPDQ_FIRST(&tp->getlst);
     while (piece != NULL) {
-	struct piece *next = TAILQ_NEXT(piece, entry);
+	struct piece *next = BTPDQ_NEXT(piece, entry);
 	free(piece);
 	piece = next;
     }
@@ -174,7 +174,7 @@ torrent_unload(struct torrent *tp)
 
     munmap(tp->imem, tp->isiz);
 
-    TAILQ_REMOVE(&btpd.cm_list, tp, entry);
+    BTPDQ_REMOVE(&btpd.cm_list, tp, entry);
     free(tp);
     btpd.ntorrents--;
 }
@@ -223,13 +223,13 @@ int
 torrent_has_peer(struct torrent *tp, const uint8_t *id)
 {
     int has = 0;
-    struct peer *p = TAILQ_FIRST(&tp->peers);
+    struct peer *p = BTPDQ_FIRST(&tp->peers);
     while (p != NULL) {
 	if (bcmp(p->id, id, 20) == 0) {
 	    has = 1;
 	    break;
 	}
-	p = TAILQ_NEXT(p, cm_entry);
+	p = BTPDQ_NEXT(p, cm_entry);
     }
     return has;
 }
@@ -237,8 +237,8 @@ torrent_has_peer(struct torrent *tp, const uint8_t *id)
 struct torrent *
 torrent_get_by_hash(const uint8_t *hash)
 {
-    struct torrent *tp = TAILQ_FIRST(&btpd.cm_list);
+    struct torrent *tp = BTPDQ_FIRST(&btpd.cm_list);
     while (tp != NULL && bcmp(hash, tp->meta.info_hash, 20) != 0)
-	tp = TAILQ_NEXT(tp, entry);
+	tp = BTPDQ_NEXT(tp, entry);
     return tp;
 }

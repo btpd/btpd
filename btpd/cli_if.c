@@ -36,7 +36,7 @@ cmd_stat(int argc, const char *args, FILE *fp)
     errdie(buf_print(&iob, "9:ntorrentsi%ue", btpd.ntorrents));
     errdie(buf_print(&iob, "7:secondsi%lue", btpd.seconds));
     errdie(buf_swrite(&iob, "8:torrentsl"));
-    TAILQ_FOREACH(tp, &btpd.cm_list, entry) {
+    BTPDQ_FOREACH(tp, &btpd.cm_list, entry) {
         uint32_t seen_npieces = 0;
         for (uint32_t i = 0; i < tp->meta.npieces; i++)
             if (tp->piece_count[i] > 0)

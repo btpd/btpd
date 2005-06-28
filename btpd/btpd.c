@@ -111,13 +111,13 @@ btpd_init(void)
 
     btpd.logmask = BTPD_L_BTPD | BTPD_L_ERROR;
 
-    TAILQ_INIT(&btpd.kids);
+    BTPDQ_INIT(&btpd.kids);
 
     btpd.ntorrents = 0;
-    TAILQ_INIT(&btpd.cm_list);
+    BTPDQ_INIT(&btpd.cm_list);
 
-    TAILQ_INIT(&btpd.readq);
-    TAILQ_INIT(&btpd.writeq);
+    BTPDQ_INIT(&btpd.readq);
+    BTPDQ_INIT(&btpd.writeq);
 
     btpd.port = 6881;
 
@@ -145,9 +145,9 @@ btpd_shutdown(void)
 {
     struct torrent *tp;
 
-    tp = TAILQ_FIRST(&btpd.cm_list);
+    tp = BTPDQ_FIRST(&btpd.cm_list);
     while (tp != NULL) {
-        struct torrent *next = TAILQ_NEXT(tp, entry);
+        struct torrent *next = BTPDQ_NEXT(tp, entry);
         torrent_unload(tp);
         tp = next;
     }
@@ -170,11 +170,11 @@ child_cb(int signal, short type, void *arg)
 
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
 	if (WIFEXITED(status) || WIFSIGNALED(status)) {
-	    struct child *kid = TAILQ_FIRST(&btpd.kids);
+	    struct child *kid = BTPDQ_FIRST(&btpd.kids);
 	    while (kid != NULL && kid->pid != pid)
-		kid = TAILQ_NEXT(kid, entry);
+		kid = BTPDQ_NEXT(kid, entry);
 	    assert(kid != NULL);
-	    TAILQ_REMOVE(&btpd.kids, kid, entry);
+	    BTPDQ_REMOVE(&btpd.kids, kid, entry);
 	    kid->child_done(kid);
 	}
     }
@@ -189,7 +189,7 @@ heartbeat_cb(int sd, short type, void *arg)
 
     btpd.seconds++;
 
-    TAILQ_FOREACH(tp, &btpd.cm_list, entry)
+    BTPDQ_FOREACH(tp, &btpd.cm_list, entry)
 	cm_by_second(tp);
 
     net_by_second();
