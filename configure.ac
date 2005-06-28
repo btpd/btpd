@@ -50,11 +50,11 @@ LDFLAGS="$LDFLAGS $openssl_LDFLAGS"
 AC_CHECK_LIB(crypto, SHA1_Final, :, echo Must have openssl; exit 1)
 LDFLAGS=$old_LDFLAGS
 
-if test x$CURLCONF == x; then
+if test x$CURLCONF = x; then
    AC_PATH_PROG(CURLCONF, curl-config)
 fi
 
-if test x$CURLCONF == x -o \! \( -r $CURLCONF -a -x $CURLCONF \); then
+if test x$CURLCONF = x -o \! \( -r "$CURLCONF" -a -x "$CURLCONF" \); then
    echo Must have the curl-config script
    exit 1
 else
