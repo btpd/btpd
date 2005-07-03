@@ -21,7 +21,7 @@
 #define PRIu64 "llu"
 #endif
 
-#define REQ_SIZE (getpagesize() * 2)
+#define REQ_SIZE (1024 + 6 * 50)
 
 struct tracker_req {
     enum tr_event tr_event;
@@ -102,16 +102,29 @@ tracker_done(struct child *child)
 
     tp->tracker_time = btpd.seconds + interval;
 
-    if ((benc_dget_lst(req->res->buf, "peers", &peers)) != 0) {
-	btpd_log(BTPD_L_TRACKER, "Bad data from tracker.\n");
-	failed = 1;
-	goto out;
+    int error = 0;
+    size_t length;
+
+    if ((error = benc_dget_lst(req->res->buf, "peers", &peers)) == 0) {
+	for (peers = benc_first(peers);
+	     peers != NULL && btpd.npeers < btpd.maxpeers;
+	     peers = benc_next(peers))
+	    maybe_connect_to(tp, peers);
     }
 
-    for (peers = benc_first(peers);
-	 peers != NULL && btpd.npeers < btpd.maxpeers;
-	 peers = benc_next(peers))
-	maybe_connect_to(tp, peers);
+    if (error == EINVAL) {
+	error = benc_dget_str(req->res->buf, "peers", &peers, &length);
+	if (error == 0 && length % 6 == 0) {
+	    for (size_t i = 0; i < length; i += 6)
+		peer_create_out_compact(tp, peers + i * 6);
+	}
+    }
+
+    if (error != 0) {
+	btpd_log(BTPD_L_ERROR, "Bad data from tracker.\n");
+	failed = 1;
+	goto out;	
+    }
 
 out:
     if (failed) {
@@ -165,10 +178,13 @@ create_url(struct tracker_req *req, struct torrent *tp, char **url)
 
     left = torrent_bytes_left(tp);
 
-    i = asprintf(url, "%s%cinfo_hash=%s&peer_id=%s&port=%d"
+    i = asprintf(url, "%s%cinfo_hash=%s"
+		 "&peer_id=%s"
+		 "&port=%d"
 		 "&uploaded=%" PRIu64
 		 "&downloaded=%" PRIu64
 		 "&left=%" PRIu64
+		 "&compact=1"
 		 "%s%s",
 		 tp->meta.announce, qc, e_hash, e_id, btpd.port,
 		 tp->uploaded, tp->downloaded, left,

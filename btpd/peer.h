@@ -58,7 +58,7 @@ unsigned long peer_get_rate(unsigned long *rates);
 void peer_create_in(int sd);
 void peer_create_out(struct torrent *tp, const uint8_t *id,
 		     const char *ip, int port);
-
+void peer_create_out_compact(struct torrent *tp, const char *compact);
 void peer_kill(struct peer *p);
 
 #endif

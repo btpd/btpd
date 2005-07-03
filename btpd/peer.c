@@ -1,4 +1,6 @@
 #include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -173,6 +175,25 @@ peer_create_out(struct torrent *tp,
 
     p = peer_create_common(sd);
     p->tp = tp;
-    bcopy(id, p->id, 20);
+    //bcopy(id, p->id, 20);
+    net_handshake(p, 0);
+}
+
+void
+peer_create_out_compact(struct torrent *tp, const char *compact)
+{
+    int sd;
+    struct peer *p;
+    struct sockaddr_in addr;
+
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = *(long *)compact;
+    addr.sin_port = *(short *)(compact + 4);
+
+    if (net_connect2((struct sockaddr *)&addr, sizeof(addr), &sd) != 0)
+	return;
+
+    p = peer_create_common(sd);
+    p->tp = tp;
     net_handshake(p, 0);
 }

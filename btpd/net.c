@@ -872,12 +872,11 @@ net_shake_read(struct peer *p, unsigned long rmax)
 	if (in->buf_off < 68)
 	    break;
 	else {
-	    if (!hs->incoming && bcmp(in->buf + 48, p->id, 20) != 0)
-		goto bad_shake;
-	    else if (hs->incoming && torrent_has_peer(p->tp, in->buf + 48))
-		goto bad_shake; // Not really, but we are already connected
-	    if (hs->incoming)
-		bcopy(in->buf + 48, p->id, 20);
+	    if (torrent_has_peer(p->tp, in->buf + 48))
+		goto bad_shake; // Not really, but we're already connected.
+	    else if (bcmp(in->buf + 48, btpd.peer_id, 20) == 0)
+		goto bad_shake; // Connection from myself.
+	    bcopy(in->buf + 48, p->id, 20);
 	    hs->state = SHAKE_ID;
 	}
     default:
@@ -923,6 +922,22 @@ net_handshake(struct peer *p, int incoming)
 }
 
 int
+net_connect2(struct sockaddr *sa, socklen_t salen, int *sd)
+{
+    if ((*sd = socket(PF_INET, SOCK_STREAM, 0)) == -1) 
+	return errno;
+    
+    set_nonblocking(*sd);
+
+    if (connect(*sd, sa, salen) == -1 && errno != EINPROGRESS) {
+	btpd_log(BTPD_L_CONN, "Botched connection %s.", strerror(errno));
+	close(*sd);
+	return errno;
+    }
+    return 0;
+}
+
+int
 net_connect(const char *ip, int port, int *sd)
 {
     struct addrinfo hints, *res;
@@ -939,25 +954,14 @@ net_connect(const char *ip, int port, int *sd)
     if (getaddrinfo(ip, portstr, &hints, &res) != 0)
 	return errno;
 
-    if (res) {
-	if ((*sd = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
-	    btpd_log(BTPD_L_CONN, "Botched connection %s.", strerror(errno));
-	    freeaddrinfo(res);
-	    return errno;
-	}
-	set_nonblocking(*sd);
-	if (connect(*sd, res->ai_addr, res->ai_addrlen) == -1 &&
-	    errno != EINPROGRESS) {
-	    btpd_log(BTPD_L_CONN, "Botched connection %s.", strerror(errno));
-	    close(*sd);
-	    freeaddrinfo(res);
-	    return errno;
-	}
-    }
+    int error = net_connect2(res->ai_addr, res->ai_addrlen, sd);
 	
     freeaddrinfo(res);
-    btpd.npeers++;
-    return 0;
+    
+    if (error == 0)
+	btpd.npeers++;
+
+    return error;
 }
 
 void

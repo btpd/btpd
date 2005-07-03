@@ -99,6 +99,7 @@ void net_handshake(struct peer *p, int incoming);
 
 void net_read_cb(int sd, short type, void *arg);
 void net_write_cb(int sd, short type, void *arg);
+int net_connect2(struct sockaddr *sa, socklen_t salen, int *sd);
 int net_connect(const char *ip, int port, int *sd);
 
 void net_unsend_piece(struct peer *p, struct piece_req *req);
