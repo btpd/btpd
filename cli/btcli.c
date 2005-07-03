@@ -1,4 +1,5 @@
 #include <sys/types.h>
+#include <sys/time.h>
 
 #include <err.h>
 #include <errno.h>
@@ -385,7 +386,7 @@ free_tors(struct tor **tors)
 }
 
 static void
-print_stat(struct tor *cur, struct tor *old, int wait)
+print_stat(struct tor *cur, struct tor *old, double ds)
 {
     if (old == NULL) {
         printf("%5.1f%% %5.1f%% %6.1fM      - kB/s %6.1fM      - kB/s %4u\n",
@@ -399,9 +400,9 @@ print_stat(struct tor *cur, struct tor *old, int wait)
                100 * cur->seen_npieces / (double)cur->npieces,
                100 * cur->have_npieces / (double)cur->npieces,
                cur->down / (double)(1 << 20),
-               (cur->down - old->down) / (double)wait / (double)(1 << 10),
+               (cur->down - old->down) / ds / (1 << 10),
                cur->up / (double)(1 << 20),
-               (cur->up - old->up) / (double)wait / (double)(1 << 10),
+               (cur->up - old->up) / ds / (1 << 10),
                (unsigned)cur->npeers
             );
     }
@@ -415,9 +416,20 @@ grok_stat(char *ipctok, int iflag, int wait,
     char *res;
     struct tor **cur, **old = NULL;
     struct tor curtot, oldtot;
-
+    struct timeval tv_cur, tv_old;
+    double ds;
 again:
     do_stat(ipctok, &res);
+    gettimeofday(&tv_cur, NULL);
+    if (old == NULL) 
+	ds = wait;
+    else {
+	struct timeval delta;
+	timersub(&tv_old, &tv_cur, &delta);
+	ds = delta.tv_sec + delta.tv_usec / 1000000.0;
+	if (ds < 0)
+	    ds = wait;
+    }
     cur = parse_tors(res, hashes, nhashes);
     free(res);
 
@@ -425,13 +437,13 @@ again:
         for (i = 0; cur[i] != NULL; i++) {
             if (old == NULL) {
                 printf("%s:\n", rindex(cur[i]->path, '/') + 1);
-                print_stat(cur[i], NULL, wait);
+                print_stat(cur[i], NULL, ds);
             } else {
                 for (j = 0; old[j] != NULL; j++)
                     if (bcmp(cur[i]->hash, old[j]->hash, 20) == 0)
                         break;
                 printf("%s:\n", rindex(cur[i]->path, '/') + 1);
-                print_stat(cur[i], old[j], wait);
+                print_stat(cur[i], old[j], ds);
             }
         }
     }
@@ -448,9 +460,9 @@ again:
     if (iflag)
         printf("Total:\n");
     if (old != NULL)
-        print_stat(&curtot, &oldtot, wait);
+        print_stat(&curtot, &oldtot, ds);
     else
-        print_stat(&curtot, NULL, wait);
+        print_stat(&curtot, NULL, ds);
 
     if (wait) {
         if (old != NULL)
