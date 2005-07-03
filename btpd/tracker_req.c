@@ -116,7 +116,7 @@ tracker_done(struct child *child)
 	error = benc_dget_str(req->res->buf, "peers", &peers, &length);
 	if (error == 0 && length % 6 == 0) {
 	    for (size_t i = 0; i < length; i += 6)
-		peer_create_out_compact(tp, peers + i * 6);
+		peer_create_out_compact(tp, peers + i);
 	}
     }
 
