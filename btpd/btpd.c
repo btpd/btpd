@@ -116,6 +116,7 @@ btpd_init(void)
     btpd.ntorrents = 0;
     BTPDQ_INIT(&btpd.cm_list);
 
+    BTPDQ_INIT(&btpd.bwq);
     BTPDQ_INIT(&btpd.readq);
     BTPDQ_INIT(&btpd.writeq);
 

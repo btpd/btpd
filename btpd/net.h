@@ -11,6 +11,14 @@
 #define MSG_PIECE	7
 #define MSG_CANCEL	8
 
+struct bwlim {
+    unsigned long count;
+    struct event timer;
+    BTPDQ_ENTRY(bwlim) entry;
+};
+
+BTPDQ_HEAD(bwlim_tq, bwlim);
+
 struct iob_link {
     BTPDQ_ENTRY(iob_link) entry;
     void (*kill_buf)(struct io_buffer *);
