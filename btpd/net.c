@@ -137,8 +137,8 @@ static struct iob_link *
 malloc_liob(size_t len)
 {
     struct iob_link *iol;
-    iol = (struct iob_link *)btpd_malloc(sizeof(*iol) + len);
-    iol->iob.buf = (char *)iol + sizeof(*iol);
+    iol = (struct iob_link *)btpd_calloc(1, sizeof(*iol) + len);
+    iol->iob.buf = (char *)(iol + 1);
     iol->iob.buf_len = len;
     iol->iob.buf_off = 0;
     iol->kill_buf = nokill_iob;
@@ -149,7 +149,7 @@ static struct iob_link *
 salloc_liob(char *buf, size_t len, void (*kill_buf)(struct io_buffer *))
 {
     struct iob_link *iol;
-    iol = (struct iob_link *)btpd_malloc(sizeof(*iol));
+    iol = (struct iob_link *)btpd_calloc(1, sizeof(*iol));
     iol->iob.buf = buf;
     iol->iob.buf_len = len;
     iol->iob.buf_off = 0;
@@ -235,26 +235,32 @@ again:
     }
 
     bcount = nwritten;
-    p->rate_from_me[btpd.seconds % RATEHISTORY] += nwritten;
 
     req = BTPDQ_FIRST(&p->p_reqs);
     iol = BTPDQ_FIRST(&p->outq);
     while (bcount > 0) {
+	unsigned long bufdelta = iol->iob.buf_len - iol->iob.buf_off;
 	if (req != NULL && req->head == iol) {
-	    struct iob_link *piece = BTPDQ_NEXT(req->head, entry);
 	    struct piece_req *next = BTPDQ_NEXT(req, entry);
 	    BTPDQ_REMOVE(&p->p_reqs, req, entry);
 	    free(req);
 	    req = next;
-	    p->tp->uploaded += piece->iob.buf_len;
 	}
-	if (bcount >= iol->iob.buf_len - iol->iob.buf_off) {
-	    bcount -= iol->iob.buf_len - iol->iob.buf_off;
+	if (bcount >= bufdelta) {
+	    if (iol->upload) {
+		p->tp->uploaded += bufdelta;
+		p->rate_from_me[btpd.seconds % RATEHISTORY] += bufdelta;
+	    }
+	    bcount -= bufdelta;
 	    BTPDQ_REMOVE(&p->outq, iol, entry);
 	    iol->kill_buf(&iol->iob);
 	    free(iol);
 	    iol = BTPDQ_FIRST(&p->outq);
 	} else {
+	    if (iol->upload) {
+		p->tp->uploaded += bcount;
+		p->rate_from_me[btpd.seconds % RATEHISTORY] += bcount;
+	    }
 	    iol->iob.buf_off += bcount;
 	    bcount = 0;
 	}
@@ -306,6 +312,7 @@ net_send_piece(struct peer *p, uint32_t index, uint32_t begin,
     net_send(p, head);
 
     piece = salloc_liob(block, blen, kill_free_buf);
+    piece->upload = 1;
     net_send(p, piece);
 
     req = btpd_malloc(sizeof(*req));

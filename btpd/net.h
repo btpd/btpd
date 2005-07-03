@@ -20,6 +20,7 @@ struct bwlim {
 BTPDQ_HEAD(bwlim_tq, bwlim);
 
 struct iob_link {
+    int upload;
     BTPDQ_ENTRY(iob_link) entry;
     void (*kill_buf)(struct io_buffer *);
     struct io_buffer iob;
