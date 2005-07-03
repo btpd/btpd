@@ -934,6 +934,8 @@ net_connect2(struct sockaddr *sa, socklen_t salen, int *sd)
 	close(*sd);
 	return errno;
     }
+
+    btpd.npeers++;
     return 0;
 }
 
@@ -955,12 +957,7 @@ net_connect(const char *ip, int port, int *sd)
 	return errno;
 
     int error = net_connect2(res->ai_addr, res->ai_addrlen, sd);
-	
     freeaddrinfo(res);
-    
-    if (error == 0)
-	btpd.npeers++;
-
     return error;
 }
 
