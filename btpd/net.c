@@ -933,7 +933,6 @@ net_connect2(struct sockaddr *sa, socklen_t salen, int *sd)
 	return errno;
     }
 
-    btpd.npeers++;
     return 0;
 }
 
@@ -983,7 +982,6 @@ net_connection_cb(int sd, short type, void *arg)
 	return;
     }
 
-    btpd.npeers++;
     peer_create_in(nsd);
 
     btpd_log(BTPD_L_CONN, "got connection.\n");

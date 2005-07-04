@@ -151,6 +151,7 @@ peer_create_common(int sd)
     event_set(&p->in_ev, p->sd, EV_READ, net_read_cb, p);
     event_add(&p->in_ev, NULL);
 
+    btpd.npeers++;
     return p;
 }
 
