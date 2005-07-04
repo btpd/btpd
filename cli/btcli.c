@@ -430,6 +430,7 @@ again:
 	if (ds < 0)
 	    ds = wait;
     }
+    tv_old = tv_cur;
     cur = parse_tors(res, hashes, nhashes);
     free(res);
 
