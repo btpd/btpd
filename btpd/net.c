@@ -30,6 +30,7 @@ net_bw_read_cb(int sd, short type, void *arg)
     struct bwlim *bw = arg;
 
     btpd.ibw_left += bw->count;
+    assert(btpd.ibw_left <= btpd.ibwlim);
 
     unsigned long count = 0;
 
@@ -79,6 +80,7 @@ net_bw_write_cb(int sd, short type, void *arg)
     struct bwlim *bw = arg;
 
     btpd.obw_left += bw->count;
+    assert(btpd.obw_left <= btpd.obwlim);
 
     unsigned long count = 0;
 
