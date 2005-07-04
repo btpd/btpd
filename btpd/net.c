@@ -222,9 +222,7 @@ net_write(struct peer *p, unsigned long wmax)
 again:
     nwritten = writev(p->sd, iov, niov);
     if (nwritten < 0) {
-	if (errno == EINTR)
-	    goto again;
-	else if (errno == EAGAIN) {
+	if (errno == EAGAIN) {
 	    event_add(&p->out_ev, NULL);
 	    return 0;
 	} else {
@@ -435,7 +433,7 @@ net_read(struct peer *p, char *buf, size_t len)
 {
     ssize_t nread = read(p->sd, buf, len);
     if (nread < 0) {
-	if (errno == EINTR || errno == EAGAIN) {
+	if (errno == EAGAIN) {
 	    event_add(&p->in_ev, NULL);
 	    return 0;
 	} else {
@@ -968,7 +966,7 @@ net_connection_cb(int sd, short type, void *arg)
 
     nsd = accept(sd, NULL, NULL);
     if (nsd < 0) {
-	if (errno == EWOULDBLOCK || errno == ECONNABORTED || errno == EINTR)
+	if (errno == EWOULDBLOCK || errno == ECONNABORTED)
 	    return;
 	else
 	    btpd_err("accept4: %s\n", strerror(errno));
