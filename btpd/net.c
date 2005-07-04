@@ -221,7 +221,6 @@ net_write(struct peer *p, unsigned long wmax)
 	iol = BTPDQ_NEXT(iol, entry);
     }
 
-again:
     nwritten = writev(p->sd, iov, niov);
     if (nwritten < 0) {
 	if (errno == EAGAIN) {
