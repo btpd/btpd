@@ -694,15 +694,6 @@ net_generic_read(struct peer *p, unsigned long rmax)
 		uint32_t index = net_read32(buf + off + 5);
 		uint32_t begin = net_read32(buf + off + 9);
 		uint32_t length = msg_len - 9;
-#if 0
-		struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
-		if (req == NULL)
-		    goto bad_data;
-		if (!(index == req->index &&
-		      begin == req->begin &&
-		      length == req->length))
-		    goto bad_data;
-#endif
 		if (len - off >= msg_len + 4) {
 		    off_t cbegin = index * p->tp->meta.piece_length + begin;
 		    p->tp->downloaded += length;
@@ -835,26 +826,11 @@ net_shake_read(struct peer *p, unsigned long rmax)
 	    break;
 	else
 	    hs->state = SHAKE_RESERVED;
-#if 0
-	else if (bcmp(in->buf + 20, "\0\0\0\0\0\0\0\0", 8) == 0)
-	    hs->state = SHAKE_RESERVED;
-	else
-	    goto bad_shake;
-#endif
     case SHAKE_RESERVED:
 	if (in->buf_off < 48)
 	    break;
 	else if (hs->incoming) {
 	    struct torrent *tp = torrent_get_by_hash(in->buf + 28);
-#if 0
-	    tp = BTPDQ_FIRST(&btpd.cm_list);
-	    while (tp != NULL) {
-		if (bcmp(in->buf + 28, tp->meta.info_hash, 20) == 0)
-		    break;
-		else
-		    tp = BTPDQ_NEXT(tp, entry);
-	    }
-#endif
 	    if (tp != NULL) {
 		hs->state = SHAKE_INFO;
 		p->tp = tp;
@@ -1001,37 +977,4 @@ net_by_second(void)
 	    p->rate_from_me[ri] = 0;
 	}
     }
-
-#if 0
-    btpd.obw_left = btpd.obwlim;
-    btpd.ibw_left = btpd.ibwlim;
-
-    if (btpd.ibwlim > 0) {
-	while ((p = BTPDQ_FIRST(&btpd.readq)) != NULL && btpd.ibw_left > 0) {
-	    BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
-	    p->flags &= ~PF_ON_READQ;
-	    btpd.ibw_left -= p->reader->read(p, btpd.ibw_left);
-	}
-    } else {
-	while ((p = BTPDQ_FIRST(&btpd.readq)) != NULL) {
-	    BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
-	    p->flags &= ~PF_ON_READQ;
-	    p->reader->read(p, 0);
-	}
-    }
-
-    if (btpd.obwlim) {
-	while ((p = BTPDQ_FIRST(&btpd.writeq)) != NULL && btpd.obw_left > 0) {
-	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
-	    p->flags &= ~PF_ON_WRITEQ;
-	    btpd.obw_left -=  net_write(p, btpd.obw_left);
-	}
-    } else {
-	while ((p = BTPDQ_FIRST(&btpd.writeq)) != NULL) {
-	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
-	    p->flags &= ~PF_ON_WRITEQ;
-	    net_write(p, 0);
-	}
-    }
-#endif
 }
