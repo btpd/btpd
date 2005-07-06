@@ -303,11 +303,13 @@ cm_on_lost_peer(struct peer *peer)
     if ((peer->flags & (PF_I_WANT|PF_P_CHOKE)) == PF_I_WANT)
 	cm_on_undownload(peer);
 
-    for (piece = BTPDQ_FIRST(&tp->getlst); piece;
-	 piece = BTPDQ_NEXT(piece, entry)) {
+    piece = BTPDQ_FIRST(&tp->getlst);
+    while (piece != NULL) {
+	struct piece *next = BTPDQ_NEXT(piece, entry);
 	if (has_bit(peer->piece_field, piece->index) &&
 	    tp->piece_count[piece->index] == 0)
 	    cm_on_peerless_piece(tp, piece);
+	piece = next;
     }
 }
 
