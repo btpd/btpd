@@ -25,6 +25,8 @@ peer_kill(struct peer *p)
 
     if (p->flags & PF_ATTACHED)
 	cm_on_lost_peer(p);
+    else
+	BTPDQ_REMOVE(&btpd.unattached, p, cm_entry);
     if (p->flags & PF_ON_READQ)
 	BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
     if (p->flags & PF_ON_WRITEQ)
@@ -151,6 +153,7 @@ peer_create_common(int sd)
     event_set(&p->in_ev, p->sd, EV_READ, net_read_cb, p);
     event_add(&p->in_ev, NULL);
 
+    BTPDQ_INSERT_TAIL(&btpd.unattached, p, cm_entry);
     btpd.npeers++;
     return p;
 }

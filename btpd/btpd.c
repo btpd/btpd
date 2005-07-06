@@ -120,6 +120,8 @@ btpd_init(void)
     BTPDQ_INIT(&btpd.readq);
     BTPDQ_INIT(&btpd.writeq);
 
+    BTPDQ_INIT(&btpd.unattached);
+
     btpd.port = 6881;
 
     btpd.obwlim = 0;

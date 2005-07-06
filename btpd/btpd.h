@@ -50,6 +50,8 @@ struct btpd {
     struct peer_tq readq;
     struct peer_tq writeq;
 
+    struct peer_tq unattached;
+
     int port;
     int peer4_sd;
     int ipc_sd;
