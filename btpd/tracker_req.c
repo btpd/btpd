@@ -21,7 +21,7 @@
 #define PRIu64 "llu"
 #endif
 
-#define REQ_SIZE (1024 + 6 * 50)
+#define REQ_SIZE (getpagesize() * 2)
 
 struct tracker_req {
     enum tr_event tr_event;
