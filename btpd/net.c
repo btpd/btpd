@@ -766,6 +766,7 @@ net_generic_read(struct peer *p, unsigned long rmax)
     }
     if (off != len) {
 	gr->iob.buf_off = len - off;
+        assert(gr->iob.buf_off <= gr->iob.buf_len);
 	bcopy(buf + off, gr->iob.buf, gr->iob.buf_off);
     }
     event_add(&p->in_ev, NULL);

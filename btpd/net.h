@@ -65,7 +65,7 @@ struct handshake {
     char _io_buf[SHAKE_LEN];
 };
 
-#define MAX_INPUT_LEFT 12
+#define MAX_INPUT_LEFT 16
 
 struct generic_reader {
     struct input_reader rd;
