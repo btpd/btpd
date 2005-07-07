@@ -115,7 +115,8 @@ tracker_done(struct child *child)
     if (error == EINVAL) {
 	error = benc_dget_str(req->res->buf, "peers", &peers, &length);
 	if (error == 0 && length % 6 == 0) {
-	    for (size_t i = 0; i < length; i += 6)
+            size_t i;
+            for (i = 0; i < length && btpd.npeers < btpd.maxpeers; i += 6)
 		peer_create_out_compact(tp, peers + i);
 	}
     }
