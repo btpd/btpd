@@ -553,7 +553,7 @@ cmd_list(int argc, char **argv)
         printf("%s\n", path);
         free(path);
     }
-    printf("%d torrents.\n", count);
+    printf("%d torrent%s.\n", count, count == 1 ? "" : "s");
 }
 
 static struct {
