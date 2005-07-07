@@ -1,0 +1,15 @@
+btpd 0.2:
+---------
+
+Misc:
+- A new way to do rate limiting.
+- Compact mode is now used when talking to the tracker.
+
+Bug fixes:
+- A buffer was too small by four bytes, causing a buffer overflow
+  on the heap in certain conditions.
+- An iteration over a list was unsafe and could cause a crash.
+- Unloading a torrent didn't kill peers in handshake for that torrent,
+  and a crash was possible when the handshake finished.
+- The counter for uploaded data was updated too early.
+- Fixed illegal operator for test(1) in configure.
