@@ -453,6 +453,21 @@ net_read(struct peer *p, char *buf, size_t len)
 	return nread;
 }
 
+static size_t
+net_read_to_buf(struct peer *p, struct io_buffer *iob, unsigned long rmax)
+{
+    if (rmax == 0)
+	rmax = iob->buf_len - iob->buf_off;
+    else
+	rmax = min(rmax, iob->buf_len - iob->buf_off);
+
+    assert(rmax > 0);
+    size_t nread = net_read(p, iob->buf + iob->buf_off, rmax);
+    if (nread > 0)
+	iob->buf_off += nread;
+    return nread;
+}
+
 void
 kill_bitfield(struct input_reader *rd)
 {
@@ -464,17 +479,12 @@ static void net_generic_reader(struct peer *p);
 static unsigned long
 read_bitfield(struct peer *p, unsigned long rmax)
 {
-    ssize_t nread;
     struct bitfield_reader *rd = (struct bitfield_reader *)p->reader;
-    if (rmax == 0)
-	rmax = rd->iob.buf_len - rd->iob.buf_off;
-    else
-	rmax = min(rmax, rd->iob.buf_len - rd->iob.buf_off);
 
-    if ((nread = net_read(p, rd->iob.buf + rd->iob.buf_off, rmax)) == 0)
+    size_t nread = net_read_to_buf(p, &rd->iob, rmax);
+    if (nread == 0)
 	return 0;
 
-    rd->iob.buf_off += nread;
     if (rd->iob.buf_off == rd->iob.buf_len) {
 	peer_on_bitfield(p, rd->iob.buf);
 	free(rd);
@@ -494,17 +504,12 @@ kill_piece(struct input_reader *rd)
 static unsigned long
 read_piece(struct peer *p, unsigned long rmax)
 {
-    ssize_t nread;
     struct piece_reader *rd = (struct piece_reader *)p->reader;
-    if (rmax == 0)
-	rmax = rd->iob.buf_len - rd->iob.buf_off;
-    else
-	rmax = min(rmax, rd->iob.buf_len - rd->iob.buf_off);
 
-    if ((nread = net_read(p, rd->iob.buf + rd->iob.buf_off, rmax)) == 0)
+    size_t nread = net_read_to_buf(p, &rd->iob, rmax);
+    if (nread == 0)
 	return 0;
 
-    rd->iob.buf_off += nread;
     p->rate_to_me[btpd.seconds % RATEHISTORY] += nread;
     p->tp->downloaded += nread;
     if (rd->iob.buf_off == rd->iob.buf_len) {
@@ -734,20 +739,12 @@ net_generic_reader(struct peer *p)
 static unsigned long
 net_shake_read(struct peer *p, unsigned long rmax)
 {
-    ssize_t nread;
     struct handshake *hs = (struct handshake *)p->reader;
     struct io_buffer *in = &hs->in;
 
-    if (rmax == 0)
-	rmax = in->buf_len - in->buf_off;
-    else
-	rmax = min(rmax, in->buf_len - in->buf_off);
-
-    nread = net_read(p, in->buf + in->buf_off, rmax);
+    size_t nread = net_read_to_buf(p, in, rmax);
     if (nread == 0)
 	return 0;
-
-    in->buf_off += nread;
 
     switch (hs->state) {
     case SHAKE_INIT:
