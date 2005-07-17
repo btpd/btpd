@@ -528,27 +528,22 @@ static unsigned long
 net_generic_read(struct peer *p, unsigned long rmax)
 {
     char buf[GRBUFLEN];
+    struct io_buffer iob = { 0, GRBUFLEN, buf };
     struct generic_reader *gr = (struct generic_reader *)p->reader;
-    ssize_t nread;
+    size_t nread;
     size_t off, len;
     int got_part;
 
-    len = 0;
     if (gr->iob.buf_off > 0) {
-	len = gr->iob.buf_off;
+	iob.buf_off = gr->iob.buf_off;
+	bcopy(gr->iob.buf, iob.buf, iob.buf_off);
 	gr->iob.buf_off = 0;
-	bcopy(gr->iob.buf, buf, len);
     }
     
-    if (rmax == 0)
-	rmax = GRBUFLEN - len;
-    else
-	rmax = min(rmax, GRBUFLEN - len);
-
-    if ((nread = net_read(p, buf + len, rmax)) == 0)
+    if ((nread = net_read_to_buf(p, &iob, rmax)) == 0)
 	return 0;
 
-    len += nread;
+    len = iob.buf_off;
     off = 0;
 
     got_part = 0;
