@@ -64,4 +64,6 @@ int torrent_has_peer(struct torrent *tp, const uint8_t *id);
 
 struct torrent *torrent_get_by_hash(const uint8_t *hash);
 
+off_t torrent_piece_size(struct torrent *tp, uint32_t index);
+
 #endif

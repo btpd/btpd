@@ -93,6 +93,8 @@ void net_send_choke(struct peer *p);
 
 void net_send_have(struct peer *p, uint32_t index);
 void net_send_request(struct peer *p, struct piece_req *req);
+void net_send_piece(struct peer *p, uint32_t index, uint32_t begin,
+    char *block, size_t blen);
 void net_send_cancel(struct peer *p, struct piece_req *req);
 
 void net_handshake(struct peer *p, int incoming);

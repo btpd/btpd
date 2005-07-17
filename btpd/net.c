@@ -476,12 +476,7 @@ read_bitfield(struct peer *p, unsigned long rmax)
 
     rd->iob.buf_off += nread;
     if (rd->iob.buf_off == rd->iob.buf_len) {
-	bcopy(rd->iob.buf, p->piece_field, rd->iob.buf_len);
-	for (unsigned i = 0; i < p->tp->meta.npieces; i++)
-	    if (has_bit(p->piece_field, i)) {
-		p->npieces++;
-		cm_on_piece_ann(p, i);
-	    }
+	peer_on_bitfield(p, rd->iob.buf);
 	free(rd);
 	net_generic_reader(p);
     } else
@@ -513,16 +508,7 @@ read_piece(struct peer *p, unsigned long rmax)
     p->rate_to_me[btpd.seconds % RATEHISTORY] += nread;
     p->tp->downloaded += nread;
     if (rd->iob.buf_off == rd->iob.buf_len) {
-	struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
-	if (req != NULL &&
-	    req->index == rd->index &&
-	    req->begin == rd->begin &&
-	    req->length == rd->iob.buf_len) {
-	    //
-	    off_t cbegin = rd->index * p->tp->meta.piece_length + rd->begin;
-	    torrent_put_bytes(p->tp, rd->iob.buf, cbegin, rd->iob.buf_len);
-	    cm_on_block(p);
-	}
+	peer_on_piece(p, rd->index, rd->begin, rd->iob.buf_len, rd->iob.buf);
 	free(rd);
 	net_generic_reader(p);
     } else
@@ -578,54 +564,33 @@ net_generic_read(struct peer *p, unsigned long rmax)
 	    btpd_log(BTPD_L_MSG, "choke.\n");
 	    if (msg_len != 1)
 		goto bad_data;
-	    if ((p->flags & (PF_P_CHOKE|PF_I_WANT)) == PF_I_WANT) {
-		p->flags |= PF_P_CHOKE;
-		cm_on_undownload(p);
-	    } else
-		p->flags |= PF_P_CHOKE;
+	    peer_on_choke(p);
 	    break;
 	case MSG_UNCHOKE:
 	    btpd_log(BTPD_L_MSG, "unchoke.\n");
 	    if (msg_len != 1)
 		goto bad_data;
-	    if ((p->flags & (PF_P_CHOKE|PF_I_WANT))
-		== (PF_P_CHOKE|PF_I_WANT)) {
-		p->flags &= ~PF_P_CHOKE;
-		cm_on_download(p);
-	    } else
-		p->flags &= ~PF_P_CHOKE;
+	    peer_on_unchoke(p);
 	    break;
 	case MSG_INTEREST:
 	    btpd_log(BTPD_L_MSG, "interested.\n");
 	    if (msg_len != 1)
 		goto bad_data;
-	    if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == 0) {
-		p->flags |= PF_P_WANT;
-		cm_on_upload(p);
-	    } else 
-		p->flags |= PF_P_WANT;
+	    peer_on_interest(p);
 	    break;
 	case MSG_UNINTEREST:
 	    btpd_log(BTPD_L_MSG, "uninterested.\n");
 	    if (msg_len != 1)
 		goto bad_data;
-	    if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT) {
-		p->flags &= ~PF_P_WANT;
-		cm_on_unupload(p);
-	    } else
-		p->flags &= ~PF_P_WANT;
+	    peer_on_uninterest(p);
 	    break;
 	case MSG_HAVE:
 	    btpd_log(BTPD_L_MSG, "have.\n");
 	    if (msg_len != 5)
 		goto bad_data;
 	    else if (len - off >= msg_len + 4) {
-		unsigned long piece = net_read32(buf + off + 5);
-		if (!has_bit(p->piece_field, piece)) {
-		    set_bit(p->piece_field, piece);
-		    p->npieces++;
-		    cm_on_piece_ann(p, piece);
-		}
+		uint32_t index = net_read32(buf + off + 5);
+		peer_on_have(p, index);
 	    } else
 		got_part = 1;
 	    break;
@@ -635,14 +600,9 @@ net_generic_read(struct peer *p, unsigned long rmax)
 		goto bad_data;
 	    else if (p->npieces != 0)
 		goto bad_data;
-	    else if (len - off >= msg_len + 4) {
-		bcopy(buf + off + 5, p->piece_field, msg_len - 1);
-		for (unsigned i = 0; i < p->tp->meta.npieces; i++)
-		    if (has_bit(p->piece_field, i)) {
-			p->npieces++;
-			cm_on_piece_ann(p, i);
-		    }
-	    } else {
+	    else if (len - off >= msg_len + 4)
+		peer_on_bitfield(p, buf + off + 5);
+	    else {
 		struct bitfield_reader *rp;
 		size_t mem = sizeof(*rp) + msg_len - 1;
 		p->reader->kill(p->reader);
@@ -666,23 +626,18 @@ net_generic_read(struct peer *p, unsigned long rmax)
 		if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) != PF_P_WANT)
 		    break;
 		uint32_t index, begin, length;
-		off_t cbegin;
-		char *content;
 		index = net_read32(buf + off + 5);
 		begin = net_read32(buf + off + 9);
 		length = net_read32(buf + off + 13);
 		if (length > (1 << 15))
 		    goto bad_data;
-		if (index >= p->tp->meta.npieces
-		    || !has_bit(p->tp->piece_field, index))
+		if (index >= p->tp->meta.npieces)
 		    goto bad_data;
-		if (begin + length > p->tp->meta.piece_length)
+		if (!has_bit(p->tp->piece_field, index))
 		    goto bad_data;
-		cbegin = index * p->tp->meta.piece_length + begin;
-		if (cbegin + length > p->tp->meta.total_length)
+		if (begin + length > torrent_piece_size(p->tp, index))
 		    goto bad_data;
-		content = torrent_get_bytes(p->tp, cbegin, length);
-		net_send_piece(p, index, begin, content, length);
+		peer_on_request(p, index, begin, length);
 	    } else
 		got_part = 1;
 	    break;
@@ -695,18 +650,9 @@ net_generic_read(struct peer *p, unsigned long rmax)
 		uint32_t begin = net_read32(buf + off + 9);
 		uint32_t length = msg_len - 9;
 		if (len - off >= msg_len + 4) {
-		    off_t cbegin = index * p->tp->meta.piece_length + begin;
 		    p->tp->downloaded += length;
 		    p->rate_to_me[btpd.seconds % RATEHISTORY] += length;
-		    struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
-		    if (req != NULL &&
-			req->index == index &&
-			req->begin == begin &&
-			req->length == length) {
-			//
-			torrent_put_bytes(p->tp, buf + off + 13, cbegin, length);
-			cm_on_block(p);
-		    }
+		    peer_on_piece(p, index, begin, length, buf + off + 13);
 		} else {
 		    struct piece_reader *rp;
 		    size_t mem = sizeof(*rp) + length;
@@ -734,27 +680,16 @@ net_generic_read(struct peer *p, unsigned long rmax)
 	    if (msg_len != 13)
 		goto bad_data;
 	    else if (len - off >= msg_len + 4) {
-		struct piece_req *req;
-		uint32_t index, begin, length;
-
-		index = net_read32(buf + off + 5);
-		begin = net_read32(buf + off + 9);
-		length = net_read32(buf + off + 13);
-
+		uint32_t index = net_read32(buf + off + 5);
+		uint32_t begin = net_read32(buf + off + 9);
+		uint32_t length = net_read32(buf + off + 13);
+		if (index > p->tp->meta.npieces)
+		    goto bad_data;
+		if (begin + length > torrent_piece_size(p->tp, index))
+		    goto bad_data;
 		btpd_log(BTPD_L_MSG, "cancel: %u, %u, %u\n",
 		    index, begin, length);
-
-		req = BTPDQ_FIRST(&p->p_reqs);
-		while (req != NULL) {
-		    if (req->index == index &&
-			req->begin == begin &&
-			req->length == length) {
-			btpd_log(BTPD_L_MSG, "cancel matched.\n");
-			net_unsend_piece(p, req);
-			break;
-		    }
-		    req = BTPDQ_NEXT(req, entry);
-		}
+		peer_on_cancel(p, index, begin, length);
 	    } else
 		got_part = 1;
 	    break;

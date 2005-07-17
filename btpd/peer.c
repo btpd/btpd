@@ -1,6 +1,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+
+#include <math.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -166,10 +168,8 @@ peer_create_in(int sd)
 }
 
 void
-peer_create_out(struct torrent *tp,
-		const uint8_t *id,
-		const char *ip,
-		int port)
+peer_create_out(struct torrent *tp, const uint8_t *id,
+    const char *ip, int port)
 {
     int sd;
     struct peer *p;
@@ -200,4 +200,107 @@ peer_create_out_compact(struct torrent *tp, const char *compact)
     p = peer_create_common(sd);
     p->tp = tp;
     net_handshake(p, 0);
+}
+
+void
+peer_on_choke(struct peer *p)
+{
+    if ((p->flags & (PF_P_CHOKE|PF_I_WANT)) == PF_I_WANT) {
+	p->flags |= PF_P_CHOKE;
+	cm_on_undownload(p);
+    } else
+	p->flags |= PF_P_CHOKE;
+}
+
+void
+peer_on_unchoke(struct peer *p)
+{
+    if ((p->flags & (PF_P_CHOKE|PF_I_WANT)) == (PF_P_CHOKE|PF_I_WANT)) {
+	p->flags &= ~PF_P_CHOKE;
+	cm_on_download(p);
+    } else
+	p->flags &= ~PF_P_CHOKE;
+}
+
+void
+peer_on_interest(struct peer *p)
+{
+    if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == 0) {
+	p->flags |= PF_P_WANT;
+	cm_on_upload(p);
+    } else 
+	p->flags |= PF_P_WANT;
+}
+
+void
+peer_on_uninterest(struct peer *p)
+{
+    if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT) {
+	p->flags &= ~PF_P_WANT;
+	cm_on_unupload(p);
+    } else
+	p->flags &= ~PF_P_WANT;
+}
+
+void
+peer_on_have(struct peer *p, uint32_t index)
+{
+    if (!has_bit(p->piece_field, index)) {
+	set_bit(p->piece_field, index);
+	p->npieces++;
+	cm_on_piece_ann(p, index);
+    }
+}
+
+void
+peer_on_bitfield(struct peer *p, uint8_t *field)
+{
+    assert(p->npieces == 0);
+    bcopy(field, p->piece_field, (size_t)ceil(p->tp->meta.npieces / 8.0));
+    for (uint32_t i = 0; i < p->tp->meta.npieces; i++) {
+	if (has_bit(p->piece_field, i)) {
+	    p->npieces++;
+	    cm_on_piece_ann(p, i);
+	}
+    }
+}
+
+void
+peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
+    uint32_t length, const char *data)
+{
+    off_t cbegin = index * p->tp->meta.piece_length + begin;
+    struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
+    if (req != NULL &&
+	req->index == index &&
+	req->begin == begin &&
+	req->length == length) {
+	torrent_put_bytes(p->tp, data, cbegin, length);
+	cm_on_block(p);
+    }
+}
+
+void
+peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
+    uint32_t length)
+{
+    off_t cbegin = index * p->tp->meta.piece_length + begin;
+    char * content = torrent_get_bytes(p->tp, cbegin, length);
+    net_send_piece(p, index, begin, content, length);
+}
+
+void
+peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
+    uint32_t length)
+{
+    struct piece_req *req = BTPDQ_FIRST(&p->p_reqs);
+    while (req != NULL) {
+	if (req->index == index
+	    && req->begin == begin && req->length == length) {
+	    btpd_log(BTPD_L_MSG, "cancel matched.\n");
+	    net_unsend_piece(p, req);
+	    break;
+	}
+	req = BTPDQ_NEXT(req, entry);
+    }
 }

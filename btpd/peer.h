@@ -48,7 +48,7 @@ void peer_choke(struct peer *p);
 void peer_unwant(struct peer *p, uint32_t index);
 void peer_want(struct peer *p, uint32_t index);
 void peer_request(struct peer *p, uint32_t index,
-		  uint32_t begin, uint32_t len);
+    uint32_t begin, uint32_t len);
 void peer_cancel(struct peer *p, uint32_t index, uint32_t begin, uint32_t len);
 
 void peer_have(struct peer *p, uint32_t index);
@@ -57,8 +57,21 @@ unsigned long peer_get_rate(unsigned long *rates);
 
 void peer_create_in(int sd);
 void peer_create_out(struct torrent *tp, const uint8_t *id,
-		     const char *ip, int port);
+    const char *ip, int port);
 void peer_create_out_compact(struct torrent *tp, const char *compact);
 void peer_kill(struct peer *p);
+
+void peer_on_interest(struct peer *p);
+void peer_on_uninterest(struct peer *p);
+void peer_on_choke(struct peer *p);
+void peer_on_unchoke(struct peer *p);
+void peer_on_have(struct peer *p, uint32_t index);
+void peer_on_bitfield(struct peer *p, uint8_t *field);
+void peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
+    uint32_t length, const char *data);
+void peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
+    uint32_t length);
+void peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
+    uint32_t length);
 
 #endif
