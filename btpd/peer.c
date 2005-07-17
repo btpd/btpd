@@ -205,41 +205,45 @@ peer_create_out_compact(struct torrent *tp, const char *compact)
 void
 peer_on_choke(struct peer *p)
 {
-    if ((p->flags & (PF_P_CHOKE|PF_I_WANT)) == PF_I_WANT) {
+    if ((p->flags & PF_P_CHOKE) != 0)
+	return;
+    else {
 	p->flags |= PF_P_CHOKE;
-	cm_on_undownload(p);
-    } else
-	p->flags |= PF_P_CHOKE;
+	cm_on_choke(p);
+    }
 }
 
 void
 peer_on_unchoke(struct peer *p)
 {
-    if ((p->flags & (PF_P_CHOKE|PF_I_WANT)) == (PF_P_CHOKE|PF_I_WANT)) {
+    if ((p->flags & PF_P_CHOKE) == 0)
+	return;
+    else {
 	p->flags &= ~PF_P_CHOKE;
-	cm_on_download(p);
-    } else
-	p->flags &= ~PF_P_CHOKE;
+	cm_on_unchoke(p);
+    }
 }
 
 void
 peer_on_interest(struct peer *p)
 {
-    if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == 0) {
+    if ((p->flags & PF_P_WANT) != 0)
+	return;
+    else {
 	p->flags |= PF_P_WANT;
-	cm_on_upload(p);
-    } else 
-	p->flags |= PF_P_WANT;
+	cm_on_interest(p);
+    }
 }
 
 void
 peer_on_uninterest(struct peer *p)
 {
-    if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT) {
+    if ((p->flags & PF_P_WANT) == 0)
+	return;
+    else {
 	p->flags &= ~PF_P_WANT;
-	cm_on_unupload(p);
-    } else
-	p->flags &= ~PF_P_WANT;
+	cm_on_uninterest(p);
+    }
 }
 
 void

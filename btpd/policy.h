@@ -6,9 +6,12 @@ void cm_by_second(struct torrent *tp);
 void cm_on_new_peer(struct peer *peer);
 void cm_on_lost_peer(struct peer *peer);
 
+void cm_on_choke(struct peer *peer);
+void cm_on_unchoke(struct peer *peer);
 void cm_on_upload(struct peer *peer);
 void cm_on_unupload(struct peer *peer);
-
+void cm_on_interest(struct peer *peer);
+void cm_on_uninterest(struct peer *peer);
 void cm_on_download(struct peer *peer);
 void cm_on_undownload(struct peer *peer);
 void cm_on_piece_ann(struct peer *peer, uint32_t piece);

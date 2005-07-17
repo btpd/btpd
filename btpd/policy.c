@@ -216,6 +216,20 @@ cm_on_unupload(struct peer *peer)
 }
 
 void
+cm_on_interest(struct peer *peer)
+{
+    if ((peer->flags & PF_I_CHOKE) == 0)
+	cm_on_upload(peer);
+}
+
+void
+cm_on_uninterest(struct peer *peer)
+{
+    if ((peer->flags & PF_I_CHOKE) == 0)
+	cm_on_unupload(peer);
+}
+
+void
 cm_by_second(struct torrent *tp)
 {
     if (btpd.seconds == tp->tracker_time)
@@ -244,6 +258,20 @@ cm_on_undownload(struct peer *peer)
 	cm_unassign_requests(peer);
     else
 	cm_unassign_requests_eg(peer);
+}
+
+void
+cm_on_unchoke(struct peer *peer)
+{
+    if ((peer->flags & PF_I_WANT) != 0)
+	cm_on_download(peer);
+}
+
+void
+cm_on_choke(struct peer *peer)
+{
+    if ((peer->flags & PF_I_WANT) != 0)
+	cm_on_undownload(peer);
 }
 
 void
