@@ -9,7 +9,7 @@ AC_CONFIG_FILES([Makefile btpd/Makefile misc/Makefile cli/Makefile])
 AC_PROG_CC
 AC_PROG_RANLIB
 
-CFLAGS="$CFLAGS -std=c99 -Wall -Werror"
+CFLAGS="$CFLAGS -std=c99"
 
 case $target_os in
      linux*)
@@ -37,6 +37,26 @@ AC_ARG_WITH(curlconf,
 [  --with-curlconf=prog    use this curl-config],
 [
     CURLCONF=$withval
+],
+[])
+
+AC_ARG_WITH(warn,
+[  --with-warn=level       select warning preset (no,all,allerr)],
+[
+    case $withval in
+    no)
+	;;
+    all)
+	CFLAGS="$CFLAGS -Wall"
+	;;
+    allerr)
+	CFLAGS="$CFLAGS -Wall -Werror"
+	;;
+    *)
+	echo "Warning preset \"$withval\" not recognized. See --help."
+	exit 1
+	;;
+    esac
 ],
 [])
 
