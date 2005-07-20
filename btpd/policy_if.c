@@ -39,14 +39,14 @@ cm_on_piece_ann(struct peer *p, uint32_t index)
 	}
     } else if (pc == NULL) {
 	peer_want(p, index);
-	if (!peer_chokes(p)) {
+	if (!peer_chokes(p) && !peer_laden(p)) {
 	    pc = cm_new_piece(tp, index);
 	    if (pc != NULL)
 		cm_piece_assign_requests(pc, p);
 	}
     } else if (!piece_full(pc)) {
 	peer_want(p, index);
-	if (!peer_chokes(p))
+	if (!peer_chokes(p) && !peer_laden(p))
 	    cm_piece_assign_requests(pc, p);
     }
 }
