@@ -178,6 +178,7 @@ cm_on_new_peer(struct peer *p)
 
     tp->npeers++;
     p->flags |= PF_ATTACHED;
+    BTPDQ_REMOVE(&btpd.unattached, p, cm_entry);
 
     if (tp->npeers == 1) {
 	BTPDQ_INSERT_HEAD(&tp->peers, p, cm_entry);
