@@ -443,6 +443,7 @@ cm_unassign_requests(struct peer *p)
     }
 
     assert(BTPDQ_EMPTY(&p->my_reqs));
+    p->nreqs_out = 0;
 }
 
 

@@ -92,6 +92,7 @@ again:
 	net_send_cancel(p, req);
 	BTPDQ_REMOVE(&p->my_reqs, req, entry);
 	free(req);
+	p->nreqs_out--;
 	goto again;
     }
 }
