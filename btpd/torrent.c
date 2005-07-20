@@ -43,6 +43,7 @@ torrent_load3(const char *file, struct metainfo *mi, char *mem, size_t memsiz)
 	btpd_err("Out of memory.\n");
 
     tp->piece_count = btpd_calloc(mi->npieces, sizeof(tp->piece_count[0]));
+    tp->busy_field = btpd_calloc(ceil(mi->npieces / 8.0), 1);
 
     BTPDQ_INIT(&tp->peers);
     BTPDQ_INIT(&tp->getlst);
@@ -178,6 +179,7 @@ torrent_unload(struct torrent *tp)
     }
 
     free(tp->piece_count);
+    free(tp->busy_field);
     free((void *)tp->relpath);
     clear_metainfo(&tp->meta);
 
@@ -261,4 +263,21 @@ torrent_piece_size(struct torrent *tp, uint32_t index)
 	off_t allbutlast = tp->meta.piece_length * (tp->meta.npieces - 1);
 	return tp->meta.total_length - allbutlast;
     }
+}
+
+uint32_t
+torrent_block_size(struct piece *pc, uint32_t index)
+{
+    if (index < pc->nblocks - 1)
+	return PIECE_BLOCKLEN;
+    else {
+	uint32_t allbutlast = PIECE_BLOCKLEN * (pc->nblocks - 1);
+	return torrent_piece_size(pc->tp, pc->index) - allbutlast;
+    }
+}
+
+int
+torrent_has_all(struct torrent *tp)
+{
+    return tp->have_npieces == tp->meta.npieces;
 }

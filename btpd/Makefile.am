@@ -5,7 +5,7 @@ btpd_SOURCES=\
 	net.c net.h\
 	queue.h \
 	peer.c peer.h\
-	policy.c policy.h\
+	policy_choke.c policy_if.c policy_subr.c policy.h\
 	torrent.c torrent.h\
 	tracker_req.c tracker_req.h
 

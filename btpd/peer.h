@@ -12,18 +12,22 @@
 
 #define RATEHISTORY 20
 
+#define MAXPIPEDREQUESTS 5
+
 struct peer {
     int sd;
     uint8_t flags;
     uint8_t *piece_field;
     uint32_t npieces;
-    unsigned nwant;
+    uint32_t nwant;
 
     uint8_t id[20];
 
     struct torrent *tp;
 
     struct piece_req_tq p_reqs, my_reqs;
+
+    unsigned nreqs_out;
 
     struct io_tq outq;
 

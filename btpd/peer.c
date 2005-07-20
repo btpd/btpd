@@ -68,6 +68,7 @@ peer_kill(struct peer *p)
 void
 peer_request(struct peer *p, uint32_t index, uint32_t begin, uint32_t len)
 {
+    p->nreqs_out++;
     struct piece_req *req = btpd_calloc(1, sizeof(*req));
     req->index = index;
     req->begin = begin;
@@ -179,7 +180,6 @@ peer_create_out(struct torrent *tp, const uint8_t *id,
 
     p = peer_create_common(sd);
     p->tp = tp;
-    //bcopy(id, p->id, 20);
     net_handshake(p, 0);
 }
 
@@ -273,14 +273,18 @@ void
 peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length, const char *data)
 {
-    off_t cbegin = index * p->tp->meta.piece_length + begin;
     struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
     if (req != NULL &&
 	req->index == index &&
 	req->begin == begin &&
 	req->length == length) {
-	torrent_put_bytes(p->tp, data, cbegin, length);
-	cm_on_block(p);
+
+	assert(p->nreqs_out > 0);
+	p->nreqs_out--;
+	BTPDQ_REMOVE(&p->my_reqs, req, entry);
+	free(req);
+	
+	cm_on_block(p, index, begin, length, data);
     }
 }
 
