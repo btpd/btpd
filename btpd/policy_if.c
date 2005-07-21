@@ -32,7 +32,7 @@ cm_on_piece_ann(struct peer *p, uint32_t index)
 	return;
     struct piece *pc = torrent_get_piece(tp, index);
     if (tp->endgame) {
-	if (pc != NULL && !piece_full(pc)) {
+	if (pc != NULL) {
 	    peer_want(p, index);
 	    if (!peer_chokes(p))
 		cm_piece_assign_requests_eg(pc, p);
@@ -139,6 +139,8 @@ cm_on_ok_piece(struct piece *pc)
     if (torrent_has_all(tp)) {
 	btpd_log(BTPD_L_BTPD, "Finished: %s.\n", tp->relpath);
 	tracker_req(tp, TR_COMPLETED);
+	BTPDQ_FOREACH(p, &tp->peers, cm_entry)
+	    assert(p->nwant == 0);
     }
 }
 
