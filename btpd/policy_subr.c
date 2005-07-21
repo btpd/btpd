@@ -51,10 +51,16 @@ static void
 cm_enter_endgame(struct torrent *tp)
 {
     struct peer *p;
+    struct piece *pc;
     btpd_log(BTPD_L_POL, "Entering end game\n");
     tp->endgame = 1;
+    BTPDQ_FOREACH(pc, &tp->getlst, entry) {
+	for (uint32_t i = 0; i < pc->nblocks; i++)
+	    clear_bit(pc->down_field, i);
+	pc->nbusy = 0;
+    }
     BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
-	struct piece *pc;
+	assert(p->nwant == 0);
 	BTPDQ_FOREACH(pc, &tp->getlst, entry) {
 	    if (peer_has(p, pc->index)) {
 		peer_want(p, pc->index);
