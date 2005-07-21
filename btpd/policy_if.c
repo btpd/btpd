@@ -241,14 +241,12 @@ cm_on_block(struct peer *p, uint32_t index, uint32_t begin, uint32_t length,
     off_t cbegin = index * p->tp->meta.piece_length + begin;
     torrent_put_bytes(p->tp, data, cbegin, length);
 
-    struct piece *pc = BTPDQ_FIRST(&tp->getlst);
-    while (pc != NULL && pc->index != index)
-        pc = BTPDQ_NEXT(pc, entry);
+    struct piece *pc = torrent_get_piece(tp, index);
+    assert(pc != NULL);
+
     uint32_t block = begin / PIECE_BLOCKLEN;
     set_bit(pc->have_field, block);
-    clear_bit(pc->down_field, block);
     pc->ngot++;
-    pc->nbusy--;
 
     if (tp->endgame) {
 	BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
@@ -258,6 +256,9 @@ cm_on_block(struct peer *p, uint32_t index, uint32_t begin, uint32_t length,
 	if (pc->ngot == pc->nblocks)
 	    cm_on_piece(pc);
     } else {
+	// XXX: Needs to be looked at if we introduce snubbing.
+	clear_bit(pc->down_field, block);
+	pc->nbusy--;
 	if (pc->ngot == pc->nblocks)
 	    cm_on_piece(pc);
 	if (peer_leech_ok(p))
