@@ -207,30 +207,34 @@ static void
 usage()
 {
     printf("Usage: btpd [options]\n"
-	   "\n"
-	   "Options:\n"
-	   "\n"
-	   "--bw-in n\n"
-	   "\tLimit incoming BitTorrent traffic to n kB/s.\n"
-	   "\tDefault is 0 which means unlimited.\n"
-	   "\n"
-	   "--bw-out n\n"
-	   "\tlimit outgoing BitTorrent traffic to n kB/s.\n"
-	   "\tDefault is 0 which means unlimited.\n"
-	   "\n"
-	   "--ipc key\n"
-	   "\tThe same key must be used by the cli to talk to this\n"
-	   "\tbtpd instance. You shouldn't need to use this option.\n"
-	   "\n"
-	   "--logfile file\n"
-	   "\tLog to the given file. By default btpd logs to ./btpd.log.\n"
-	   "\n"
-	   "-p n, --port n\n"
-	   "\tListen at port n. Default is 6881.\n"
-	   "\n"
-	   "--help\n"
-	   "\tShow this help.\n"
-	   "\n");
+	"\n"
+	"Options:\n"
+	"\n"
+	"--bw-in n\n"
+	"\tLimit incoming BitTorrent traffic to n kB/s.\n"
+	"\tDefault is 0 which means unlimited.\n"
+	"\n"
+	"--bw-out n\n"
+	"\tLimit outgoing BitTorrent traffic to n kB/s.\n"
+	"\tDefault is 0 which means unlimited.\n"
+	"\n"
+	"-d\n"
+	"\tKeep the btpd process in the foregorund and log to std{out,err}.\n"
+	"\tThis options is intended for debugging purposes.\n"
+	"\n"
+	"--ipc key\n"
+	"\tThe same key must be used by the cli to talk to this\n"
+	"\tbtpd instance. You shouldn't need to use this option.\n"
+	"\n"
+	"--logfile file\n"
+	"\tLog to the given file. By default btpd logs to ./btpd.log.\n"
+	"\n"
+	"-p n, --port n\n"
+	"\tListen at port n. Default is 6881.\n"
+	"\n"
+	"--help\n"
+	"\tShow this help.\n"
+	"\n");
     exit(1);
 }
 
@@ -251,12 +255,16 @@ main(int argc, char **argv)
 {
     int error, ch;
     char *logfile = NULL, *ipc = NULL;
-    
+    int d_opt = 0;
+
     setlocale(LC_ALL, "");
     btpd_init();
 
-    while ((ch = getopt_long(argc, argv, "p:", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "dp:", longopts, NULL)) != -1) {
 	switch (ch) {
+	case 'd':
+	    d_opt = 1;
+	    break;
 	case 'p':
 	    btpd.port = atoi(optarg);
 	    break;
@@ -353,12 +361,15 @@ main(int argc, char **argv)
     freopen("/dev/null", "r", stdin);
     if (logfile == NULL)
 	logfile = "btpd.log";
-    freopen(logfile, "w", stdout);
-    freopen(logfile, "w", stderr);
+    if (!d_opt) {
+	freopen(logfile, "w", stdout);
+	freopen(logfile, "w", stderr);
+	daemon(1, 1);
+    }
+
     setlinebuf(stdout);
     setlinebuf(stderr);
 
-    daemon(1, 1);
 
     event_init();
 
