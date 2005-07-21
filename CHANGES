@@ -3,6 +3,7 @@ btpd-0.3:
 
 Misc:
 - New download strategy.
+- Pipe ten requests instead of five.
 - "-d" option added to btpd.
 - "--with-warn" option added to configure. The default is now
   to compile with warnings off.
