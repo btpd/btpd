@@ -8,25 +8,18 @@ void next_optimistic(struct torrent *tp, struct peer *np);
 
 // policy_subr.c
 
-struct piece *torrent_get_piece(struct torrent *tp, uint32_t index);
 int piece_full(struct piece *pc);
-int peer_chokes(struct peer *p);
-int peer_wanted(struct peer *p);
-int peer_laden(struct peer *p);
-int peer_has(struct peer *p, uint32_t index);
-int peer_leech_ok(struct peer *p);
-
 void piece_free(struct piece *pc);
 
 void cm_on_piece_unfull(struct piece *pc);
 void cm_on_piece(struct piece *pc);
 
 struct piece *cm_new_piece(struct torrent *tp, uint32_t index);
+struct piece *cm_find_piece(struct torrent *tp, uint32_t index);
 unsigned cm_piece_assign_requests(struct piece *pc, struct peer *p);
 void cm_piece_assign_requests_eg(struct piece *pc, struct peer *p);
 unsigned  cm_assign_requests(struct peer *p);
 void cm_assign_requests_eg(struct peer *p);
-
 void cm_unassign_requests(struct peer *p);
 void cm_unassign_requests_eg(struct peer *p);
 

@@ -315,3 +315,33 @@ peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
 	req = BTPDQ_NEXT(req, entry);
     }
 }
+
+int
+peer_chokes(struct peer *p)
+{
+    return p->flags & PF_P_CHOKE;
+}
+
+int
+peer_has(struct peer *p, uint32_t index)
+{
+    return has_bit(p->piece_field, index);
+}
+
+int
+peer_laden(struct peer *p)
+{
+    return p->nreqs_out >= MAXPIPEDREQUESTS;
+}
+
+int
+peer_wanted(struct peer *p)
+{
+    return (p->flags & PF_I_WANT) == PF_I_WANT;
+}
+
+int
+peer_leech_ok(struct peer *p)
+{
+    return (p->flags & (PF_I_WANT|PF_P_CHOKE)) == PF_I_WANT;
+}

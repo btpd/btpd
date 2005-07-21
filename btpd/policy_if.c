@@ -30,7 +30,7 @@ cm_on_piece_ann(struct peer *p, uint32_t index)
     tp->piece_count[index]++;
     if (has_bit(tp->piece_field, index))
 	return;
-    struct piece *pc = torrent_get_piece(tp, index);
+    struct piece *pc = cm_find_piece(tp, index);
     if (tp->endgame) {
 	if (pc != NULL) {
 	    peer_want(p, index);
@@ -241,7 +241,7 @@ cm_on_block(struct peer *p, uint32_t index, uint32_t begin, uint32_t length,
     off_t cbegin = index * p->tp->meta.piece_length + begin;
     torrent_put_bytes(p->tp, data, cbegin, length);
 
-    struct piece *pc = torrent_get_piece(tp, index);
+    struct piece *pc = cm_find_piece(tp, index);
     assert(pc != NULL);
 
     uint32_t block = begin / PIECE_BLOCKLEN;

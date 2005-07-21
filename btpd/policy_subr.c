@@ -29,94 +29,6 @@
 #include "btpd.h"
 #include "stream.h"
 
-static int
-cm_should_enter_endgame(struct torrent *tp)
-{
-    int should;
-    if (tp->have_npieces + tp->npcs_busy == tp->meta.npieces) {
-	should = 1;
-	struct piece *pc;
-	BTPDQ_FOREACH(pc, &tp->getlst, entry) {
-	    if (!piece_full(pc)) {
-		should = 0;
-		break;
-	    }
-	}
-    } else
-	should = 0;
-    return should;
-}
-
-static void
-cm_enter_endgame(struct torrent *tp)
-{
-    struct peer *p;
-    struct piece *pc;
-    btpd_log(BTPD_L_POL, "Entering end game\n");
-    tp->endgame = 1;
-    BTPDQ_FOREACH(pc, &tp->getlst, entry) {
-	for (uint32_t i = 0; i < pc->nblocks; i++)
-	    clear_bit(pc->down_field, i);
-	pc->nbusy = 0;
-    }
-    BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
-	assert(p->nwant == 0);
-	BTPDQ_FOREACH(pc, &tp->getlst, entry) {
-	    if (peer_has(p, pc->index)) {
-		peer_want(p, pc->index);
-		if (peer_leech_ok(p))
-		    cm_piece_assign_requests_eg(pc, p);
-	    }
-	}
-    }
-}
-
-int
-peer_chokes(struct peer *p)
-{
-    return p->flags & PF_P_CHOKE;
-}
-
-int
-peer_has(struct peer *p, uint32_t index)
-{
-    return has_bit(p->piece_field, index);
-}
-
-int
-peer_laden(struct peer *p)
-{
-    return p->nreqs_out >= MAXPIPEDREQUESTS;
-}
-
-int
-peer_wanted(struct peer *p)
-{
-    return (p->flags & PF_I_WANT) == PF_I_WANT;
-}
-
-int
-peer_leech_ok(struct peer *p)
-{
-    return (p->flags & (PF_I_WANT|PF_P_CHOKE)) == PF_I_WANT;
-}
-
-int
-piece_full(struct piece *pc)
-{
-    return pc->ngot + pc->nbusy == pc->nblocks;
-}
-
-struct piece *
-torrent_get_piece(struct torrent *tp, uint32_t index)
-{
-    struct piece *pc;
-    BTPDQ_FOREACH(pc, &tp->getlst, entry)
-	if (pc->index == index)
-	    break;
-    return pc;
-}
-
 static struct piece *
 piece_alloc(struct torrent *tp, uint32_t index)
 {
@@ -159,6 +71,64 @@ piece_free(struct piece *pc)
     clear_bit(tp->busy_field, pc->index);
     BTPDQ_REMOVE(&pc->tp->getlst, pc, entry);
     free(pc);
+}
+
+int
+piece_full(struct piece *pc)
+{
+    return pc->ngot + pc->nbusy == pc->nblocks;
+}
+
+static int
+cm_should_enter_endgame(struct torrent *tp)
+{
+    int should;
+    if (tp->have_npieces + tp->npcs_busy == tp->meta.npieces) {
+	should = 1;
+	struct piece *pc;
+	BTPDQ_FOREACH(pc, &tp->getlst, entry) {
+	    if (!piece_full(pc)) {
+		should = 0;
+		break;
+	    }
+	}
+    } else
+	should = 0;
+    return should;
+}
+
+static void
+cm_enter_endgame(struct torrent *tp)
+{
+    struct peer *p;
+    struct piece *pc;
+    btpd_log(BTPD_L_POL, "Entering end game\n");
+    tp->endgame = 1;
+    BTPDQ_FOREACH(pc, &tp->getlst, entry) {
+	for (uint32_t i = 0; i < pc->nblocks; i++)
+	    clear_bit(pc->down_field, i);
+	pc->nbusy = 0;
+    }
+    BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
+	assert(p->nwant == 0);
+	BTPDQ_FOREACH(pc, &tp->getlst, entry) {
+	    if (peer_has(p, pc->index)) {
+		peer_want(p, pc->index);
+		if (peer_leech_ok(p))
+		    cm_piece_assign_requests_eg(pc, p);
+	    }
+	}
+    }
+}
+
+struct piece *
+cm_find_piece(struct torrent *tp, uint32_t index)
+{
+    struct piece *pc;
+    BTPDQ_FOREACH(pc, &tp->getlst, entry)
+	if (pc->index == index)
+	    break;
+    return pc;
 }
 
 static int

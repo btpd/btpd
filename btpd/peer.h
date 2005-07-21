@@ -78,4 +78,10 @@ void peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
 void peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length);
 
+int peer_chokes(struct peer *p);
+int peer_wanted(struct peer *p);
+int peer_laden(struct peer *p);
+int peer_has(struct peer *p, uint32_t index);
+int peer_leech_ok(struct peer *p);
+
 #endif
