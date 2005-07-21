@@ -1,3 +1,17 @@
+btpd-0.3:
+---------
+
+Misc:
+- New download strategy.
+- "-d" option added to btpd.
+- "--with-warn" option added to configure. The default is now
+  to compile with warnings off.
+
+Bug fixes:
+- It was possible for blocks to remain marked as busy when a peer
+  choked or was lost, causing a piece download to wait until end game.
+- The peer wanted level could get too high during end game.
+
 btpd 0.2:
 ---------
 
