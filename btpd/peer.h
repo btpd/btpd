@@ -12,7 +12,7 @@
 
 #define RATEHISTORY 20
 
-#define MAXPIPEDREQUESTS 5
+#define MAXPIPEDREQUESTS 10
 
 struct peer {
     int sd;
