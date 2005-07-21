@@ -125,6 +125,7 @@ peer_choke(struct peer *p)
 void
 peer_want(struct peer *p, uint32_t index)
 {
+    assert(p->nwant < p->npieces);
     p->nwant++;
     if (p->nwant == 1) {
 	p->flags |= PF_I_WANT;
@@ -135,6 +136,7 @@ peer_want(struct peer *p, uint32_t index)
 void
 peer_unwant(struct peer *p, uint32_t index)
 {
+    assert(p->nwant > 0);
     p->nwant--;
     if (p->nwant == 0) {
 	p->flags &= ~PF_I_WANT;
