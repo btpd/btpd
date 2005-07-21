@@ -81,7 +81,7 @@ cm_on_undownload(struct peer *p)
 void
 cm_on_choke(struct peer *p)
 {
-    if (peer_wanted(p))
+    if (p->nreqs_out > 0)
 	cm_on_undownload(p);
 }
 
@@ -217,7 +217,7 @@ cm_on_lost_peer(struct peer *p)
 	if (peer_has(p, i))
 	    tp->piece_count[i]--;
 
-    if (peer_leech_ok(p))
+    if (p->nreqs_out > 0)
 	cm_on_undownload(p);
 #if 0
     struct piece *pc = BTPDQ_FIRST(&tp->getlst);
