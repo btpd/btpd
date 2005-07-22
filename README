@@ -5,7 +5,7 @@ btpd consists of the following programs:
 * btcli    - Command line interface to btpd.
 * btinfo   - Shows information from a torrent file.
 
-All programs takes the "--help" option.
+All programs take the "--help" option.
 
 + DIRECTORY STRUCTURE
 
