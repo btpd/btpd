@@ -58,8 +58,11 @@ cm_on_download(struct peer *p)
     struct torrent *tp = p->tp;
     if (tp->endgame) {
 	cm_assign_requests_eg(p);
-    } else if (cm_assign_requests(p) == 0)
-	assert(!peer_wanted(p) || peer_laden(p));
+    } else {
+	unsigned count = cm_assign_requests(p);
+	if (count == 0 && !p->tp->endgame) // We may have entered end game.
+	    assert(!peer_wanted(p) || peer_laden(p));
+    }
 }
 
 void
