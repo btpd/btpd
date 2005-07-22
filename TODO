@@ -1,6 +1,5 @@
 1.0 - TODO
 
-Change download strategy. The current one isn't too good.
 Better code for missing c99 int types.
 Should be able to listen on IPv6 too
 Calculate number of bytes left better
