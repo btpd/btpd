@@ -18,6 +18,8 @@
 
 #include "btpd.h"
 
+#define WRITE_TIMEOUT (& (struct timeval) { 60, 0 })
+
 #define min(x, y) ((x) <= (y) ? (x) : (y))
 
 static unsigned long
@@ -105,6 +107,11 @@ void
 net_write_cb(int sd, short type, void *arg)
 {
     struct peer *p = (struct peer *)arg;
+    if (type == EV_TIMEOUT) {
+	btpd_log(BTPD_L_ERROR, "Write attempt timed out.\n");
+	peer_kill(p);
+	return;
+    }
     if (btpd.obwlim == 0) {
 	net_write(p, 0);
     } else if (btpd.obw_left > 0) {
@@ -224,7 +231,7 @@ net_write(struct peer *p, unsigned long wmax)
     nwritten = writev(p->sd, iov, niov);
     if (nwritten < 0) {
 	if (errno == EAGAIN) {
-	    event_add(&p->out_ev, NULL);
+	    event_add(&p->out_ev, WRITE_TIMEOUT);
 	    return 0;
 	} else {
 	    btpd_log(BTPD_L_CONN, "write error: %s\n", strerror(errno));
@@ -269,7 +276,7 @@ net_write(struct peer *p, unsigned long wmax)
 	}
     }
     if (!BTPDQ_EMPTY(&p->outq))
-	event_add(&p->out_ev, NULL);
+	event_add(&p->out_ev, WRITE_TIMEOUT);
     else if (p->flags & PF_WRITE_CLOSE) {
 	btpd_log(BTPD_L_CONN, "Closed because of write flag.\n");
 	peer_kill(p);
@@ -282,7 +289,7 @@ void
 net_send(struct peer *p, struct iob_link *iol)
 {
     if (BTPDQ_EMPTY(&p->outq))
-	event_add(&p->out_ev, NULL);
+	event_add(&p->out_ev, WRITE_TIMEOUT);
     BTPDQ_INSERT_TAIL(&p->outq, iol, entry);
 }
 
