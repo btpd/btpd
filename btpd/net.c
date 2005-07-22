@@ -231,6 +231,10 @@ net_write(struct peer *p, unsigned long wmax)
 	    peer_kill(p);
 	    return 0;
 	}
+    } else if (nwritten == 0) {
+	btpd_log(BTPD_L_CONN, "connection close by peer.\n");
+	peer_kill(p);
+	return 0;
     }
 
     bcount = nwritten;
