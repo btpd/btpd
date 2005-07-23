@@ -15,6 +15,14 @@ cm_by_second(struct torrent *tp)
 
     if (btpd.seconds == tp->choke_time)
 	choke_alg(tp);
+
+    struct peer *p;
+    int ri = btpd.seconds % RATEHISTORY;
+
+    BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
+	p->rate_to_me[ri] = 0;
+	p->rate_from_me[ri] = 0;
+    }
 }
 
 /*

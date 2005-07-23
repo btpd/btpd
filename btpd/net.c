@@ -26,80 +26,16 @@ static unsigned long
 net_write(struct peer *p, unsigned long wmax);
 
 void
-net_bw_read_cb(int sd, short type, void *arg)
-{
-    struct peer *p;
-    struct bwlim *bw = arg;
-
-    btpd.ibw_left += bw->count;
-    assert(btpd.ibw_left <= btpd.ibwlim);
-
-    unsigned long count = 0;
-
-    while ((p = BTPDQ_FIRST(&btpd.readq)) != NULL && btpd.ibw_left - count > 0) {
-	BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
-	p->flags &= ~PF_ON_READQ;
-	count += p->reader->read(p, btpd.ibw_left - count);
-    }
-    btpd.ibw_left -= count;
-
-    BTPDQ_REMOVE(&btpd.bwq, bw, entry);
-    if (count == 0)
-	free(bw);
-    else {
-	bw->count = count;
-	event_add(&bw->timer, (& (struct timeval) { 1, 0 }));
-	BTPDQ_INSERT_TAIL(&btpd.bwq, bw, entry);
-    }
-}
-
-void
 net_read_cb(int sd, short type, void *arg)
 {
     struct peer *p = (struct peer *)arg;
     if (btpd.ibwlim == 0) {
 	p->reader->read(p, 0);
     } else if (btpd.ibw_left > 0) {
-	unsigned long nread = p->reader->read(p, btpd.ibw_left);
-	if (nread > 0) {
-	    struct bwlim *bw = btpd_calloc(1, sizeof(*bw));
-	    evtimer_set(&bw->timer, net_bw_read_cb, bw);
-	    evtimer_add(&bw->timer, (& (struct timeval) { 1, 0 }));
-	    bw->count = nread;
-	    btpd.ibw_left -= nread;
-	    BTPDQ_INSERT_TAIL(&btpd.bwq, bw, entry);
-	}
+	btpd.ibw_left -= p->reader->read(p, btpd.ibw_left);
     } else {
 	p->flags |= PF_ON_READQ;
 	BTPDQ_INSERT_TAIL(&btpd.readq, p, rq_entry);
-    }
-}
-
-void
-net_bw_write_cb(int sd, short type, void *arg)
-{
-    struct peer *p;
-    struct bwlim *bw = arg;
-
-    btpd.obw_left += bw->count;
-    assert(btpd.obw_left <= btpd.obwlim);
-
-    unsigned long count = 0;
-
-    while ((p = BTPDQ_FIRST(&btpd.writeq)) != NULL && btpd.obw_left - count > 0) {
-	BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
-	p->flags &= ~PF_ON_WRITEQ;
-	count += net_write(p, btpd.obw_left - count);
-    }
-    btpd.obw_left -= count;
-
-    BTPDQ_REMOVE(&btpd.bwq, bw, entry);
-    if (count == 0)
-	free(bw);
-    else {
-	bw->count = count;
-	event_add(&bw->timer, (& (struct timeval) { 1, 0 }));
-	BTPDQ_INSERT_TAIL(&btpd.bwq, bw, entry);
     }
 }
 
@@ -115,15 +51,7 @@ net_write_cb(int sd, short type, void *arg)
     if (btpd.obwlim == 0) {
 	net_write(p, 0);
     } else if (btpd.obw_left > 0) {
-	unsigned long nw = net_write(p, btpd.obw_left); 
-	if (nw > 0) {
-	    struct bwlim *bw = btpd_calloc(1, sizeof(*bw));
-	    evtimer_set(&bw->timer, net_bw_write_cb, bw);
-	    evtimer_add(&bw->timer, (& (struct timeval) { 1, 0 }));
-	    bw->count = nw;
-	    btpd.obw_left -= nw;
-	    BTPDQ_INSERT_TAIL(&btpd.bwq, bw, entry);
-	}
+	btpd.obw_left -= net_write(p, btpd.obw_left);
     } else {
 	p->flags |= PF_ON_WRITEQ;
 	BTPDQ_INSERT_TAIL(&btpd.writeq, p, wq_entry);
@@ -916,4 +844,42 @@ net_by_second(void)
 	    p->rate_from_me[ri] = 0;
 	}
     }
+}
+
+void
+net_bw_cb(int sd, short type, void *arg)    
+{
+    struct peer *p;
+
+    btpd.obw_left = btpd.obwlim / btpd.bw_hz;
+    btpd.ibw_left = btpd.ibwlim / btpd.bw_hz;
+
+    if (btpd.ibwlim > 0) {
+	while ((p = BTPDQ_FIRST(&btpd.readq)) != NULL && btpd.ibw_left > 0) {
+	    BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
+	    p->flags &= ~PF_ON_READQ;
+	    btpd.ibw_left -= p->reader->read(p, btpd.ibw_left);
+	}
+    } else {
+	while ((p = BTPDQ_FIRST(&btpd.readq)) != NULL) {
+	    BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
+	    p->flags &= ~PF_ON_READQ;
+	    p->reader->read(p, 0);
+	}
+    }
+
+    if (btpd.obwlim) {
+	while ((p = BTPDQ_FIRST(&btpd.writeq)) != NULL && btpd.obw_left > 0) {
+	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
+	    p->flags &= ~PF_ON_WRITEQ;
+	    btpd.obw_left -=  net_write(p, btpd.obw_left);
+	}
+    } else {
+	while ((p = BTPDQ_FIRST(&btpd.writeq)) != NULL) {
+	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
+	    p->flags &= ~PF_ON_WRITEQ;
+	    net_write(p, 0);
+	}
+    }
+    event_add(&btpd.bwlim, (& (struct timeval) { 0, 1000000 / btpd.bw_hz }));
 }

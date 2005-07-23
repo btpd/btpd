@@ -11,14 +11,6 @@
 #define MSG_PIECE	7
 #define MSG_CANCEL	8
 
-struct bwlim {
-    unsigned long count;
-    struct event timer;
-    BTPDQ_ENTRY(bwlim) entry;
-};
-
-BTPDQ_HEAD(bwlim_tq, bwlim);
-
 struct iob_link {
     int upload;
     BTPDQ_ENTRY(iob_link) entry;
@@ -82,7 +74,7 @@ struct piece_req {
 BTPDQ_HEAD(piece_req_tq, piece_req);
 
 void net_connection_cb(int sd, short type, void *arg);
-void net_by_second(void);
+void net_bw_cb(int sd, short type, void *arg);
 
 struct peer;
 

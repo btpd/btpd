@@ -116,7 +116,6 @@ btpd_init(void)
     btpd.ntorrents = 0;
     BTPDQ_INIT(&btpd.cm_list);
 
-    BTPDQ_INIT(&btpd.bwq);
     BTPDQ_INIT(&btpd.readq);
     BTPDQ_INIT(&btpd.writeq);
 
@@ -124,6 +123,7 @@ btpd_init(void)
 
     btpd.port = 6881;
 
+    btpd.bw_hz = 8;
     btpd.obwlim = 0;
     btpd.ibwlim = 0;
     btpd.obw_left = 0;
@@ -187,20 +187,13 @@ static void
 heartbeat_cb(int sd, short type, void *arg)
 {
     struct torrent *tp;
-    struct timeval begin, end, wadj;
-    gettimeofday(&begin, NULL);
 
     btpd.seconds++;
 
     BTPDQ_FOREACH(tp, &btpd.cm_list, entry)
 	cm_by_second(tp);
 
-    net_by_second();
-
-    gettimeofday(&end, NULL);
-    timersub(&end, &begin, &wadj);
-    evtimer_add(&btpd.heartbeat,
-        (& (struct timeval) { 0, 1000000 - wadj.tv_usec }));
+    evtimer_add(&btpd.heartbeat, (& (struct timeval) { 0, 1000000 }));
 }
 
 static void
@@ -209,6 +202,10 @@ usage()
     printf("Usage: btpd [options]\n"
 	"\n"
 	"Options:\n"
+	"\n"
+	"--bw-hz n\n"
+	"\tRun the bandwidth limiter at n hz.\n"
+	"\tDefault is 8 hz.\n"
 	"\n"
 	"--bw-in n\n"
 	"\tLimit incoming BitTorrent traffic to n kB/s.\n"
@@ -242,6 +239,7 @@ static int longval = 0;
 
 static struct option longopts[] = {
     { "port",	required_argument,	NULL,		'p' },
+    { "bw-hz",	required_argument,	&longval,	6 },
     { "bw-in",	required_argument,	&longval,	1 },
     { "bw-out",	required_argument,	&longval,	2 },
     { "logfile", required_argument,	&longval,	3 },
@@ -272,11 +270,9 @@ main(int argc, char **argv)
 	    switch (longval) {
 	    case 1:
 		btpd.ibwlim = atoi(optarg) * 1024;
-		btpd.ibw_left = btpd.ibwlim;
 		break;
 	    case 2:
 		btpd.obwlim = atoi(optarg) * 1024;
-		btpd.obw_left = btpd.obwlim;
 		break;
 	    case 3:
 		logfile = optarg;
@@ -289,6 +285,12 @@ main(int argc, char **argv)
 		break;
 	    case 5:
 		usage();
+	    case 6:
+		btpd.bw_hz = atoi(optarg);
+		if (btpd.bw_hz <= 0 || btpd.bw_hz > 100)
+		    btpd_err("I will only accept bw limiter hz "
+			"between 1 and 100.\n");
+		break;
 	    default:
 		usage();
 	    }
@@ -370,7 +372,6 @@ main(int argc, char **argv)
     setlinebuf(stdout);
     setlinebuf(stderr);
 
-
     event_init();
 
     signal(SIGPIPE, SIG_IGN);
@@ -392,6 +393,14 @@ main(int argc, char **argv)
     event_set(&btpd.accept4, btpd.peer4_sd, EV_READ | EV_PERSIST,
         net_connection_cb, &btpd);
     event_add(&btpd.accept4, NULL);
+
+    evtimer_set(&btpd.bwlim, net_bw_cb, NULL);
+    if (btpd.obwlim > 0 || btpd.ibwlim > 0) {
+	btpd.ibw_left = btpd.ibwlim / btpd.bw_hz;
+	btpd.obw_left = btpd.obwlim / btpd.bw_hz;
+	evtimer_add(&btpd.bwlim,
+	    (& (struct timeval) { 0, 1000000 / btpd.bw_hz }));
+    }
 
     error = event_dispatch();
     btpd_err("Returned from dispatch. Error = %d.\n", error);

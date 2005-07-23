@@ -46,7 +46,6 @@ struct btpd {
     unsigned ntorrents;
     struct torrent_tq cm_list;
 
-    struct bwlim_tq bwq;
     struct peer_tq readq;
     struct peer_tq writeq;
 
@@ -56,9 +55,11 @@ struct btpd {
     int peer4_sd;
     int ipc_sd;
 
+    unsigned bw_hz;
     unsigned long obwlim, ibwlim;
     unsigned long ibw_left, obw_left;
-    
+    struct event bwlim;    
+
     unsigned npeers;
     unsigned maxpeers;
 
