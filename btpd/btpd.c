@@ -217,7 +217,7 @@ usage()
 	"\n"
 	"-d\n"
 	"\tKeep the btpd process in the foregorund and log to std{out,err}.\n"
-	"\tThis options is intended for debugging purposes.\n"
+	"\tThis option is intended for debugging purposes.\n"
 	"\n"
 	"--ipc key\n"
 	"\tThe same key must be used by the cli to talk to this\n"
