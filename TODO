@@ -15,6 +15,5 @@ General code cleanup, esp. the cli
 Improve build scripts
 Intelligent logging
 Better handling of unresponsive trackers
-Send multiple have messages instead of bitfield, when it's better
 Bitfields could be handled as a whole in policy.c.
 Other temporarily or permanently forgotten things...

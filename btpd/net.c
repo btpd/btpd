@@ -299,6 +299,23 @@ net_send_have(struct peer *p, uint32_t index)
 }
 
 void
+net_send_multihave(struct peer *p)
+{
+    struct torrent *tp = p->tp;
+    struct iob_link *out;
+    out = malloc_liob(9 * tp->have_npieces);
+    for (uint32_t i = 0, count = 0; count <tp->have_npieces; i++) {
+	if (has_bit(tp->piece_field, i)) {
+	    net_write32(out->iob.buf + count * 9, 5);
+	    out->iob.buf[count * 9 + 4] = MSG_HAVE;
+	    net_write32(out->iob.buf + count * 9 + 5, i);
+	    count++;
+	}
+    }
+    net_send(p, out);
+}
+
+void
 net_send_onesized(struct peer *p, char type)
 {
     struct iob_link *out;
@@ -357,9 +374,6 @@ net_send_shake(struct peer *p)
     bcopy(p->tp->meta.info_hash, out->iob.buf + 28, 20);
     bcopy(btpd.peer_id, out->iob.buf + 48, 20);
     net_send(p, out);
-
-    if (p->tp->have_npieces > 0)
-	net_send_bitfield(p);
 }
 
 static void
@@ -730,6 +744,12 @@ net_shake_read(struct peer *p, unsigned long rmax)
 	p->piece_field = btpd_calloc(1, (int)ceil(p->tp->meta.npieces / 8.0));
 	cm_on_new_peer(p);
 	net_generic_reader(p);
+	if (p->tp->have_npieces > 0) {
+	    if (p->tp->have_npieces * 9 < 5 + ceil(p->tp->meta.npieces / 8.0))
+		net_send_multihave(p);
+	    else
+		net_send_bitfield(p);
+	}
     } else
 	event_add(&p->in_ev, NULL);
 
