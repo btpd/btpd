@@ -113,34 +113,6 @@ nb_create_set(short type, char *buf, size_t len,
     nb_hold(nb);
     return nb;
 }
-#if 0
-void
-net_unsend_piece(struct peer *p, struct piece_req *req)
-{
-    struct nb_link *nl;
-    struct iob_link *piece;
-
-    BTPDQ_REMOVE(&p->p_reqs, req, entry);
-
-    piece = BTPDQ_NEXT(req->head, entry);
-    BTPDQ_REMOVE(&p->outq, piece, entry);
-    piece->kill_buf(&piece->iob);
-    free(piece);
-
-    BTPDQ_REMOVE(&p->outq, req->head, entry);
-    req->head->kill_buf(&req->head->iob);
-    free(req->head);
-    free(req);
-
-    if (BTPDQ_EMPTY(&p->outq)) {
-	if (p->flags & PF_ON_WRITEQ) {
-	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
-	    p->flags &= ~PF_ON_WRITEQ;
-	} else
-	    event_del(&p->out_ev);
-    }
-}
-#endif
 
 void
 kill_shake(struct input_reader *reader)
@@ -866,21 +838,6 @@ net_connection_cb(int sd, short type, void *arg)
     peer_create_in(nsd);
 
     btpd_log(BTPD_L_CONN, "got connection.\n");
-}
-
-void
-net_by_second(void)
-{
-    struct peer *p;
-    struct torrent *tp;
-    int ri = btpd.seconds % RATEHISTORY;
-
-    BTPDQ_FOREACH(tp, &btpd.cm_list, entry) {
-	BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
-	    p->rate_to_me[ri] = 0;
-	    p->rate_from_me[ri] = 0;
-	}
-    }
 }
 
 void
