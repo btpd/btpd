@@ -310,6 +310,8 @@ peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length)
 {
     struct nb_link *nl = BTPDQ_FIRST(&p->outq);
+    if (nl == NULL)
+	return;
     while (nl != NULL) {
 	if (nl->nb->info.type == NB_PIECE
 	    && nl->nb->info.index == index
@@ -326,6 +328,14 @@ peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
 	    free(data);
 	}
 	nl = BTPDQ_NEXT(nl, entry);
+    }
+
+    if (BTPDQ_EMPTY(&p->outq)) {
+	if (p->flags & PF_ON_WRITEQ) {
+	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
+	    p->flags &= ~PF_ON_WRITEQ;
+	} else
+	    event_del(&p->out_ev);
     }
 }
 
