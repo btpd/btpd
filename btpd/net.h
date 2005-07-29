@@ -74,6 +74,7 @@ struct piece_req {
 BTPDQ_HEAD(piece_req_tq, piece_req);
 
 void net_connection_cb(int sd, short type, void *arg);
+void net_bw_rate(void);
 void net_bw_cb(int sd, short type, void *arg);
 
 struct peer;

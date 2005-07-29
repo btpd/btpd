@@ -25,6 +25,8 @@
 
 #define BTPD_VERSION (PACKAGE_NAME "/" PACKAGE_VERSION)
 
+#define BWCALLHISTORY 5
+
 struct child {
     pid_t pid;
     void *data;
@@ -56,6 +58,9 @@ struct btpd {
     int ipc_sd;
 
     unsigned bw_hz;
+    double bw_hz_avg;
+    unsigned bwcalls;
+    unsigned bwrate[BWCALLHISTORY];
     unsigned long obwlim, ibwlim;
     unsigned long ibw_left, obw_left;
     struct event bwlim;    

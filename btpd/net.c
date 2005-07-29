@@ -847,12 +847,34 @@ net_by_second(void)
 }
 
 void
+net_bw_rate(void)
+{
+    unsigned sum = 0;
+    for (int i = 0; i < BWCALLHISTORY - 1; i++) {
+	btpd.bwrate[i] = btpd.bwrate[i + 1];
+	sum += btpd.bwrate[i];
+    }
+    btpd.bwrate[BWCALLHISTORY - 1] = btpd.bwcalls;
+    sum += btpd.bwrate[BWCALLHISTORY - 1];
+    btpd.bwcalls = 0;
+    btpd.bw_hz_avg = sum / 5.0;
+}
+
+void
 net_bw_cb(int sd, short type, void *arg)    
 {
     struct peer *p;
 
-    btpd.obw_left = btpd.obwlim / btpd.bw_hz;
-    btpd.ibw_left = btpd.ibwlim / btpd.bw_hz;
+    btpd.bwcalls++;
+
+    double avg_hz;
+    if (btpd.seconds < BWCALLHISTORY)
+	avg_hz = btpd.bw_hz;
+    else
+	avg_hz = btpd.bw_hz_avg;
+
+    btpd.obw_left = btpd.obwlim / avg_hz;
+    btpd.ibw_left = btpd.ibwlim / avg_hz;
 
     if (btpd.ibwlim > 0) {
 	while ((p = BTPDQ_FIRST(&btpd.readq)) != NULL && btpd.ibw_left > 0) {

@@ -124,6 +124,10 @@ btpd_init(void)
     btpd.port = 6881;
 
     btpd.bw_hz = 8;
+    btpd.bwcalls = 0;
+    for (int i = 0; i < BWCALLHISTORY; i++)
+	btpd.bwrate[i] = 0;
+
     btpd.obwlim = 0;
     btpd.ibwlim = 0;
     btpd.obw_left = 0;
@@ -190,10 +194,12 @@ heartbeat_cb(int sd, short type, void *arg)
 
     btpd.seconds++;
 
+    net_bw_rate();
+
     BTPDQ_FOREACH(tp, &btpd.cm_list, entry)
 	cm_by_second(tp);
 
-    evtimer_add(&btpd.heartbeat, (& (struct timeval) { 0, 1000000 }));
+    evtimer_add(&btpd.heartbeat, (& (struct timeval) { 1, 0 }));
 }
 
 static void
