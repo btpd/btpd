@@ -11,14 +11,45 @@
 #define MSG_PIECE	7
 #define MSG_CANCEL	8
 
-struct iob_link {
-    int upload;
-    BTPDQ_ENTRY(iob_link) entry;
-    void (*kill_buf)(struct io_buffer *);
-    struct io_buffer iob;
+#define NB_CHOKE	0
+#define NB_UNCHOKE	1
+#define NB_INTEREST	2
+#define NB_UNINTEREST	3
+#define NB_HAVE		4
+#define NB_BITFIELD	5
+#define NB_REQUEST	6
+#define NB_PIECE	7
+#define NB_CANCEL	8
+#define NB_TORRENTDATA	10
+#define NB_MULTIHAVE	11
+#define NB_BITDATA	12
+#define NB_SHAKE	13
+
+struct net_buf {
+    unsigned refs;
+
+    struct {
+	short type;
+	uint32_t index, begin, length;
+    } info;
+
+    char *buf;
+    size_t len;
+    void (*kill_buf)(char *, size_t);
 };
 
-BTPDQ_HEAD(io_tq, iob_link);
+struct nb_link {
+    struct net_buf *nb;
+    BTPDQ_ENTRY(nb_link) entry;
+};
+
+BTPDQ_HEAD(nb_tq, nb_link);
+
+struct net_buf *nb_create_alloc(short type, size_t len);
+struct net_buf *nb_create_set(short type, char *buf, size_t len,
+    void (*kill_buf)(char *, size_t));
+int nb_drop(struct net_buf *nb);
+void nb_hold(struct net_buf *nb);
 
 struct peer;
 

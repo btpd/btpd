@@ -20,7 +20,7 @@ peer_get_rate(unsigned long *rates)
 void
 peer_kill(struct peer *p)
 {
-    struct iob_link *iol;
+    struct nb_link *nl;
     struct piece_req *req;
 
     btpd_log(BTPD_L_CONN, "killed peer.\n");
@@ -38,18 +38,12 @@ peer_kill(struct peer *p)
     event_del(&p->in_ev);
     event_del(&p->out_ev);
 
-    iol = BTPDQ_FIRST(&p->outq);
-    while (iol != NULL) {
-	struct iob_link *next = BTPDQ_NEXT(iol, entry);
-	iol->kill_buf(&iol->iob);
-	free(iol);
-	iol = next;
-    }
-    req = BTPDQ_FIRST(&p->p_reqs);
-    while (req != NULL) {
-	struct piece_req *next = BTPDQ_NEXT(req, entry);
-	free(req);
-	req = next;
+    nl = BTPDQ_FIRST(&p->outq);
+    while (nl != NULL) {
+	struct nb_link *next = BTPDQ_NEXT(nl, entry);
+	nb_drop(nl->nb);
+	free(nl);
+	nl = next;
     }
     req = BTPDQ_FIRST(&p->my_reqs);
     while (req != NULL) {
@@ -113,10 +107,22 @@ peer_unchoke(struct peer *p)
 void
 peer_choke(struct peer *p)
 {
-    struct piece_req *req;
-
-    while ((req = BTPDQ_FIRST(&p->p_reqs)) != NULL)
-	net_unsend_piece(p, req);
+    struct nb_link *nl = BTPDQ_FIRST(&p->outq);
+    while (nl != NULL) {
+	struct nb_link *next = BTPDQ_NEXT(nl, entry);
+	if (nl->nb->info.type == NB_PIECE
+	    && (nl != BTPDQ_FIRST(&p->outq) && p->outq_off > 0)) {
+	    nb_drop(nl->nb);
+	    BTPDQ_REMOVE(&p->outq, nl, entry);
+	    free(nl);
+	    nl = next;
+	    next = BTPDQ_NEXT(next, entry);
+	    nb_drop(nl->nb);
+	    BTPDQ_REMOVE(&p->outq, nl, entry);
+	    free(nl);
+	}
+	nl = next;
+    }
 
     p->flags |= PF_I_CHOKE;
     net_send_choke(p);    
@@ -151,7 +157,6 @@ peer_create_common(int sd)
 
     p->sd = sd;
     p->flags = PF_I_CHOKE | PF_P_CHOKE;
-    BTPDQ_INIT(&p->p_reqs);
     BTPDQ_INIT(&p->my_reqs);
     BTPDQ_INIT(&p->outq);
 
@@ -304,15 +309,23 @@ void
 peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length)
 {
-    struct piece_req *req = BTPDQ_FIRST(&p->p_reqs);
-    while (req != NULL) {
-	if (req->index == index
-	    && req->begin == begin && req->length == length) {
+    struct nb_link *nl = BTPDQ_FIRST(&p->outq);
+    while (nl != NULL) {
+	if (nl->nb->info.type == NB_PIECE
+	    && nl->nb->info.index == index
+	    && nl->nb->info.begin == begin
+	    && nl->nb->info.length == length
+	    && (nl != BTPDQ_FIRST(&p->outq) && p->outq_off > 0)) {
 	    btpd_log(BTPD_L_MSG, "cancel matched.\n");
-	    net_unsend_piece(p, req);
-	    break;
+	    struct nb_link *data = BTPDQ_NEXT(nl, entry);
+	    nb_drop(nl->nb);
+	    BTPDQ_REMOVE(&p->outq, nl, entry);
+	    free(nl);
+	    nb_drop(data->nb);
+	    BTPDQ_REMOVE(&p->outq, data, entry);
+	    free(data);
 	}
-	req = BTPDQ_NEXT(req, entry);
+	nl = BTPDQ_NEXT(nl, entry);
     }
 }
 

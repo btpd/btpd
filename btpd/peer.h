@@ -25,11 +25,12 @@ struct peer {
 
     struct torrent *tp;
 
-    struct piece_req_tq p_reqs, my_reqs;
+    struct piece_req_tq my_reqs;
 
     unsigned nreqs_out;
 
-    struct io_tq outq;
+    size_t outq_off;
+    struct nb_tq outq;
 
     struct event in_ev;
     struct event out_ev;
