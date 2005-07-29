@@ -304,7 +304,7 @@ net_send_multihave(struct peer *p)
     struct torrent *tp = p->tp;
     struct iob_link *out;
     out = malloc_liob(9 * tp->have_npieces);
-    for (uint32_t i = 0, count = 0; count <tp->have_npieces; i++) {
+    for (uint32_t i = 0, count = 0; count < tp->have_npieces; i++) {
 	if (has_bit(tp->piece_field, i)) {
 	    net_write32(out->iob.buf + count * 9, 5);
 	    out->iob.buf[count * 9 + 4] = MSG_HAVE;
