@@ -62,6 +62,8 @@ peer_kill(struct peer *p)
 void
 peer_request(struct peer *p, uint32_t index, uint32_t begin, uint32_t len)
 {
+    if (p->tp->endgame == 0)
+	assert(p->nreqs_out < MAXPIPEDREQUESTS);
     p->nreqs_out++;
     struct piece_req *req = btpd_calloc(1, sizeof(*req));
     req->index = index;
@@ -76,12 +78,9 @@ peer_cancel(struct peer *p, uint32_t index, uint32_t begin, uint32_t len)
 {
     struct piece_req *req;
 again:
-    req = BTPDQ_FIRST(&p->my_reqs);
-    while (req != NULL &&
-	   !(index == req->index &&
-	     begin == req->begin &&
-	     len == req->length))
-	req = BTPDQ_NEXT(req, entry);
+    BTPDQ_FOREACH(req, &p->my_reqs, entry)
+	if (index == req->index && begin == req->begin && len == req->length)
+	    break;
     if (req != NULL) {
 	net_send_cancel(p, req);
 	BTPDQ_REMOVE(&p->my_reqs, req, entry);
@@ -110,7 +109,7 @@ peer_choke(struct peer *p)
     struct nb_link *nl = BTPDQ_FIRST(&p->outq);
     while (nl != NULL) {
 	struct nb_link *next = BTPDQ_NEXT(nl, entry);
-	if (nl->nb->info.type == NB_PIECE) {
+	if (nl->nb->type == NB_PIECE) {
 	    struct nb_link *data = next;
 	    next = BTPDQ_NEXT(next, entry);
 	    if (net_unsend(p, nl))
@@ -306,10 +305,10 @@ peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
 {
     struct nb_link *nl;
     BTPDQ_FOREACH(nl, &p->outq, entry)
-	if (nl->nb->info.type == NB_PIECE
-	    && nl->nb->info.index == index
-	    && nl->nb->info.begin == begin
-	    && nl->nb->info.length == length) {
+	if (nl->nb->type == NB_PIECE
+	    && nb_get_begin(nl->nb) == begin
+	    && nb_get_index(nl->nb) == index
+	    && nb_get_length(nl->nb) == length) {
 	    struct nb_link *data = BTPDQ_NEXT(nl, entry);
 	    if (net_unsend(p, nl))
 		net_unsend(p, data);

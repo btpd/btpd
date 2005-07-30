@@ -58,6 +58,18 @@ net_write_cb(int sd, short type, void *arg)
     }
 }
 
+void
+net_write32(void *buf, uint32_t num)
+{
+    *(uint32_t *)buf = htonl(num);
+}
+
+uint32_t
+net_read32(void *buf)
+{
+    return ntohl(*(uint32_t *)buf);
+}
+
 static void
 kill_buf_no(char *buf, size_t len)
 {
@@ -93,7 +105,7 @@ struct net_buf *
 nb_create_alloc(short type, size_t len)
 {
     struct net_buf *nb = btpd_calloc(1, sizeof(*nb) + len);
-    nb->info.type = type;
+    nb->type = type;
     nb->buf = (char *)(nb + 1);
     nb->len = len;
     nb->kill_buf = kill_buf_no;
@@ -105,11 +117,52 @@ nb_create_set(short type, char *buf, size_t len,
     void (*kill_buf)(char *, size_t))
 {
     struct net_buf *nb = btpd_calloc(1, sizeof(*nb));
-    nb->info.type = type;
+    nb->type = type;
     nb->buf = buf;
     nb->len = len;
     nb->kill_buf = kill_buf;
     return nb;
+}
+
+uint32_t
+nb_get_index(struct net_buf *nb)
+{
+    switch (nb->type) {
+    case NB_CANCEL:
+    case NB_HAVE:
+    case NB_PIECE:
+    case NB_REQUEST:
+	return net_read32(nb->buf + 5);
+    default:
+	abort();
+    }
+}
+
+uint32_t
+nb_get_begin(struct net_buf *nb)
+{
+    switch (nb->type) {
+    case NB_CANCEL:
+    case NB_PIECE:
+    case NB_REQUEST:
+	return net_read32(nb->buf + 9);
+    default:
+	abort();
+    }
+}
+
+uint32_t
+nb_get_length(struct net_buf *nb)
+{
+    switch (nb->type) {
+    case NB_CANCEL:
+    case NB_REQUEST:
+	return net_read32(nb->buf + 13);
+    case NB_PIECE:
+	return net_read32(nb->buf) - 9;
+    default:
+	abort();
+    }
 }
 
 void
@@ -173,7 +226,7 @@ net_write(struct peer *p, unsigned long wmax)
     while (bcount > 0) {
 	unsigned long bufdelta = nl->nb->len - p->outq_off;
 	if (bcount >= bufdelta) {
-	    if (nl->nb->info.type == NB_TORRENTDATA) {
+	    if (nl->nb->type == NB_TORRENTDATA) {
 		p->tp->uploaded += bufdelta;
 		p->rate_from_me[btpd.seconds % RATEHISTORY] += bufdelta;
 	    }
@@ -184,7 +237,7 @@ net_write(struct peer *p, unsigned long wmax)
 	    p->outq_off = 0;
 	    nl = BTPDQ_FIRST(&p->outq);
 	} else {
-	    if (nl->nb->info.type == NB_TORRENTDATA) {
+	    if (nl->nb->type == NB_TORRENTDATA) {
 		p->tp->uploaded += bcount;
 		p->rate_from_me[btpd.seconds % RATEHISTORY] += bcount;
 	    }
@@ -244,18 +297,6 @@ net_unsend(struct peer *p, struct nb_link *nl)
 }
 
 void
-net_write32(void *buf, uint32_t num)
-{
-    *(uint32_t *)buf = htonl(num);
-}
-
-uint32_t
-net_read32(void *buf)
-{
-    return ntohl(*(uint32_t *)buf);
-}
-
-void
 net_send_piece(struct peer *p, uint32_t index, uint32_t begin,
 	       char *block, size_t blen)
 {
@@ -271,9 +312,6 @@ net_send_piece(struct peer *p, uint32_t index, uint32_t begin,
     net_send(p, head);
 
     piece = nb_create_set(NB_TORRENTDATA, block, blen, kill_buf_free);
-    piece->info.index = index;
-    piece->info.begin = begin;
-    piece->info.length = blen;
     net_send(p, piece);
 }
 
@@ -286,9 +324,6 @@ net_send_request(struct peer *p, struct piece_req *req)
     net_write32(out->buf + 5, req->index);
     net_write32(out->buf + 9, req->begin);
     net_write32(out->buf + 13, req->length);
-    out->info.index = req->index;
-    out->info.begin = req->begin;
-    out->info.length = req->length;
     net_send(p, out);
 }
 
@@ -301,9 +336,6 @@ net_send_cancel(struct peer *p, struct piece_req *req)
     net_write32(out->buf + 5, req->index);
     net_write32(out->buf + 9, req->begin);
     net_write32(out->buf + 13, req->length);
-    out->info.index = req->index;
-    out->info.begin = req->begin;
-    out->info.length = req->length;
     net_send(p, out);
 }
 
@@ -314,7 +346,6 @@ net_send_have(struct peer *p, uint32_t index)
     net_write32(out->buf, 5);
     out->buf[4] = MSG_HAVE;
     net_write32(out->buf + 5, index);
-    out->info.index = index;
     net_send(p, out);
 }
 

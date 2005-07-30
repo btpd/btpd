@@ -26,13 +26,8 @@
 #define NB_SHAKE	13
 
 struct net_buf {
+    short type;
     unsigned refs;
-
-    struct {
-	short type;
-	uint32_t index, begin, length;
-    } info;
-
     char *buf;
     size_t len;
     void (*kill_buf)(char *, size_t);
@@ -50,6 +45,9 @@ struct net_buf *nb_create_set(short type, char *buf, size_t len,
     void (*kill_buf)(char *, size_t));
 int nb_drop(struct net_buf *nb);
 void nb_hold(struct net_buf *nb);
+uint32_t nb_get_index(struct net_buf *nb);
+uint32_t nb_get_begin(struct net_buf *nb);
+uint32_t nb_get_length(struct net_buf *nb);
 
 struct peer;
 
