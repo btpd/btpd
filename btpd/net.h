@@ -120,7 +120,7 @@ void net_send_request(struct peer *p, struct piece_req *req);
 void net_send_piece(struct peer *p, uint32_t index, uint32_t begin,
     char *block, size_t blen);
 void net_send_cancel(struct peer *p, struct piece_req *req);
-
+int net_unsend(struct peer *p, struct nb_link *nl);
 void net_handshake(struct peer *p, int incoming);
 
 void net_read_cb(int sd, short type, void *arg);

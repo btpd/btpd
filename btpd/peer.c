@@ -110,16 +110,11 @@ peer_choke(struct peer *p)
     struct nb_link *nl = BTPDQ_FIRST(&p->outq);
     while (nl != NULL) {
 	struct nb_link *next = BTPDQ_NEXT(nl, entry);
-	if (nl->nb->info.type == NB_PIECE
-	    && (nl != BTPDQ_FIRST(&p->outq) && p->outq_off > 0)) {
-	    nb_drop(nl->nb);
-	    BTPDQ_REMOVE(&p->outq, nl, entry);
-	    free(nl);
-	    nl = next;
+	if (nl->nb->info.type == NB_PIECE) {
+	    struct nb_link *data = next;
 	    next = BTPDQ_NEXT(next, entry);
-	    nb_drop(nl->nb);
-	    BTPDQ_REMOVE(&p->outq, nl, entry);
-	    free(nl);
+	    if (net_unsend(p, nl))
+		net_unsend(p, data);
 	}
 	nl = next;
     }
@@ -309,34 +304,17 @@ void
 peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length)
 {
-    struct nb_link *nl = BTPDQ_FIRST(&p->outq);
-    if (nl == NULL)
-	return;
-    while (nl != NULL) {
+    struct nb_link *nl;
+    BTPDQ_FOREACH(nl, &p->outq, entry)
 	if (nl->nb->info.type == NB_PIECE
 	    && nl->nb->info.index == index
 	    && nl->nb->info.begin == begin
-	    && nl->nb->info.length == length
-	    && (nl != BTPDQ_FIRST(&p->outq) && p->outq_off > 0)) {
-	    btpd_log(BTPD_L_MSG, "cancel matched.\n");
+	    && nl->nb->info.length == length) {
 	    struct nb_link *data = BTPDQ_NEXT(nl, entry);
-	    nb_drop(nl->nb);
-	    BTPDQ_REMOVE(&p->outq, nl, entry);
-	    free(nl);
-	    nb_drop(data->nb);
-	    BTPDQ_REMOVE(&p->outq, data, entry);
-	    free(data);
+	    if (net_unsend(p, nl))
+		net_unsend(p, data);
+	    break;
 	}
-	nl = BTPDQ_NEXT(nl, entry);
-    }
-
-    if (BTPDQ_EMPTY(&p->outq)) {
-	if (p->flags & PF_ON_WRITEQ) {
-	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
-	    p->flags &= ~PF_ON_WRITEQ;
-	} else
-	    event_del(&p->out_ev);
-    }
 }
 
 int

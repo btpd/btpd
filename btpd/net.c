@@ -97,7 +97,6 @@ nb_create_alloc(short type, size_t len)
     nb->buf = (char *)(nb + 1);
     nb->len = len;
     nb->kill_buf = kill_buf_no;
-    nb_hold(nb);
     return nb;
 }
 
@@ -110,7 +109,6 @@ nb_create_set(short type, char *buf, size_t len,
     nb->buf = buf;
     nb->len = len;
     nb->kill_buf = kill_buf;
-    nb_hold(nb);
     return nb;
 }
 
@@ -209,12 +207,40 @@ net_send(struct peer *p, struct net_buf *nb)
 {
     struct nb_link *nl = btpd_calloc(1, sizeof(*nl));
     nl->nb = nb;
+    nb_hold(nb);
 
     if (BTPDQ_EMPTY(&p->outq)) {
 	assert(p->outq_off == 0);
 	event_add(&p->out_ev, WRITE_TIMEOUT);
     }
     BTPDQ_INSERT_TAIL(&p->outq, nl, entry);
+}
+
+
+/*
+ * Remove a network buffer from the peer's outq.
+ * If a part of the buffer already have been written
+ * to the network it cannot be removed.
+ *
+ * Returns 1 if the buffer is removed, 0 if not.
+ */
+int
+net_unsend(struct peer *p, struct nb_link *nl)
+{
+    if (!(nl == BTPDQ_FIRST(&p->outq) && p->outq_off > 0)) {
+	BTPDQ_REMOVE(&p->outq, nl, entry);
+	nb_drop(nl->nb);
+	free(nl);
+	if (BTPDQ_EMPTY(&p->outq)) {
+	    if (p->flags & PF_ON_WRITEQ) {
+		BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
+		p->flags &= ~PF_ON_WRITEQ;
+	    } else
+		event_del(&p->out_ev);
+	}
+	return 1;
+    } else
+	return 0;
 }
 
 void
