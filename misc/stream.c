@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <errno.h>
-#include <inttypes.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -73,14 +73,9 @@ bts_read_ro(struct bt_stream_ro *bts, char *buf, size_t len)
 	}
 
 	wantread = min(len - boff, files[bts->index].length - bts->f_off);
-    again:
 	didread = read(bts->fd, buf + boff, wantread);
-	if (didread == -1) {
-            if (errno == EINTR)
-		goto again;
-	    else
-		return errno;
-	}
+	if (didread == -1)
+	    return errno;
 
 	boff += didread;
 	bts->f_off += didread;
@@ -129,9 +124,9 @@ bts_sha(struct bt_stream_ro *bts, off_t length, uint8_t *hash)
 
 int
 bts_hashes(struct metainfo *meta,
-	   F_fdcb fd_cb,
-	   void (*cb)(uint32_t, uint8_t *, void *),
-	   void *arg)
+    F_fdcb fd_cb,
+    void (*cb)(uint32_t, uint8_t *, void *),
+    void *arg)
 {
     int err = 0;
     uint8_t hash[SHA_DIGEST_LENGTH];
@@ -204,7 +199,7 @@ bts_write_wo(struct bt_stream_wo *bts, const char *buf, size_t len)
 	wantwrite = min(len - boff, files[bts->index].length - bts->f_off);
 	didwrite = write(bts->fd, buf + boff, wantwrite);
 	if (didwrite == -1)
-		return errno;
+	    return errno;
 
 	boff += didwrite;
 	bts->f_off += didwrite;
