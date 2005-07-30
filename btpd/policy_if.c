@@ -261,7 +261,7 @@ cm_on_block(struct peer *p, uint32_t index, uint32_t begin, uint32_t length,
 
     if (tp->endgame) {
 	BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
-	    if (peer_has(p, index) && peer_leech_ok(p))
+	    if (peer_has(p, index) && p->nreqs_out > 0)
 		peer_cancel(p, index, begin, length);
 	}
 	if (pc->ngot == pc->nblocks)
@@ -272,7 +272,7 @@ cm_on_block(struct peer *p, uint32_t index, uint32_t begin, uint32_t length,
 	pc->nbusy--;
 	if (pc->ngot == pc->nblocks)
 	    cm_on_piece(pc);
-	if (peer_leech_ok(p))
+	if (peer_leech_ok(p) && !peer_laden(p))
 	    cm_assign_requests(p);
     }
 }
