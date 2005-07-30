@@ -48,7 +48,7 @@ piece_alloc(struct torrent *tp, uint32_t index)
     pc->down_field = (uint8_t *)(pc + 1);
     pc->have_field =
 	tp->block_field +
-	(size_t)ceil(index * tp->meta.piece_length / (double)(1 << 17));
+	index * (size_t)ceil(tp->meta.piece_length / (double)(1 << 17));
     pc->nblocks = nblocks;
     pc->index = index;
 
@@ -255,29 +255,6 @@ cm_choose_rarest(struct peer *p, uint32_t *res)
 }
 
 /*
- * Allocate the piece indicated by the index for download.
- * There's a small possibility that a piece is fully downloaded
- * but haven't been tested. If such is the case the piece will
- * be tested and NULL will be returned. Also, we might then enter
- * end game.
- *
- * Return the piece or NULL.
- */
-struct piece *
-cm_new_piece(struct torrent *tp, uint32_t index)
-{
-    btpd_log(BTPD_L_POL, "Started on piece %u.\n", index);
-    struct piece *pc = piece_alloc(tp, index);
-    if (pc->ngot == pc->nblocks) {
-	cm_on_piece(pc);
-	if (cm_should_enter_endgame(tp))
-	    cm_enter_endgame(tp);
-	return NULL;
-    } else
-	return pc;
-}
-
-/*
  * Called from either cm_piece_assign_requests or cm_new_piece, 
  * when a pice becomes full. The wanted level of the peers
  * that has this piece will be decreased. This function is
@@ -295,6 +272,29 @@ cm_on_piece_full(struct piece *pc)
 	cm_enter_endgame(pc->tp);
 }
 
+/*
+ * Allocate the piece indicated by the index for download.
+ * There's a small possibility that a piece is fully downloaded
+ * but haven't been tested. If such is the case the piece will
+ * be tested and NULL will be returned. Also, we might then enter
+ * end game.
+ *
+ * Return the piece or NULL.
+ */
+struct piece *
+cm_new_piece(struct torrent *tp, uint32_t index)
+{
+    btpd_log(BTPD_L_POL, "Started on piece %u.\n", index);
+    struct piece *pc = piece_alloc(tp, index);
+    if (pc->ngot == pc->nblocks) {
+	cm_on_piece_full(pc);
+	cm_on_piece(pc);
+	if (cm_should_enter_endgame(tp))
+	    cm_enter_endgame(tp);
+	return NULL;
+    } else
+	return pc;
+}
 
 /*
  * Called when a previously full piece loses a peer.
@@ -360,7 +360,7 @@ cm_piece_assign_requests(struct piece *pc, struct peer *p)
 unsigned
 cm_assign_requests(struct peer *p)
 {
-    assert(!p->tp->endgame);
+    assert(!p->tp->endgame && !peer_laden(p));
     struct piece *pc;
     struct torrent *tp = p->tp;
     unsigned count = 0;

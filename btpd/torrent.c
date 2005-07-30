@@ -94,7 +94,7 @@ torrent_load2(const char *file, struct metainfo *mi)
 
     memsiz =
 	ceil(mi->npieces / 8.0) +
-	ceil(mi->npieces * mi->piece_length / (double)(1 << 17));
+	mi->npieces * ceil(mi->piece_length / (double)(1 << 17));
 
     if (sb.st_size != memsiz) {
 	btpd_log(BTPD_L_ERROR, "File has wrong size: %s.i.\n", file);

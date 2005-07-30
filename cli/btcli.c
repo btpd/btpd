@@ -138,9 +138,8 @@ gen_ifile(char *path)
     if ((errno = vopen(&fd, O_WRONLY|O_CREAT, "%s.i", path)) != 0)
 	err(1, "opening %s.i", path);
 
-    if (ftruncate(fd,
-            field_len +
-	    (off_t)ceil(mi->npieces * mi->piece_length / (double)(1<<17))) < 0)
+    if (ftruncate(fd, field_len + mi->npieces *
+	    (off_t)ceil(mi->piece_length / (double)(1 << 17))) < 0)
 	err(1, "ftruncate: %s", path);
 
     if (write(fd, cb.piece_field, field_len) != field_len)
