@@ -44,7 +44,7 @@ net_write_cb(int sd, short type, void *arg)
 {
     struct peer *p = (struct peer *)arg;
     if (type == EV_TIMEOUT) {
-	btpd_log(BTPD_L_ERROR, "Write attempt timed out.\n");
+	btpd_log(BTPD_L_CONN, "Write attempt timed out.\n");
 	peer_kill(p);
 	return;
     }
