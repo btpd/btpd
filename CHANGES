@@ -1,3 +1,19 @@
+btpd-0.4:
+---------
+
+Misc:
+- The 0.1 rate limiter is back. It runs at a configurable hz now.
+- Added "--bw-hz" option to btpd.
+- Multiple have messages can be sent in place of a bitfield.
+- If btpd can't write to a peer for 60s, it will be disconnected.
+
+Bug fixes:
+- A calculation error made btpd buggy with small torrents.
+  This caused strange crashes and many reports on bad hashes in the log.
+- The bitfield was sent too early. A peer could miss pieces btpd got
+  while the peer was in handshake.
+- Some situations in end game or with bad hashes could cause a crash.
+
 btpd-0.3:
 ---------
 
