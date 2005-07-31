@@ -1,4 +1,4 @@
-AC_INIT(btpd, 0.3, btpd@murmeldjur.se)
+AC_INIT(btpd, 0.4, btpd@murmeldjur.se)
 
 AC_CANONICAL_TARGET
 
