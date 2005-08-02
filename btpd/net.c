@@ -788,7 +788,6 @@ net_shake_read(struct peer *p, unsigned long rmax)
 	btpd_log(BTPD_L_CONN, "Got whole shake.\n");
 	free(hs);
 	p->piece_field = btpd_calloc(1, (int)ceil(p->tp->meta.npieces / 8.0));
-	cm_on_new_peer(p);
 	net_generic_reader(p);
 	if (p->tp->have_npieces > 0) {
 	    if (p->tp->have_npieces * 9 < 5 + ceil(p->tp->meta.npieces / 8.0))
@@ -796,6 +795,7 @@ net_shake_read(struct peer *p, unsigned long rmax)
 	    else
 		net_send_bitfield(p);
 	}
+	cm_on_new_peer(p);
     } else
 	event_add(&p->in_ev, NULL);
 

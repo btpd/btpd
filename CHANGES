@@ -1,3 +1,10 @@
+btpd-0.5:
+---------
+
+Bug fixes:
+- The bitfield could be sent too late. This could cause the receiving
+  peer to close the connection.
+
 btpd-0.4:
 ---------
 
