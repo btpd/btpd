@@ -3,6 +3,7 @@ btpd_SOURCES=\
 	btpd.c btpd.h\
 	cli_if.c\
 	net.c net.h\
+	net_buf.c net_buf.h\
 	queue.h \
 	peer.c peer.h\
 	policy_choke.c policy_if.c policy_subr.c policy.h\

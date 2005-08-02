@@ -18,8 +18,6 @@
 
 #include "btpd.h"
 
-#define WRITE_TIMEOUT (& (struct timeval) { 60, 0 })
-
 #define min(x, y) ((x) <= (y) ? (x) : (y))
 
 static unsigned long
@@ -68,101 +66,6 @@ uint32_t
 net_read32(void *buf)
 {
     return ntohl(*(uint32_t *)buf);
-}
-
-static void
-kill_buf_no(char *buf, size_t len)
-{
-    //Nothing
-}
-
-static void
-kill_buf_free(char *buf, size_t len)
-{
-    free(buf);
-}
-
-int
-nb_drop(struct net_buf *nb)
-{
-    assert(nb->refs > 0);
-    nb->refs--;
-    if (nb->refs == 0) {
-	nb->kill_buf(nb->buf, nb->len);
-	free(nb);
-	return 1;
-    } else
-	return 0;
-}
-
-void
-nb_hold(struct net_buf *nb)
-{
-    nb->refs++;
-}
-
-struct net_buf *
-nb_create_alloc(short type, size_t len)
-{
-    struct net_buf *nb = btpd_calloc(1, sizeof(*nb) + len);
-    nb->type = type;
-    nb->buf = (char *)(nb + 1);
-    nb->len = len;
-    nb->kill_buf = kill_buf_no;
-    return nb;
-}
-
-struct net_buf *
-nb_create_set(short type, char *buf, size_t len,
-    void (*kill_buf)(char *, size_t))
-{
-    struct net_buf *nb = btpd_calloc(1, sizeof(*nb));
-    nb->type = type;
-    nb->buf = buf;
-    nb->len = len;
-    nb->kill_buf = kill_buf;
-    return nb;
-}
-
-uint32_t
-nb_get_index(struct net_buf *nb)
-{
-    switch (nb->type) {
-    case NB_CANCEL:
-    case NB_HAVE:
-    case NB_PIECE:
-    case NB_REQUEST:
-	return net_read32(nb->buf + 5);
-    default:
-	abort();
-    }
-}
-
-uint32_t
-nb_get_begin(struct net_buf *nb)
-{
-    switch (nb->type) {
-    case NB_CANCEL:
-    case NB_PIECE:
-    case NB_REQUEST:
-	return net_read32(nb->buf + 9);
-    default:
-	abort();
-    }
-}
-
-uint32_t
-nb_get_length(struct net_buf *nb)
-{
-    switch (nb->type) {
-    case NB_CANCEL:
-    case NB_REQUEST:
-	return net_read32(nb->buf + 13);
-    case NB_PIECE:
-	return net_read32(nb->buf) - 9;
-    default:
-	abort();
-    }
 }
 
 void
@@ -253,173 +156,6 @@ net_write(struct peer *p, unsigned long wmax)
     }
 
     return nwritten;
-}
-
-void
-net_send(struct peer *p, struct net_buf *nb)
-{
-    struct nb_link *nl = btpd_calloc(1, sizeof(*nl));
-    nl->nb = nb;
-    nb_hold(nb);
-
-    if (BTPDQ_EMPTY(&p->outq)) {
-	assert(p->outq_off == 0);
-	event_add(&p->out_ev, WRITE_TIMEOUT);
-    }
-    BTPDQ_INSERT_TAIL(&p->outq, nl, entry);
-}
-
-
-/*
- * Remove a network buffer from the peer's outq.
- * If a part of the buffer already have been written
- * to the network it cannot be removed.
- *
- * Returns 1 if the buffer is removed, 0 if not.
- */
-int
-net_unsend(struct peer *p, struct nb_link *nl)
-{
-    if (!(nl == BTPDQ_FIRST(&p->outq) && p->outq_off > 0)) {
-	BTPDQ_REMOVE(&p->outq, nl, entry);
-	nb_drop(nl->nb);
-	free(nl);
-	if (BTPDQ_EMPTY(&p->outq)) {
-	    if (p->flags & PF_ON_WRITEQ) {
-		BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
-		p->flags &= ~PF_ON_WRITEQ;
-	    } else
-		event_del(&p->out_ev);
-	}
-	return 1;
-    } else
-	return 0;
-}
-
-void
-net_send_piece(struct peer *p, uint32_t index, uint32_t begin,
-	       char *block, size_t blen)
-{
-    struct net_buf *head, *piece;
-
-    btpd_log(BTPD_L_MSG, "send piece: %u, %u, %u\n", index, begin, blen);
-
-    head = nb_create_alloc(NB_PIECE, 13);
-    net_write32(head->buf, 9 + blen);
-    head->buf[4] = MSG_PIECE;
-    net_write32(head->buf + 5, index);
-    net_write32(head->buf + 9, begin);
-    net_send(p, head);
-
-    piece = nb_create_set(NB_TORRENTDATA, block, blen, kill_buf_free);
-    net_send(p, piece);
-}
-
-void
-net_send_request(struct peer *p, struct piece_req *req)
-{
-    struct net_buf *out = nb_create_alloc(NB_REQUEST, 17);
-    net_write32(out->buf, 13);
-    out->buf[4] = MSG_REQUEST;
-    net_write32(out->buf + 5, req->index);
-    net_write32(out->buf + 9, req->begin);
-    net_write32(out->buf + 13, req->length);
-    net_send(p, out);
-}
-
-void
-net_send_cancel(struct peer *p, struct piece_req *req)
-{
-    struct net_buf *out = nb_create_alloc(NB_CANCEL, 17);
-    net_write32(out->buf, 13);
-    out->buf[4] = MSG_CANCEL;
-    net_write32(out->buf + 5, req->index);
-    net_write32(out->buf + 9, req->begin);
-    net_write32(out->buf + 13, req->length);
-    net_send(p, out);
-}
-
-void
-net_send_have(struct peer *p, uint32_t index)
-{
-    struct net_buf *out = nb_create_alloc(NB_HAVE, 9);
-    net_write32(out->buf, 5);
-    out->buf[4] = MSG_HAVE;
-    net_write32(out->buf + 5, index);
-    net_send(p, out);
-}
-
-void
-net_send_multihave(struct peer *p)
-{
-    struct torrent *tp = p->tp;
-    struct net_buf *out = nb_create_alloc(NB_MULTIHAVE, 9 * tp->have_npieces);
-    for (uint32_t i = 0, count = 0; count < tp->have_npieces; i++) {
-	if (has_bit(tp->piece_field, i)) {
-	    net_write32(out->buf + count * 9, 5);
-	    out->buf[count * 9 + 4] = MSG_HAVE;
-	    net_write32(out->buf + count * 9 + 5, i);
-	    count++;
-	}
-    }
-    net_send(p, out);
-}
-
-void
-net_send_onesized(struct peer *p, char mtype, int btype)
-{
-    struct net_buf *out = nb_create_alloc(btype, 5);
-    net_write32(out->buf, 1);
-    out->buf[4] = mtype;
-    net_send(p, out);    
-}
-
-void
-net_send_unchoke(struct peer *p)
-{
-    net_send_onesized(p, MSG_UNCHOKE, NB_UNCHOKE);
-}
-
-void
-net_send_choke(struct peer *p)
-{
-    net_send_onesized(p, MSG_CHOKE, NB_CHOKE);
-}
-
-void
-net_send_uninterest(struct peer *p)
-{
-    net_send_onesized(p, MSG_UNINTEREST, NB_UNINTEREST);
-}
-
-void
-net_send_interest(struct peer *p)
-{
-    net_send_onesized(p, MSG_INTEREST, NB_INTEREST);
-}
-
-void
-net_send_bitfield(struct peer *p)
-{
-    uint32_t plen = ceil(p->tp->meta.npieces / 8.0);
-
-    struct net_buf *out = nb_create_alloc(NB_BITFIELD, 5);
-    net_write32(out->buf, plen + 1);
-    out->buf[4] = MSG_BITFIELD;
-    net_send(p, out);
-    
-    out = nb_create_set(NB_BITDATA, p->tp->piece_field, plen, kill_buf_no);
-    net_send(p, out);
-}
-
-void
-net_send_shake(struct peer *p)
-{
-    struct net_buf *out = nb_create_alloc(NB_SHAKE, 68);
-    bcopy("\x13""BitTorrent protocol\0\0\0\0\0\0\0\0", out->buf, 28);
-    bcopy(p->tp->meta.info_hash, out->buf + 28, 20);
-    bcopy(btpd.peer_id, out->buf + 48, 20);
-    net_send(p, out);
 }
 
 static void
@@ -761,7 +497,7 @@ net_shake_read(struct peer *p, unsigned long rmax)
 	    if (tp != NULL) {
 		hs->state = SHAKE_INFO;
 		p->tp = tp;
-		net_send_shake(p);
+		peer_send(p, nb_create_shake(p->tp));
 	    } else
 		goto bad_shake;
 	} else {
@@ -791,9 +527,11 @@ net_shake_read(struct peer *p, unsigned long rmax)
 	net_generic_reader(p);
 	if (p->tp->have_npieces > 0) {
 	    if (p->tp->have_npieces * 9 < 5 + ceil(p->tp->meta.npieces / 8.0))
-		net_send_multihave(p);
-	    else
-		net_send_bitfield(p);
+		peer_send(p, nb_create_multihave(p->tp));
+	    else {
+		peer_send(p, nb_create_bitfield(p->tp));
+		peer_send(p, nb_create_bitdata(p->tp));
+	    }
 	}
 	cm_on_new_peer(p);
     } else
@@ -826,7 +564,7 @@ net_handshake(struct peer *p, int incoming)
     hs->rd.kill = kill_shake;
 
     if (!incoming)
-	net_send_shake(p);
+	peer_send(p, nb_create_shake(p->tp));
 }
 
 int

@@ -396,20 +396,22 @@ cm_unassign_requests(struct peer *p)
     while (pc != NULL) {
 	int was_full = piece_full(pc);
 
-	struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
-	while (req != NULL) {
-	    struct piece_req *next = BTPDQ_NEXT(req, entry);
+	struct nb_link *nl = BTPDQ_FIRST(&p->my_reqs);
+	while (nl != NULL) {
+	    struct nb_link *next = BTPDQ_NEXT(nl, entry);
 
-	    if (pc->index == req->index) {
+	    if (pc->index == nb_get_index(nl->nb)) {
+		uint32_t block = nb_get_begin(nl->nb) / PIECE_BLOCKLEN;
 		// XXX: Needs to be looked at if we introduce snubbing.
-		assert(has_bit(pc->down_field, req->begin / PIECE_BLOCKLEN));
-		clear_bit(pc->down_field, req->begin / PIECE_BLOCKLEN);
+		assert(has_bit(pc->down_field, block));
+		clear_bit(pc->down_field, block);
 		pc->nbusy--;
-		BTPDQ_REMOVE(&p->my_reqs, req, entry);
-		free(req);
+		BTPDQ_REMOVE(&p->my_reqs, nl, entry);
+		nb_drop(nl->nb);
+		free(nl);
 	    }
 	    
-	    req = next;
+	    nl = next;
 	}
 	
 	if (was_full && !piece_full(pc))
@@ -449,11 +451,12 @@ cm_assign_requests_eg(struct peer *p)
 void
 cm_unassign_requests_eg(struct peer *p)
 {
-    struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
-    while (req != NULL) {
-	struct piece_req *next = BTPDQ_NEXT(req, entry);
-	free(req);
-	req = next;
+    struct nb_link *nl = BTPDQ_FIRST(&p->my_reqs);
+    while (nl != NULL) {
+	struct nb_link *next = BTPDQ_NEXT(nl, entry);
+	nb_drop(nl->nb);
+	free(nl);
+	nl = next;
     }
     BTPDQ_INIT(&p->my_reqs);
     p->nreqs_out = 0;

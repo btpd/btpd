@@ -21,7 +21,6 @@ void
 peer_kill(struct peer *p)
 {
     struct nb_link *nl;
-    struct piece_req *req;
 
     btpd_log(BTPD_L_CONN, "killed peer.\n");
 
@@ -45,11 +44,12 @@ peer_kill(struct peer *p)
 	free(nl);
 	nl = next;
     }
-    req = BTPDQ_FIRST(&p->my_reqs);
-    while (req != NULL) {
-	struct piece_req *next = BTPDQ_NEXT(req, entry);
-	free(req);
-	req = next;
+    nl = BTPDQ_FIRST(&p->my_reqs);
+    while (nl != NULL) {
+	struct nb_link *next = BTPDQ_NEXT(nl, entry);
+	nb_drop(nl->nb);
+	free(nl);
+	nl = next;
     }
 
     p->reader->kill(p->reader);
@@ -60,31 +60,81 @@ peer_kill(struct peer *p)
 }
 
 void
+peer_send(struct peer *p, struct net_buf *nb)
+{
+    struct nb_link *nl = btpd_calloc(1, sizeof(*nl));
+    nl->nb = nb;
+    nb_hold(nb);
+
+    if (BTPDQ_EMPTY(&p->outq)) {
+	assert(p->outq_off == 0);
+	event_add(&p->out_ev, WRITE_TIMEOUT);
+    }
+    BTPDQ_INSERT_TAIL(&p->outq, nl, entry);
+}
+
+
+/*
+ * Remove a network buffer from the peer's outq.
+ * If a part of the buffer already have been written
+ * to the network it cannot be removed.
+ *
+ * Returns 1 if the buffer is removed, 0 if not.
+ */
+int
+peer_unsend(struct peer *p, struct nb_link *nl)
+{
+    if (!(nl == BTPDQ_FIRST(&p->outq) && p->outq_off > 0)) {
+	BTPDQ_REMOVE(&p->outq, nl, entry);
+	nb_drop(nl->nb);
+	free(nl);
+	if (BTPDQ_EMPTY(&p->outq)) {
+	    if (p->flags & PF_ON_WRITEQ) {
+		BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
+		p->flags &= ~PF_ON_WRITEQ;
+	    } else
+		event_del(&p->out_ev);
+	}
+	return 1;
+    } else
+	return 0;
+}
+
+void
 peer_request(struct peer *p, uint32_t index, uint32_t begin, uint32_t len)
 {
     if (p->tp->endgame == 0)
 	assert(p->nreqs_out < MAXPIPEDREQUESTS);
     p->nreqs_out++;
-    struct piece_req *req = btpd_calloc(1, sizeof(*req));
-    req->index = index;
-    req->begin = begin;
-    req->length = len;
-    BTPDQ_INSERT_TAIL(&p->my_reqs, req, entry);
-    net_send_request(p, req);
+    struct net_buf *nb = nb_create_request(index, begin, len);
+    struct nb_link *nl = btpd_calloc(1, sizeof(*nl));
+    nl->nb = nb;
+    nb_hold(nb);
+    BTPDQ_INSERT_TAIL(&p->my_reqs, nl, entry);
+    peer_send(p, nb);
 }
 
 void
 peer_cancel(struct peer *p, uint32_t index, uint32_t begin, uint32_t len)
 {
-    struct piece_req *req;
+    struct net_buf *nb = NULL;
+    struct nb_link *nl;
 again:
-    BTPDQ_FOREACH(req, &p->my_reqs, entry)
-	if (index == req->index && begin == req->begin && len == req->length)
+    BTPDQ_FOREACH(nl, &p->my_reqs, entry) {
+	int match = nb_get_begin(nl->nb) == begin
+	    && nb_get_index(nl->nb) == index
+	    && nb_get_length(nl->nb) == len;
+	if (match)
 	    break;
-    if (req != NULL) {
-	net_send_cancel(p, req);
-	BTPDQ_REMOVE(&p->my_reqs, req, entry);
-	free(req);
+    }
+    if (nl != NULL) {
+	if (nb == NULL) {
+	    nb =  nb_create_cancel(index, begin, len);
+	    peer_send(p, nb);
+	}
+	BTPDQ_REMOVE(&p->my_reqs, nl, entry);
+	nb_drop(nl->nb);
+	free(nl);
 	p->nreqs_out--;
 	goto again;
     }
@@ -93,14 +143,14 @@ again:
 void
 peer_have(struct peer *p, uint32_t index)
 {
-    net_send_have(p, index);
+    peer_send(p, nb_create_have(index));
 }
 
 void
 peer_unchoke(struct peer *p)
 {
     p->flags &= ~PF_I_CHOKE;
-    net_send_unchoke(p);
+    peer_send(p, btpd.unchoke_msg);
 }
 
 void
@@ -112,14 +162,14 @@ peer_choke(struct peer *p)
 	if (nl->nb->type == NB_PIECE) {
 	    struct nb_link *data = next;
 	    next = BTPDQ_NEXT(next, entry);
-	    if (net_unsend(p, nl))
-		net_unsend(p, data);
+	    if (peer_unsend(p, nl))
+		peer_unsend(p, data);
 	}
 	nl = next;
     }
 
     p->flags |= PF_I_CHOKE;
-    net_send_choke(p);    
+    peer_send(p, btpd.choke_msg);
 }
 
 void
@@ -129,7 +179,7 @@ peer_want(struct peer *p, uint32_t index)
     p->nwant++;
     if (p->nwant == 1) {
 	p->flags |= PF_I_WANT;
-	net_send_interest(p);
+	peer_send(p, btpd.interest_msg);
     }
 }
 
@@ -140,7 +190,7 @@ peer_unwant(struct peer *p, uint32_t index)
     p->nwant--;
     if (p->nwant == 0) {
 	p->flags &= ~PF_I_WANT;
-	net_send_uninterest(p);
+	peer_send(p, btpd.uninterest_msg);
     }
 }
 
@@ -275,16 +325,17 @@ void
 peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length, const char *data)
 {
-    struct piece_req *req = BTPDQ_FIRST(&p->my_reqs);
-    if (req != NULL &&
-	req->index == index &&
-	req->begin == begin &&
-	req->length == length) {
+    struct nb_link *nl = BTPDQ_FIRST(&p->my_reqs);
+    if (nl != NULL &&
+	nb_get_begin(nl->nb) == begin &&
+	nb_get_index(nl->nb) == index &&
+	nb_get_length(nl->nb) == length) {
 
 	assert(p->nreqs_out > 0);
 	p->nreqs_out--;
-	BTPDQ_REMOVE(&p->my_reqs, req, entry);
-	free(req);
+	BTPDQ_REMOVE(&p->my_reqs, nl, entry);
+	nb_drop(nl->nb);
+	free(nl);
 	
 	cm_on_block(p, index, begin, length, data);
     }
@@ -296,7 +347,8 @@ peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
 {
     off_t cbegin = index * p->tp->meta.piece_length + begin;
     char * content = torrent_get_bytes(p->tp, cbegin, length);
-    net_send_piece(p, index, begin, content, length);
+    peer_send(p, nb_create_piece(index, begin, length));
+    peer_send(p, nb_create_torrentdata(content, length));
 }
 
 void
@@ -310,8 +362,8 @@ peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
 	    && nb_get_index(nl->nb) == index
 	    && nb_get_length(nl->nb) == length) {
 	    struct nb_link *data = BTPDQ_NEXT(nl, entry);
-	    if (net_unsend(p, nl))
-		net_unsend(p, data);
+	    if (peer_unsend(p, nl))
+		peer_unsend(p, data);
 	    break;
 	}
 }

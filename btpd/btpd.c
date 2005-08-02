@@ -145,6 +145,15 @@ btpd_init(void)
 		 "More could be beneficial to the download performance.\n",
 		 nfiles);
     btpd.maxpeers = nfiles - 20;
+
+    btpd.choke_msg = nb_create_choke();
+    nb_hold(btpd.choke_msg);
+    btpd.unchoke_msg = nb_create_unchoke();
+    nb_hold(btpd.unchoke_msg);
+    btpd.interest_msg = nb_create_interest();
+    nb_hold(btpd.interest_msg);
+    btpd.uninterest_msg = nb_create_uninterest();
+    nb_hold(btpd.uninterest_msg);
 }
 
 void

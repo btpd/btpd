@@ -17,6 +17,7 @@
 #include "benc.h"
 #include "metainfo.h"
 #include "iobuf.h"
+#include "net_buf.h"
 #include "net.h"
 #include "peer.h"
 #include "torrent.h"
@@ -78,6 +79,11 @@ struct btpd {
     struct event sigint;
     struct event sigterm;
     struct event sigchld;
+
+    struct net_buf *choke_msg;
+    struct net_buf *unchoke_msg;
+    struct net_buf *interest_msg;
+    struct net_buf *uninterest_msg;
 };
 
 extern struct btpd btpd;

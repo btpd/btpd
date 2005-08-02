@@ -25,7 +25,7 @@ struct peer {
 
     struct torrent *tp;
 
-    struct piece_req_tq my_reqs;
+    struct nb_tq my_reqs;
 
     unsigned nreqs_out;
 
@@ -47,6 +47,9 @@ struct peer {
 };
 
 BTPDQ_HEAD(peer_tq, peer);
+
+void peer_send(struct peer *p, struct net_buf *nb);
+int peer_unsend(struct peer *p, struct nb_link *nl);
 
 void peer_unchoke(struct peer *p);
 void peer_choke(struct peer *p);

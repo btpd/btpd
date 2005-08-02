@@ -11,43 +11,7 @@
 #define MSG_PIECE	7
 #define MSG_CANCEL	8
 
-#define NB_CHOKE	0
-#define NB_UNCHOKE	1
-#define NB_INTEREST	2
-#define NB_UNINTEREST	3
-#define NB_HAVE		4
-#define NB_BITFIELD	5
-#define NB_REQUEST	6
-#define NB_PIECE	7
-#define NB_CANCEL	8
-#define NB_TORRENTDATA	10
-#define NB_MULTIHAVE	11
-#define NB_BITDATA	12
-#define NB_SHAKE	13
-
-struct net_buf {
-    short type;
-    unsigned refs;
-    char *buf;
-    size_t len;
-    void (*kill_buf)(char *, size_t);
-};
-
-struct nb_link {
-    struct net_buf *nb;
-    BTPDQ_ENTRY(nb_link) entry;
-};
-
-BTPDQ_HEAD(nb_tq, nb_link);
-
-struct net_buf *nb_create_alloc(short type, size_t len);
-struct net_buf *nb_create_set(short type, char *buf, size_t len,
-    void (*kill_buf)(char *, size_t));
-int nb_drop(struct net_buf *nb);
-void nb_hold(struct net_buf *nb);
-uint32_t nb_get_index(struct net_buf *nb);
-uint32_t nb_get_begin(struct net_buf *nb);
-uint32_t nb_get_length(struct net_buf *nb);
+#define WRITE_TIMEOUT (& (struct timeval) { 60, 0 })
 
 struct peer;
 
@@ -94,36 +58,18 @@ struct generic_reader {
     char _io_buf[MAX_INPUT_LEFT];
 };
 
-struct piece_req {
-    uint32_t index, begin, length;
-    struct iob_link *head; /* Pointer to outgoing piece. */
-    BTPDQ_ENTRY(piece_req) entry;
-};
-
-BTPDQ_HEAD(piece_req_tq, piece_req);
-
 void net_connection_cb(int sd, short type, void *arg);
 void net_bw_rate(void);
 void net_bw_cb(int sd, short type, void *arg);
 
-struct peer;
-
-void net_send_uninterest(struct peer *p);
-void net_send_interest(struct peer *p);
-void net_send_unchoke(struct peer *p);
-void net_send_choke(struct peer *p);
-
-void net_send_have(struct peer *p, uint32_t index);
-void net_send_request(struct peer *p, struct piece_req *req);
-void net_send_piece(struct peer *p, uint32_t index, uint32_t begin,
-    char *block, size_t blen);
-void net_send_cancel(struct peer *p, struct piece_req *req);
-int net_unsend(struct peer *p, struct nb_link *nl);
-void net_handshake(struct peer *p, int incoming);
-
 void net_read_cb(int sd, short type, void *arg);
 void net_write_cb(int sd, short type, void *arg);
+
+void net_handshake(struct peer *p, int incoming);
 int net_connect2(struct sockaddr *sa, socklen_t salen, int *sd);
 int net_connect(const char *ip, int port, int *sd);
+
+void net_write32(void *buf, uint32_t num);
+uint32_t net_read32(void *buf);
 
 #endif
