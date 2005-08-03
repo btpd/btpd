@@ -137,8 +137,9 @@ cm_on_ok_piece(struct piece *pc)
     tp->have_npieces++;
     msync(tp->imem, tp->isiz, MS_ASYNC);
 
+    struct net_buf *have = nb_create_have(pc->index);
     BTPDQ_FOREACH(p, &tp->peers, cm_entry)
-	peer_have(p, pc->index);
+	peer_send(p, have);
 
     if (tp->endgame)
 	BTPDQ_FOREACH(p, &tp->peers, cm_entry)
