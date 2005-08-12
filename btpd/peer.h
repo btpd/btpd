@@ -1,22 +1,23 @@
 #ifndef BTPD_PEER_H
 #define BTPD_PEER_H
 
-#define PF_I_WANT	0x01	/* We want to download from the peer */
-#define PF_I_CHOKE	0x02	/* We choke the peer */
-#define	PF_P_WANT	0x04	/* The peer wants to download from us */
-#define	PF_P_CHOKE	0x08	/* The peer is choking us */
-#define PF_ON_READQ	0x10
-#define PF_ON_WRITEQ	0x20
-#define PF_ATTACHED	0x40
-#define PF_WRITE_CLOSE	0x80	/* Close connection after writing all data */
+#define PF_I_WANT	  0x1	/* We want to download from the peer */
+#define PF_I_CHOKE	  0x2	/* We choke the peer */
+#define PF_P_WANT	  0x4	/* The peer wants to download from us */
+#define PF_P_CHOKE	  0x8	/* The peer is choking us */
+#define PF_ON_READQ	 0x10
+#define PF_ON_WRITEQ	 0x20
+#define PF_ATTACHED	 0x40
+#define PF_WRITE_CLOSE	 0x80	/* Close connection after writing all data */
+#define PF_NO_REQUESTS	0x100
 
 #define RATEHISTORY 20
-
+#define MAXPIECEMSGS 128
 #define MAXPIPEDREQUESTS 10
 
 struct peer {
     int sd;
-    uint8_t flags;
+    uint16_t flags;
     uint8_t *piece_field;
     uint32_t npieces;
     uint32_t nwant;
@@ -28,6 +29,7 @@ struct peer {
     struct nb_tq my_reqs;
 
     unsigned nreqs_out;
+    unsigned npiece_msgs;
 
     size_t outq_off;
     struct nb_tq outq;
@@ -50,6 +52,7 @@ BTPDQ_HEAD(peer_tq, peer);
 
 void peer_send(struct peer *p, struct net_buf *nb);
 int peer_unsend(struct peer *p, struct nb_link *nl);
+void peer_sent(struct peer *p, struct net_buf *nb);
 
 void peer_unchoke(struct peer *p);
 void peer_choke(struct peer *p);

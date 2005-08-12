@@ -86,6 +86,10 @@ peer_unsend(struct peer *p, struct nb_link *nl)
 {
     if (!(nl == BTPDQ_FIRST(&p->outq) && p->outq_off > 0)) {
 	BTPDQ_REMOVE(&p->outq, nl, entry);
+	if (nl->nb->type == NB_TORRENTDATA) {
+	    assert(p->npiece_msgs > 0);
+	    p->npiece_msgs--;
+	}
 	nb_drop(nl->nb);
 	free(nl);
 	if (BTPDQ_EMPTY(&p->outq)) {
@@ -98,6 +102,21 @@ peer_unsend(struct peer *p, struct nb_link *nl)
 	return 1;
     } else
 	return 0;
+}
+
+void
+peer_sent(struct peer *p, struct net_buf *nb)
+{
+    switch (nb->type) {
+    case NB_TORRENTDATA:
+	assert(p->npiece_msgs > 0);
+	p->npiece_msgs--;
+	break;
+    case NB_UNCHOKE:
+	assert(p->npiece_msgs == 0);
+	p->flags &= ~PF_NO_REQUESTS;
+	break;
+    }
 }
 
 void
@@ -345,10 +364,18 @@ void
 peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length)
 {
-    off_t cbegin = index * p->tp->meta.piece_length + begin;
-    char * content = torrent_get_bytes(p->tp, cbegin, length);
-    peer_send(p, nb_create_piece(index, begin, length));
-    peer_send(p, nb_create_torrentdata(content, length));
+    if ((p->flags & PF_NO_REQUESTS) == 0) {
+	off_t cbegin = index * p->tp->meta.piece_length + begin;
+	char * content = torrent_get_bytes(p->tp, cbegin, length);
+	peer_send(p, nb_create_piece(index, begin, length));
+	peer_send(p, nb_create_torrentdata(content, length));
+	p->npiece_msgs++;
+	if (p->npiece_msgs >= MAXPIECEMSGS) {
+	    peer_send(p, btpd.choke_msg);
+	    peer_send(p, btpd.unchoke_msg);
+	    p->flags |= PF_NO_REQUESTS;
+	}
+    }
 }
 
 void

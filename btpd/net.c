@@ -129,6 +129,7 @@ net_write(struct peer *p, unsigned long wmax)
     while (bcount > 0) {
 	unsigned long bufdelta = nl->nb->len - p->outq_off;
 	if (bcount >= bufdelta) {
+	    peer_sent(p, nl->nb);
 	    if (nl->nb->type == NB_TORRENTDATA) {
 		p->tp->uploaded += bufdelta;
 		p->rate_from_me[btpd.seconds % RATEHISTORY] += bufdelta;
