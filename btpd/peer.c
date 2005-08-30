@@ -113,7 +113,6 @@ peer_sent(struct peer *p, struct net_buf *nb)
 	p->npiece_msgs--;
 	break;
     case NB_UNCHOKE:
-	assert(p->npiece_msgs == 0);
 	p->flags &= ~PF_NO_REQUESTS;
 	break;
     }
