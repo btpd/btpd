@@ -1,7 +1,5 @@
 AC_INIT(btpd, 0.5, btpd@murmeldjur.se)
 
-AC_CANONICAL_TARGET
-
 AM_INIT_AUTOMAKE([foreign])
 
 AC_CONFIG_FILES([Makefile btpd/Makefile misc/Makefile cli/Makefile])
@@ -10,12 +8,7 @@ AC_PROG_CC
 AC_PROG_RANLIB
 
 CFLAGS="$CFLAGS -std=c99"
-
-case $target_os in
-     linux*)
-	CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64"
-	;;
-esac
+CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64"
 
 AC_ARG_WITH(event,
 [  --with-event=dir        use libevent installed in dir],
