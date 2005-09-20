@@ -44,13 +44,6 @@ peer_kill(struct peer *p)
 	free(nl);
 	nl = next;
     }
-    nl = BTPDQ_FIRST(&p->my_reqs);
-    while (nl != NULL) {
-	struct nb_link *next = BTPDQ_NEXT(nl, entry);
-	nb_drop(nl->nb);
-	free(nl);
-	nl = next;
-    }
 
     p->reader->kill(p->reader);
     if (p->piece_field != NULL)
@@ -119,49 +112,40 @@ peer_sent(struct peer *p, struct net_buf *nb)
 }
 
 void
-peer_request(struct peer *p, uint32_t index, uint32_t begin, uint32_t len)
+peer_request(struct peer *p, struct block_request *req)
 {
-    if (p->tp->endgame == 0)
-	assert(p->nreqs_out < MAXPIPEDREQUESTS);
+    assert(p->nreqs_out < MAXPIPEDREQUESTS);
     p->nreqs_out++;
-    struct net_buf *nb = nb_create_request(index, begin, len);
-    struct nb_link *nl = btpd_calloc(1, sizeof(*nl));
-    nl->nb = nb;
-    nb_hold(nb);
-    BTPDQ_INSERT_TAIL(&p->my_reqs, nl, entry);
-    peer_send(p, nb);
+    BTPDQ_INSERT_TAIL(&p->my_reqs, req, p_entry);
+    peer_send(p, req->blk->msg);
+}
+
+int
+peer_requested(struct peer *p, struct block *blk)
+{
+    struct block_request *req;
+    BTPDQ_FOREACH(req, &p->my_reqs, p_entry)
+	if (req->blk == blk)
+	    return 1;
+    return 0;
 }
 
 void
-peer_cancel(struct peer *p, uint32_t index, uint32_t begin, uint32_t len)
+peer_cancel(struct peer *p, struct block_request *req, struct net_buf *nb)
 {
-    struct net_buf *nb = NULL;
+    BTPDQ_REMOVE(&p->my_reqs, req, p_entry);
+    p->nreqs_out--;
+
+    int removed = 0;
     struct nb_link *nl;
-again:
-    BTPDQ_FOREACH(nl, &p->my_reqs, entry) {
-	int match = nb_get_begin(nl->nb) == begin
-	    && nb_get_index(nl->nb) == index
-	    && nb_get_length(nl->nb) == len;
-	if (match)
+    BTPDQ_FOREACH(nl, &p->outq, entry) {
+	if (nl->nb == req->blk->msg) {
+	    removed = peer_unsend(p, nl);
 	    break;
-    }
-    if (nl != NULL) {
-	if (nb == NULL) {
-	    nb =  nb_create_cancel(index, begin, len);
-	    peer_send(p, nb);
 	}
-	BTPDQ_REMOVE(&p->my_reqs, nl, entry);
-	nb_drop(nl->nb);
-	free(nl);
-	p->nreqs_out--;
-	goto again;
     }
-}
-
-void
-peer_have(struct peer *p, uint32_t index)
-{
-    peer_send(p, nb_create_have(index));
+    if (!removed)
+	peer_send(p, nb);
 }
 
 void
@@ -343,19 +327,18 @@ void
 peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length, const char *data)
 {
-    struct nb_link *nl = BTPDQ_FIRST(&p->my_reqs);
-    if (nl != NULL &&
-	nb_get_begin(nl->nb) == begin &&
-	nb_get_index(nl->nb) == index &&
-	nb_get_length(nl->nb) == length) {
+    struct block_request *req = BTPDQ_FIRST(&p->my_reqs);
+    if (req == NULL)
+	return;
+    struct net_buf *nb = req->blk->msg;
+    if (nb_get_begin(nb) == begin &&
+	nb_get_index(nb) == index &&
+	nb_get_length(nb) == length) {
 
 	assert(p->nreqs_out > 0);
 	p->nreqs_out--;
-	BTPDQ_REMOVE(&p->my_reqs, nl, entry);
-	nb_drop(nl->nb);
-	free(nl);
-	
-	cm_on_block(p, index, begin, length, data);
+	BTPDQ_REMOVE(&p->my_reqs, req, p_entry);
+	cm_on_block(p, req, index, begin, length, data);
     }
 }
 

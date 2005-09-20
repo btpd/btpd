@@ -3,14 +3,25 @@
 
 #define PIECE_BLOCKLEN (1 << 14)
 
+struct block {
+    struct piece *pc;
+    struct net_buf *msg;
+    struct block_request_tq reqs;
+};
+
 struct piece {
     struct torrent *tp;
 
     uint32_t index;
-    unsigned nblocks;
 
+    unsigned nreqs;
+
+    unsigned nblocks;
     unsigned ngot;
     unsigned nbusy;
+    unsigned next_block;
+
+    struct block *blocks;
 
     uint8_t *have_field;
     uint8_t *down_field;

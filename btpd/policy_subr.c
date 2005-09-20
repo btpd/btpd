@@ -35,13 +35,14 @@ piece_alloc(struct torrent *tp, uint32_t index)
     assert(!has_bit(tp->busy_field, index)
 	&& tp->npcs_busy < tp->meta.npieces);
     struct piece *pc;
-    size_t mem, field;
+    size_t mem, field, blocks;
     unsigned nblocks;
     off_t piece_length = torrent_piece_size(tp, index);
 
     nblocks = (unsigned)ceil((double)piece_length / PIECE_BLOCKLEN);
+    blocks = sizeof(pc->blocks[0]) * nblocks;
     field = (size_t)ceil(nblocks / 8.0);
-    mem = sizeof(*pc) + field;
+    mem = sizeof(*pc) + field + blocks;
 
     pc = btpd_calloc(1, mem);
     pc->tp = tp;
@@ -49,12 +50,27 @@ piece_alloc(struct torrent *tp, uint32_t index)
     pc->have_field =
 	tp->block_field +
 	index * (size_t)ceil(tp->meta.piece_length / (double)(1 << 17));
-    pc->nblocks = nblocks;
+
     pc->index = index;
+    pc->nblocks = nblocks;
+
+    pc->nreqs = 0;
+    pc->next_block = 0;
 
     for (unsigned i = 0; i < nblocks; i++)
 	if (has_bit(pc->have_field, i))
 	    pc->ngot++;
+
+    pc->blocks = (struct block *)(pc->down_field + field);
+    for (unsigned i = 0; i < nblocks; i++) {
+	uint32_t start = i * PIECE_BLOCKLEN;
+	uint32_t len = torrent_block_size(pc, i);
+	struct block *blk = &pc->blocks[i];
+	blk->pc = pc;
+	BTPDQ_INIT(&blk->reqs);
+	blk->msg = nb_create_request(index, start, len);
+	nb_hold(blk->msg);
+    }	
 
     tp->npcs_busy++;
     set_bit(tp->busy_field, index);
@@ -70,6 +86,15 @@ piece_free(struct piece *pc)
     tp->npcs_busy--;
     clear_bit(tp->busy_field, pc->index);
     BTPDQ_REMOVE(&pc->tp->getlst, pc, entry);
+    for (unsigned i = 0; i < pc->nblocks; i++) {
+	struct block_request *req = BTPDQ_FIRST(&pc->blocks[i].reqs);
+	while (req != NULL) {
+	    struct block_request *next = BTPDQ_NEXT(req, blk_entry);
+	    free(req);
+	    req = next;
+	}
+	nb_drop(pc->blocks[i].msg);
+    }
     free(pc);
 }
 
@@ -98,26 +123,65 @@ cm_should_enter_endgame(struct torrent *tp)
 }
 
 static void
+cm_piece_insert_eg(struct piece *pc)
+{
+    struct piece_tq *getlst = &pc->tp->getlst;
+    if (pc->nblocks == pc->ngot)
+	BTPDQ_INSERT_TAIL(getlst, pc, entry);
+    else {
+	unsigned r = pc->nreqs / (pc->nblocks - pc->ngot);
+	struct piece *it;
+	BTPDQ_FOREACH(it, getlst, entry) {
+	    if ((it->nblocks == it->ngot
+		    || r < it->nreqs / (it->nblocks - it->ngot))) {
+		BTPDQ_INSERT_BEFORE(it, pc, entry);
+		break;
+	    }
+	}
+	if (it == NULL)
+	    BTPDQ_INSERT_TAIL(getlst, pc, entry);
+    }
+}
+
+void
+cm_piece_reorder_eg(struct piece *pc)
+{
+    BTPDQ_REMOVE(&pc->tp->getlst, pc, entry);
+    cm_piece_insert_eg(pc);
+}
+
+static void
 cm_enter_endgame(struct torrent *tp)
 {
     struct peer *p;
     struct piece *pc;
+    struct piece *pcs[tp->npcs_busy];
+    unsigned pi;
+
     btpd_log(BTPD_L_POL, "Entering end game\n");
     tp->endgame = 1;
+
+    pi = 0;
     BTPDQ_FOREACH(pc, &tp->getlst, entry) {
-	for (uint32_t i = 0; i < pc->nblocks; i++)
+	for (unsigned i = 0; i < pc->nblocks; i++)
 	    clear_bit(pc->down_field, i);
 	pc->nbusy = 0;
+	pcs[pi] = pc;
+	pi++;
+    }
+    BTPDQ_INIT(&tp->getlst);
+    while (pi > 0) {
+	pi--;
+	cm_piece_insert_eg(pcs[pi]);
     }
     BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
 	assert(p->nwant == 0);
 	BTPDQ_FOREACH(pc, &tp->getlst, entry) {
-	    if (peer_has(p, pc->index)) {
+	    if (peer_has(p, pc->index))
 		peer_want(p, pc->index);
-		if (peer_leech_ok(p))
-		    cm_piece_assign_requests_eg(pc, p);
-	    }
 	}
+	if (p->nwant > 0 && peer_leech_ok(p) && !peer_laden(p))
+	    cm_assign_requests_eg(p);
     }
 }
 
@@ -320,6 +384,10 @@ cm_on_piece_unfull(struct piece *pc)
     }
 }
 
+#define INCNEXTBLOCK(pc) \
+    (pc)->next_block = ((pc)->next_block + 1) % (pc)->nblocks
+
+
 /*
  * Request as many blocks as possible on this piece from
  * the peer. If the piece becomes full we call cm_on_piece_full.
@@ -331,18 +399,29 @@ cm_piece_assign_requests(struct piece *pc, struct peer *p)
 {
     assert(!piece_full(pc) && !peer_laden(p));
     unsigned count = 0;
-    for (uint32_t i = 0; !piece_full(pc) && !peer_laden(p); i++) {
-	if (has_bit(pc->have_field, i) || has_bit(pc->down_field, i))
-	    continue;
-	set_bit(pc->down_field, i);
+    do {
+	while ((has_bit(pc->have_field, pc->next_block)
+		   || has_bit(pc->down_field, pc->next_block)))
+	    INCNEXTBLOCK(pc);
+
+	struct block *blk = &pc->blocks[pc->next_block];
+	struct block_request *req = btpd_malloc(sizeof(*req));
+	req->p = p;
+	req->blk = blk;
+	BTPDQ_INSERT_TAIL(&blk->reqs, req, blk_entry);
+	
+	peer_request(p, req);
+
+	set_bit(pc->down_field, pc->next_block);
 	pc->nbusy++;
-	uint32_t start = i * PIECE_BLOCKLEN;
-	uint32_t len = torrent_block_size(pc, i);
-	peer_request(p, pc->index, start, len);
+	pc->nreqs++;
 	count++;
-    }
+	INCNEXTBLOCK(pc);
+    } while (!piece_full(pc) && !peer_laden(p));
+
     if (piece_full(pc))
 	cm_on_piece_full(pc);
+
     return count;
 }
 
@@ -390,74 +469,118 @@ cm_assign_requests(struct peer *p)
 void
 cm_unassign_requests(struct peer *p)
 {
-    struct torrent *tp = p->tp;
-
-    struct piece *pc = BTPDQ_FIRST(&tp->getlst);
-    while (pc != NULL) {
+    while (p->nreqs_out > 0) {
+	struct block_request *req = BTPDQ_FIRST(&p->my_reqs);
+	struct piece *pc = req->blk->pc;
 	int was_full = piece_full(pc);
 
-	struct nb_link *nl = BTPDQ_FIRST(&p->my_reqs);
-	while (nl != NULL) {
-	    struct nb_link *next = BTPDQ_NEXT(nl, entry);
+	while (req != NULL) {
+	    struct block_request *next = BTPDQ_NEXT(req, p_entry);
 
-	    if (pc->index == nb_get_index(nl->nb)) {
-		uint32_t block = nb_get_begin(nl->nb) / PIECE_BLOCKLEN;
-		// XXX: Needs to be looked at if we introduce snubbing.
-		assert(has_bit(pc->down_field, block));
-		clear_bit(pc->down_field, block);
-		pc->nbusy--;
-		BTPDQ_REMOVE(&p->my_reqs, nl, entry);
-		nb_drop(nl->nb);
-		free(nl);
-	    }
-	    
-	    nl = next;
+	    uint32_t blki = nb_get_begin(req->blk->msg) / PIECE_BLOCKLEN;
+	    struct block *blk = req->blk;
+	    // XXX: Needs to be looked at if we introduce snubbing.
+	    assert(has_bit(pc->down_field, blki));
+	    clear_bit(pc->down_field, blki);
+	    pc->nbusy--;
+	    BTPDQ_REMOVE(&p->my_reqs, req, p_entry);
+	    p->nreqs_out--;
+	    BTPDQ_REMOVE(&blk->reqs, req, blk_entry);
+	    free(req);
+	    pc->nreqs--;
+
+	    while (next != NULL && next->blk->pc != pc)
+		next = BTPDQ_NEXT(next, p_entry);
+	    req = next;
 	}
-	
+
 	if (was_full && !piece_full(pc))
 	    cm_on_piece_unfull(pc);
-
-	pc = BTPDQ_NEXT(pc, entry);
     }
-
     assert(BTPDQ_EMPTY(&p->my_reqs));
-    p->nreqs_out = 0;
 }
 
-
-void
+static void
 cm_piece_assign_requests_eg(struct piece *pc, struct peer *p)
 {
-    for (uint32_t i = 0; i < pc->nblocks; i++) {
-	if (!has_bit(pc->have_field, i)) {
-	    uint32_t start = i * PIECE_BLOCKLEN;
-	    uint32_t len = torrent_block_size(pc, i);
-	    peer_request(p, pc->index, start, len);
+    unsigned first_block = pc->next_block;
+    do {
+	if ((has_bit(pc->have_field, pc->next_block)
+		|| peer_requested(p, &pc->blocks[pc->next_block]))) {
+	    INCNEXTBLOCK(pc);
+	    continue;
 	}
-    }
+	struct block_request *req = btpd_calloc(1, sizeof(*req));
+	req->blk = &pc->blocks[pc->next_block];
+	req->p = p;
+	BTPDQ_INSERT_TAIL(&pc->blocks[pc->next_block].reqs, req, blk_entry);
+	pc->nreqs++;
+	INCNEXTBLOCK(pc);
+	peer_request(p, req);
+    } while (!peer_laden(p) && pc->next_block != first_block);
 }
 
 void
 cm_assign_requests_eg(struct peer *p)
 {
+    assert(!peer_laden(p));
     struct torrent *tp = p->tp;
-    struct piece *pc;
-    BTPDQ_FOREACH(pc, &tp->getlst, entry) {
-	if (peer_has(p, pc->index))
+    struct piece_tq tmp;
+    BTPDQ_INIT(&tmp);
+
+    struct piece *pc = BTPDQ_FIRST(&tp->getlst);
+    while (!peer_laden(p) && pc != NULL) {
+	struct piece *next = BTPDQ_NEXT(pc, entry);
+	if (peer_has(p, pc->index) && pc->nblocks != pc->ngot) {
 	    cm_piece_assign_requests_eg(pc, p);
+	    BTPDQ_REMOVE(&tp->getlst, pc, entry);
+	    BTPDQ_INSERT_HEAD(&tmp, pc, entry);
+	}
+	pc = next;
+    }
+
+    pc = BTPDQ_FIRST(&tmp);
+    while (pc != NULL) {
+	struct piece *next = BTPDQ_NEXT(pc, entry);
+	cm_piece_insert_eg(pc);
+	pc = next;
     }
 }
 
 void
 cm_unassign_requests_eg(struct peer *p)
 {
-    struct nb_link *nl = BTPDQ_FIRST(&p->my_reqs);
-    while (nl != NULL) {
-	struct nb_link *next = BTPDQ_NEXT(nl, entry);
-	nb_drop(nl->nb);
-	free(nl);
-	nl = next;
+    struct block_request *req;
+    struct piece *pc;
+    struct piece_tq tmp;
+    BTPDQ_INIT(&tmp);
+
+    while (p->nreqs_out > 0) {
+	req = BTPDQ_FIRST(&p->my_reqs);
+
+	pc = req->blk->pc;
+	BTPDQ_REMOVE(&pc->tp->getlst, pc, entry);
+	BTPDQ_INSERT_HEAD(&tmp, pc, entry);
+	
+	while (req != NULL) {
+	    struct block_request *next = BTPDQ_NEXT(req, p_entry);
+	    BTPDQ_REMOVE(&p->my_reqs, req, p_entry);
+	    p->nreqs_out--;
+	    BTPDQ_REMOVE(&req->blk->reqs, req, blk_entry);
+	    free(req);
+	    pc->nreqs--;
+
+	    while (next != NULL && next->blk->pc != pc)
+		next = BTPDQ_NEXT(next, p_entry);
+	    req = next;
+	}
     }
-    BTPDQ_INIT(&p->my_reqs);
-    p->nreqs_out = 0;
+    assert(BTPDQ_EMPTY(&p->my_reqs));
+
+    pc = BTPDQ_FIRST(&tmp);
+    while (pc != NULL) {
+	struct piece *next = BTPDQ_NEXT(pc, entry);
+	cm_piece_insert_eg(pc);
+	pc = next;
+    }
 }

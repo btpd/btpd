@@ -15,6 +15,15 @@
 #define MAXPIECEMSGS 128
 #define MAXPIPEDREQUESTS 10
 
+struct block_request {
+    struct peer *p;
+    struct block *blk;
+    BTPDQ_ENTRY(block_request) p_entry;
+    BTPDQ_ENTRY(block_request) blk_entry;
+};
+
+BTPDQ_HEAD(block_request_tq, block_request);
+
 struct peer {
     int sd;
     uint16_t flags;
@@ -26,7 +35,7 @@ struct peer {
 
     struct torrent *tp;
 
-    struct nb_tq my_reqs;
+    struct block_request_tq my_reqs;
 
     unsigned nreqs_out;
     unsigned npiece_msgs;
@@ -58,11 +67,11 @@ void peer_unchoke(struct peer *p);
 void peer_choke(struct peer *p);
 void peer_unwant(struct peer *p, uint32_t index);
 void peer_want(struct peer *p, uint32_t index);
-void peer_request(struct peer *p, uint32_t index,
-    uint32_t begin, uint32_t len);
-void peer_cancel(struct peer *p, uint32_t index, uint32_t begin, uint32_t len);
+void peer_request(struct peer *p, struct block_request *req);
+void peer_cancel(struct peer *p, struct block_request *req,
+    struct net_buf *nb);
 
-void peer_have(struct peer *p, uint32_t index);
+int peer_requested(struct peer *p, struct block *blk);
 
 unsigned long peer_get_rate(unsigned long *rates);
 
