@@ -171,12 +171,8 @@ torrent_unload(struct torrent *tp)
 	peer = next;
     }
 
-    piece = BTPDQ_FIRST(&tp->getlst);
-    while (piece != NULL) {
-	struct piece *next = BTPDQ_NEXT(piece, entry);
-	free(piece);
-	piece = next;
-    }
+    while ((piece = BTPDQ_FIRST(&tp->getlst)) != NULL)
+	piece_free(piece);
 
     free(tp->piece_count);
     free(tp->busy_field);
