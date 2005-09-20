@@ -28,7 +28,13 @@ struct {								\
 
 #define	BTPDQ_FIRST(head)	((head)->tqh_first)
 
+#define	BTPDQ_LAST(head, headname)					\
+	(*(((struct headname *)((head)->tqh_last))->tqh_last))
+
 #define	BTPDQ_NEXT(elm, field) ((elm)->field.tqe_next)
+
+#define	BTPDQ_PREV(elm, headname, field)				\
+	(*(((struct headname *)((elm)->field.tqe_prev))->tqh_last))
 
 #define	BTPDQ_FOREACH(var, head, field)					\
 	for ((var) = BTPDQ_FIRST((head));				\
@@ -49,6 +55,13 @@ struct {								\
 	}								\
 	BTPDQ_NEXT((listelm), field) = (elm);				\
 	(elm)->field.tqe_prev = &BTPDQ_NEXT((listelm), field);		\
+} while (0)
+
+#define	BTPDQ_INSERT_BEFORE(listelm, elm, field) do {			\
+	(elm)->field.tqe_prev = (listelm)->field.tqe_prev;		\
+	BTPDQ_NEXT((elm), field) = (listelm);				\
+	*(listelm)->field.tqe_prev = (elm);				\
+	(listelm)->field.tqe_prev = &BTPDQ_NEXT((elm), field);		\
 } while (0)
 
 #define	BTPDQ_INSERT_HEAD(head, elm, field) do {			\
