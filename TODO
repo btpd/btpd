@@ -12,8 +12,7 @@ Much, much,  better cli. Both code and usage wise.
 Close connections to seeders if we are seeding
 Better data structures
 General code cleanup, esp. the cli
-Improve build scripts
 Intelligent logging
 Better handling of unresponsive trackers
-Bitfields could be handled as a whole in policy.c.
+Better disk allocation strategy
 Other temporarily or permanently forgotten things...
