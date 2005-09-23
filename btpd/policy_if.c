@@ -252,10 +252,6 @@ cm_on_block(struct peer *p, struct block_request *req,
     struct block *blk = req->blk;
     struct piece *pc = blk->pc;
 
-    BTPDQ_REMOVE(&blk->reqs, req, blk_entry);
-    free(req);
-    pc->nreqs--;
-
     off_t cbegin = index * p->tp->meta.piece_length + begin;
     torrent_put_bytes(p->tp, data, cbegin, length);
 
@@ -263,26 +259,31 @@ cm_on_block(struct peer *p, struct block_request *req,
     pc->ngot++;
 
     if (tp->endgame) {
-	if (!BTPDQ_EMPTY(&blk->reqs)) {
-	    struct net_buf *nb = nb_create_cancel(index, begin, length);
-	    nb_hold(nb);
-	    struct block_request *req = BTPDQ_FIRST(&blk->reqs);
-	    while (req != NULL) {
-		struct block_request *next = BTPDQ_NEXT(req, blk_entry);
-		peer_cancel(req->p, req, nb);
-		free(req);
-		pc->nreqs--;
-		req = next;
-	    }
-	    BTPDQ_INIT(&blk->reqs);
-	    nb_drop(nb);
-	}
-	cm_piece_reorder_eg(pc);
-	if (pc->ngot == pc->nblocks)
-	    cm_on_piece(pc);
-	if (peer_leech_ok(p) && !peer_laden(p))
-	    cm_assign_requests_eg(p);
+        struct block_request *req;
+        struct net_buf *cancel = nb_create_cancel(index, begin, length);
+        nb_hold(cancel);
+        BTPDQ_FOREACH(req, &blk->reqs, blk_entry) {
+            if (req->p != p)
+                peer_cancel(req->p, req, cancel);
+            pc->nreqs--;
+        }
+        nb_drop(cancel);
+        cm_piece_reorder_eg(pc);
+        req = BTPDQ_FIRST(&blk->reqs);
+        while (req != NULL) {
+            struct block_request *next = BTPDQ_NEXT(req, blk_entry);
+            if (peer_leech_ok(req->p) && !peer_laden(req->p))
+                cm_assign_requests_eg(req->p);
+            free(req);
+            req = next;
+        }
+        BTPDQ_INIT(&blk->reqs);
+        if (pc->ngot == pc->nblocks)
+            cm_on_piece(pc);
     } else {
+        BTPDQ_REMOVE(&blk->reqs, req, blk_entry);
+        free(req);
+        pc->nreqs--;
 	// XXX: Needs to be looked at if we introduce snubbing.
 	clear_bit(pc->down_field, begin / PIECE_BLOCKLEN);
 	pc->nbusy--;
