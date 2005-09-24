@@ -180,8 +180,13 @@ peer_want(struct peer *p, uint32_t index)
     assert(p->nwant < p->npieces);
     p->nwant++;
     if (p->nwant == 1) {
+	int unsent = 0;
+	struct nb_link *nl = BTPDQ_LAST(&p->outq, nb_tq);
+	if (nl != NULL && nl->nb->type == NB_UNINTEREST)
+	    unsent = peer_unsend(p, nl);
+	if (!unsent)
+	    peer_send(p, btpd.interest_msg);
 	p->flags |= PF_I_WANT;
-	peer_send(p, btpd.interest_msg);
     }
 }
 
