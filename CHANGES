@@ -1,3 +1,11 @@
+btpd-0.6:
+---------
+
+Misc:
+- Set an upper limit on how much data a peer can request at once.
+  This protects from running out of memory because of a greedy peer.
+- End game is more efficient and uses much less memory.
+
 btpd-0.5:
 ---------
 
