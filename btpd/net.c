@@ -297,31 +297,26 @@ net_generic_read(struct peer *p, unsigned long rmax)
 
 	switch (buf[off + 4]) {
 	case MSG_CHOKE:
-	    btpd_log(BTPD_L_MSG, "choke.\n");
 	    if (msg_len != 1)
 		goto bad_data;
 	    peer_on_choke(p);
 	    break;
 	case MSG_UNCHOKE:
-	    btpd_log(BTPD_L_MSG, "unchoke.\n");
 	    if (msg_len != 1)
 		goto bad_data;
 	    peer_on_unchoke(p);
 	    break;
 	case MSG_INTEREST:
-	    btpd_log(BTPD_L_MSG, "interested.\n");
 	    if (msg_len != 1)
 		goto bad_data;
 	    peer_on_interest(p);
 	    break;
 	case MSG_UNINTEREST:
-	    btpd_log(BTPD_L_MSG, "uninterested.\n");
 	    if (msg_len != 1)
 		goto bad_data;
 	    peer_on_uninterest(p);
 	    break;
 	case MSG_HAVE:
-	    btpd_log(BTPD_L_MSG, "have.\n");
 	    if (msg_len != 5)
 		goto bad_data;
 	    else if (len - off >= msg_len + 4) {
@@ -331,7 +326,6 @@ net_generic_read(struct peer *p, unsigned long rmax)
 		got_part = 1;
 	    break;
 	case MSG_BITFIELD:
-	    btpd_log(BTPD_L_MSG, "bitfield.\n");
 	    if (msg_len != (size_t)ceil(p->tp->meta.npieces / 8.0) + 1)
 		goto bad_data;
 	    else if (p->npieces != 0)
@@ -355,7 +349,6 @@ net_generic_read(struct peer *p, unsigned long rmax)
 	    }
 	    break;
 	case MSG_REQUEST:
-	    btpd_log(BTPD_L_MSG, "request.\n");
 	    if (msg_len != 13)
 		goto bad_data;
 	    else if (len - off >= msg_len + 4) {
@@ -378,7 +371,6 @@ net_generic_read(struct peer *p, unsigned long rmax)
 		got_part = 1;
 	    break;
 	case MSG_PIECE:
-	    btpd_log(BTPD_L_MSG, "piece.\n");
 	    if (msg_len < 10)
 		goto bad_data;
 	    else if (len - off >= 13) {
@@ -423,8 +415,6 @@ net_generic_read(struct peer *p, unsigned long rmax)
 		    goto bad_data;
 		if (begin + length > torrent_piece_size(p->tp, index))
 		    goto bad_data;
-		btpd_log(BTPD_L_MSG, "cancel: %u, %u, %u\n",
-		    index, begin, length);
 		peer_on_cancel(p, index, begin, length);
 	    } else
 		got_part = 1;
@@ -444,7 +434,7 @@ net_generic_read(struct peer *p, unsigned long rmax)
     return nread;
 
 bad_data:
-    btpd_log(BTPD_L_MSG, "bad data\n");
+    btpd_log(BTPD_L_MSG, "received bad data from %p\n", p);
     peer_kill(p);
     return nread;
 }

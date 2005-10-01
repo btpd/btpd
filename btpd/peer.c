@@ -101,12 +101,51 @@ void
 peer_sent(struct peer *p, struct net_buf *nb)
 {
     switch (nb->type) {
+    case NB_CHOKE:
+	btpd_log(BTPD_L_MSG, "sent choke to %p\n", p);
+	break;
+    case NB_UNCHOKE:
+	btpd_log(BTPD_L_MSG, "sent unchoke to %p\n", p);
+	p->flags &= ~PF_NO_REQUESTS;
+	break;
+    case NB_INTEREST:
+	btpd_log(BTPD_L_MSG, "sent interest to %p\n", p);
+	break;
+    case NB_UNINTEREST:
+	btpd_log(BTPD_L_MSG, "sent uninterest to %p\n", p);
+	break;
+    case NB_HAVE:
+	btpd_log(BTPD_L_MSG, "sent have(%u) to %p\n",
+	    nb_get_index(nb), p);
+	break;
+    case NB_BITFIELD:
+	btpd_log(BTPD_L_MSG, "sent bitfield to %p\n", p);
+	break;
+    case NB_REQUEST:
+	btpd_log(BTPD_L_MSG, "sent request(%u,%u,%u) to %p\n",
+	    nb_get_index(nb), nb_get_begin(nb), nb_get_length(nb), p);
+	break;
+    case NB_PIECE:
+	btpd_log(BTPD_L_MSG, "sent piece(%u,%u,%u) to %p\n",
+	    nb_get_index(nb), nb_get_begin(nb), nb_get_length(nb), p);
+	break;
+    case NB_CANCEL:
+	btpd_log(BTPD_L_MSG, "sent cancel(%u,%u,%u) to %p\n",
+	    nb_get_index(nb), nb_get_begin(nb), nb_get_length(nb), p);
+	break;
     case NB_TORRENTDATA:
+	btpd_log(BTPD_L_MSG, "sent data to %p\n", p);
 	assert(p->npiece_msgs > 0);
 	p->npiece_msgs--;
 	break;
-    case NB_UNCHOKE:
-	p->flags &= ~PF_NO_REQUESTS;
+    case NB_MULTIHAVE:
+	btpd_log(BTPD_L_MSG, "sent multihave to %p\n", p);
+	break;
+    case NB_BITDATA:
+	btpd_log(BTPD_L_MSG, "sent bitdata to %p\n", p);
+	break;
+    case NB_SHAKE:
+	btpd_log(BTPD_L_MSG, "sent shake to %p\n", p);
 	break;
     }
 }
@@ -264,6 +303,7 @@ peer_create_out_compact(struct torrent *tp, const char *compact)
 void
 peer_on_choke(struct peer *p)
 {
+    btpd_log(BTPD_L_MSG, "received choke from %p\n", p);
     if ((p->flags & PF_P_CHOKE) != 0)
 	return;
     else {
@@ -275,6 +315,7 @@ peer_on_choke(struct peer *p)
 void
 peer_on_unchoke(struct peer *p)
 {
+    btpd_log(BTPD_L_MSG, "received unchoke from %p\n", p);
     if ((p->flags & PF_P_CHOKE) == 0)
 	return;
     else {
@@ -286,6 +327,7 @@ peer_on_unchoke(struct peer *p)
 void
 peer_on_interest(struct peer *p)
 {
+    btpd_log(BTPD_L_MSG, "received interest from %p\n", p);
     if ((p->flags & PF_P_WANT) != 0)
 	return;
     else {
@@ -297,6 +339,7 @@ peer_on_interest(struct peer *p)
 void
 peer_on_uninterest(struct peer *p)
 {
+    btpd_log(BTPD_L_MSG, "received uninterest from %p\n", p);
     if ((p->flags & PF_P_WANT) == 0)
 	return;
     else {
@@ -308,6 +351,7 @@ peer_on_uninterest(struct peer *p)
 void
 peer_on_have(struct peer *p, uint32_t index)
 {
+    btpd_log(BTPD_L_MSG, "received have(%u) from %p\n", index, p);
     if (!has_bit(p->piece_field, index)) {
 	set_bit(p->piece_field, index);
 	p->npieces++;
@@ -318,6 +362,7 @@ peer_on_have(struct peer *p, uint32_t index)
 void
 peer_on_bitfield(struct peer *p, uint8_t *field)
 {
+    btpd_log(BTPD_L_MSG, "received bitfield from %p\n", p);
     assert(p->npieces == 0);
     bcopy(field, p->piece_field, (size_t)ceil(p->tp->meta.npieces / 8.0));
     for (uint32_t i = 0; i < p->tp->meta.npieces; i++) {
@@ -332,6 +377,8 @@ void
 peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length, const char *data)
 {
+    btpd_log(BTPD_L_MSG, "received piece(%u,%u,%u) from %p\n",
+	index, begin, length, p);
     struct block_request *req = BTPDQ_FIRST(&p->my_reqs);
     if (req == NULL)
 	return;
@@ -351,6 +398,8 @@ void
 peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length)
 {
+    btpd_log(BTPD_L_MSG, "received request(%u,%u,%u) from %p\n",
+	index, begin, length, p);
     if ((p->flags & PF_NO_REQUESTS) == 0) {
 	off_t cbegin = index * p->tp->meta.piece_length + begin;
 	char * content = torrent_get_bytes(p->tp, cbegin, length);
@@ -369,6 +418,8 @@ void
 peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length)
 {
+    btpd_log(BTPD_L_MSG, "received cancel(%u,%u,%u) from %p\n",
+	index, begin, length, p);
     struct nb_link *nl;
     BTPDQ_FOREACH(nl, &p->outq, entry)
 	if (nl->nb->type == NB_PIECE

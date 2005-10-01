@@ -51,9 +51,6 @@ struct net_buf *
 nb_create_piece(uint32_t index, uint32_t begin, size_t blen)
 {
     struct net_buf *out;
-
-    btpd_log(BTPD_L_MSG, "send piece: %u, %u, %u\n", index, begin, blen);
-
     out = nb_create_alloc(NB_PIECE, 13);
     net_write32(out->buf, 9 + blen);
     out->buf[4] = MSG_PIECE;
