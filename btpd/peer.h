@@ -8,9 +8,8 @@
 #define PF_ON_READQ	 0x10
 #define PF_ON_WRITEQ	 0x20
 #define PF_ATTACHED	 0x40
-#define PF_WRITE_CLOSE	 0x80	/* Close connection after writing all data */
-#define PF_NO_REQUESTS	0x100
-#define PF_INCOMING	0x200
+#define PF_NO_REQUESTS	 0x80
+#define PF_INCOMING	0x100
 
 #define RATEHISTORY 20
 #define MAXPIECEMSGS 128
@@ -52,6 +51,8 @@ struct peer {
 
     size_t state_bytes;
     uint8_t net_state;
+    uint8_t msg_num;
+    uint32_t msg_len;
     struct io_buffer net_in;
 
     BTPDQ_ENTRY(peer) cm_entry;
