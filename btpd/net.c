@@ -214,7 +214,7 @@ net_progress(struct peer *p, size_t length)
     }
 }
 
-static int
+static ssize_t
 net_state(struct peer *p, struct io_buffer *iob)
 {
     switch (p->net_state) {
@@ -259,14 +259,11 @@ net_state(struct peer *p, struct io_buffer *iob)
 	return 4;
     case NET_MSGHEAD:
 	p->msg_num = iob->buf[0];
-	if (!net_mh_ok(p)) {
-	    btpd_log(BTPD_L_ERROR, "error in head\n");
+	if (!net_mh_ok(p))
 	    goto bad;
-	} else if (p->msg_len == 1) {
-	    if (net_dispatch_msg(p, iob->buf) != 0) {
-		btpd_log(BTPD_L_ERROR, "error in dispatch\n");
+	else if (p->msg_len == 1) {
+	    if (net_dispatch_msg(p, iob->buf) != 0)
 		goto bad;
-	    }
 	    net_set_state(p, NET_MSGSIZE, 4);
 	} else {
 	    uint8_t nstate =
@@ -276,10 +273,8 @@ net_state(struct peer *p, struct io_buffer *iob)
 	return 1;
     case NET_MSGPIECE:
     case NET_MSGBODY:
-	if (net_dispatch_msg(p, iob->buf) != 0) {
-	    btpd_log(BTPD_L_ERROR, "error in dispatch\n");
+	if (net_dispatch_msg(p, iob->buf) != 0)
 	    goto bad;
-	}
 	net_set_state(p, NET_MSGSIZE, 4);
 	return p->msg_len - 1;
     default:
