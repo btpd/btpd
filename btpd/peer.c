@@ -22,7 +22,7 @@ peer_kill(struct peer *p)
 {
     struct nb_link *nl;
 
-    btpd_log(BTPD_L_CONN, "killed peer.\n");
+    btpd_log(BTPD_L_CONN, "killed peer %p\n", p);
 
     if (p->flags & PF_ATTACHED)
 	cm_on_lost_peer(p);
@@ -45,7 +45,8 @@ peer_kill(struct peer *p)
 	nl = next;
     }
 
-    p->reader->kill(p->reader);
+    if (p->net_in.buf != NULL)
+	free(p->net_in.buf);
     if (p->piece_field != NULL)
         free(p->piece_field);
     free(p);
@@ -65,7 +66,6 @@ peer_send(struct peer *p, struct net_buf *nb)
     }
     BTPDQ_INSERT_TAIL(&p->outq, nl, entry);
 }
-
 
 /*
  * Remove a network buffer from the peer's outq.
@@ -250,6 +250,8 @@ peer_create_common(int sd)
     BTPDQ_INIT(&p->my_reqs);
     BTPDQ_INIT(&p->outq);
 
+    net_set_state(p, SHAKE_PSTR, 28);
+
     event_set(&p->out_ev, p->sd, EV_WRITE, net_write_cb, p);
     event_set(&p->in_ev, p->sd, EV_READ, net_read_cb, p);
     event_add(&p->in_ev, NULL);
@@ -263,7 +265,7 @@ void
 peer_create_in(int sd)
 {
     struct peer *p = peer_create_common(sd);
-    net_handshake(p, 1);
+    p->flags |= PF_INCOMING;
 }
 
 void
@@ -278,7 +280,7 @@ peer_create_out(struct torrent *tp, const uint8_t *id,
 
     p = peer_create_common(sd);
     p->tp = tp;
-    net_handshake(p, 0);
+    peer_send(p, nb_create_shake(p->tp));
 }
 
 void
@@ -297,7 +299,7 @@ peer_create_out_compact(struct torrent *tp, const char *compact)
 
     p = peer_create_common(sd);
     p->tp = tp;
-    net_handshake(p, 0);
+    peer_send(p, nb_create_shake(p->tp));
 }
 
 void

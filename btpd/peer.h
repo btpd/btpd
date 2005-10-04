@@ -10,6 +10,7 @@
 #define PF_ATTACHED	 0x40
 #define PF_WRITE_CLOSE	 0x80	/* Close connection after writing all data */
 #define PF_NO_REQUESTS	0x100
+#define PF_INCOMING	0x200
 
 #define RATEHISTORY 20
 #define MAXPIECEMSGS 128
@@ -46,10 +47,12 @@ struct peer {
     struct event in_ev;
     struct event out_ev;
 
-    struct input_reader *reader;
-
     unsigned long rate_to_me[RATEHISTORY];
     unsigned long rate_from_me[RATEHISTORY];
+
+    size_t state_bytes;
+    uint8_t net_state;
+    struct io_buffer net_in;
 
     BTPDQ_ENTRY(peer) cm_entry;
 
