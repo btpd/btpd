@@ -146,7 +146,10 @@ net_dispatch_msg(struct peer *p, const char *buf)
 	peer_on_have(p, net_read32(buf));
 	break;
     case MSG_BITFIELD:
-	peer_on_bitfield(p, buf);
+        if (p->npieces == 0)
+            peer_on_bitfield(p, buf);
+        else
+            res = 1;
 	break;
     case MSG_REQUEST:
 	if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT) {
@@ -156,7 +159,9 @@ net_dispatch_msg(struct peer *p, const char *buf)
 	    if ((length > PIECE_BLOCKLEN
 		    || index >= p->tp->meta.npieces
 		    || !has_bit(p->tp->piece_field, index)
-		    || begin + length < torrent_piece_size(p->tp, index))) {
+		    || begin + length > torrent_piece_size(p->tp, index))) {
+                btpd_log(BTPD_L_MSG, "bad request: (%u, %u, %u) from %p\n",
+                         index, begin, length, p);
 		res = 1;
 		break;
 	    }
@@ -269,7 +274,8 @@ net_state(struct peer *p, const char *buf)
 
     return 0;
 bad:
-    btpd_log(BTPD_L_CONN, "bad data from %p.\n", p);
+    btpd_log(BTPD_L_CONN, "bad data from %p (%u, %u, %u).\n",
+             p, p->net.state, p->net.msg_len, p->net.msg_num);
     peer_kill(p);
     return -1;
 }
