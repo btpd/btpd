@@ -16,9 +16,7 @@
 #define SHAKE_LEN 68
 
 enum shake_state {
-    SHAKE_INIT,
     SHAKE_PSTR,
-    SHAKE_RESERVED,
     SHAKE_INFO,
     SHAKE_ID,
     NET_MSGSIZE,
