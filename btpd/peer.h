@@ -49,11 +49,14 @@ struct peer {
     unsigned long rate_to_me[RATEHISTORY];
     unsigned long rate_from_me[RATEHISTORY];
 
-    size_t state_bytes;
-    uint8_t net_state;
-    uint8_t msg_num;
-    uint32_t msg_len;
-    struct io_buffer net_in;
+    struct {
+        uint32_t msg_len;
+        uint8_t msg_num;
+        uint8_t state;
+        size_t st_bytes;
+        char *buf;
+        size_t off;
+    } net;
 
     BTPDQ_ENTRY(peer) cm_entry;
 

@@ -45,8 +45,8 @@ peer_kill(struct peer *p)
 	nl = next;
     }
 
-    if (p->net_in.buf != NULL)
-	free(p->net_in.buf);
+    if (p->net.buf != NULL)
+	free(p->net.buf);
     if (p->piece_field != NULL)
         free(p->piece_field);
     free(p);

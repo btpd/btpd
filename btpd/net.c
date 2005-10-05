@@ -119,8 +119,8 @@ net_write(struct peer *p, unsigned long wmax)
 void
 net_set_state(struct peer *p, int state, size_t size)
 {
-    p->net_state = state;
-    p->state_bytes = size;
+    p->net.state = state;
+    p->net.st_bytes = size;
 }
 
 static int
@@ -129,7 +129,7 @@ net_dispatch_msg(struct peer *p, const char *buf)
     uint32_t index, begin, length;
     int res = 0;
 
-    switch (p->msg_num) {
+    switch (p->net.msg_num) {
     case MSG_CHOKE:
 	peer_on_choke(p);
 	break;
@@ -172,7 +172,7 @@ net_dispatch_msg(struct peer *p, const char *buf)
     case MSG_PIECE:
 	index = net_read32(buf);
 	begin = net_read32(buf + 4);
-	length = p->msg_len - 9;
+	length = p->net.msg_len - 9;
 	peer_on_piece(p, index, begin, length, buf + 8);
 	break;
     default:
@@ -184,8 +184,8 @@ net_dispatch_msg(struct peer *p, const char *buf)
 static int
 net_mh_ok(struct peer *p)
 {
-    uint32_t mlen = p->msg_len;
-    switch (p->msg_num) {
+    uint32_t mlen = p->net.msg_len;
+    switch (p->net.msg_num) {
     case MSG_CHOKE:
     case MSG_UNCHOKE:
     case MSG_INTEREST:
@@ -208,7 +208,7 @@ net_mh_ok(struct peer *p)
 static void
 net_progress(struct peer *p, size_t length)
 {
-    if (p->net_state == NET_MSGBODY && p->msg_num == MSG_PIECE) {
+    if (p->net.state == NET_MSGBODY && p->net.msg_num == MSG_PIECE) {
 	p->tp->downloaded += length;
 	p->rate_to_me[btpd.seconds % RATEHISTORY] += length;
     }
@@ -217,7 +217,7 @@ net_progress(struct peer *p, size_t length)
 static int
 net_state(struct peer *p, const char *buf)
 {
-    switch (p->net_state) {
+    switch (p->net.state) {
     case SHAKE_PSTR:
         if (bcmp(buf, "\x13""BitTorrent protocol", 20) != 0)
 	    goto bad;
@@ -253,20 +253,20 @@ net_state(struct peer *p, const char *buf)
 	net_set_state(p, NET_MSGSIZE, 4);
         break;
     case NET_MSGSIZE:
-	p->msg_len = net_read32(buf);
-	if (p->msg_len != 0)
+	p->net.msg_len = net_read32(buf);
+	if (p->net.msg_len != 0)
 	    net_set_state(p, NET_MSGHEAD, 1);
         break;
     case NET_MSGHEAD:
-	p->msg_num = buf[0];
+	p->net.msg_num = buf[0];
 	if (!net_mh_ok(p))
 	    goto bad;
-	else if (p->msg_len == 1) {
+	else if (p->net.msg_len == 1) {
 	    if (net_dispatch_msg(p, buf) != 0)
 		goto bad;
 	    net_set_state(p, NET_MSGSIZE, 4);
 	} else {
-	    net_set_state(p, NET_MSGBODY, p->msg_len - 1);
+	    net_set_state(p, NET_MSGBODY, p->net.msg_len - 1);
 	}
         break;
     case NET_MSGBODY:
@@ -290,11 +290,11 @@ bad:
 static unsigned long
 net_read(struct peer *p, unsigned long rmax)
 {
-    size_t rest = p->net_in.buf_len - p->net_in.buf_off;
+    size_t rest = p->net.buf != NULL ? p->net.st_bytes - p->net.off : 0;
     char buf[GRBUFLEN];
     struct iovec iov[2] = {
 	{
-	    p->net_in.buf + p->net_in.buf_off,
+	    p->net.buf + p->net.off,
 	    rest
 	}, {
 	    buf,
@@ -323,34 +323,33 @@ net_read(struct peer *p, unsigned long rmax)
 
     if (rest > 0) {
 	if (nread < rest) {
-	    p->net_in.buf_off += nread;
+	    p->net.off += nread;
 	    net_progress(p, nread);
 	    goto out;
 	}
 	net_progress(p, rest);
-	if (net_state(p, p->net_in.buf) != 0)
+	if (net_state(p, p->net.buf) != 0)
 	    return nread;
-	free(p->net_in.buf);
-	bzero(&p->net_in, sizeof(p->net_in));
+	free(p->net.buf);
+        p->net.buf = NULL;
+        p->net.off = 0;
     }
 
-    struct io_buffer iob = { 0, nread - rest, buf };
-
-    while (p->state_bytes <= iob.buf_len) {
-        ssize_t consumed = p->state_bytes;
+    iov[1].iov_len = nread - rest;
+    while (p->net.st_bytes <= iov[1].iov_len) {
+        ssize_t consumed = p->net.st_bytes;
 	net_progress(p, consumed);
-	if (net_state(p, iob.buf) != 0)
+	if (net_state(p, iov[1].iov_base) != 0)
 	    return nread;
-	iob.buf += consumed;
-	iob.buf_len -= consumed;
+	iov[1].iov_base += consumed;
+	iov[1].iov_len -= consumed;
     }
 
-    if (iob.buf_len > 0) {
-	net_progress(p, iob.buf_len);
-	p->net_in.buf_off = iob.buf_len;
-	p->net_in.buf_len = p->state_bytes;
-	p->net_in.buf = btpd_malloc(p->state_bytes);
-	bcopy(iob.buf, p->net_in.buf, iob.buf_len);
+    if (iov[1].iov_len > 0) {
+	net_progress(p, iov[1].iov_len);
+	p->net.off = iov[1].iov_len;
+	p->net.buf = btpd_malloc(p->net.st_bytes);
+	bcopy(iov[1].iov_base, p->net.buf, iov[1].iov_len);
     }
 
 out:
