@@ -90,7 +90,7 @@ void peer_on_uninterest(struct peer *p);
 void peer_on_choke(struct peer *p);
 void peer_on_unchoke(struct peer *p);
 void peer_on_have(struct peer *p, uint32_t index);
-void peer_on_bitfield(struct peer *p, uint8_t *field);
+void peer_on_bitfield(struct peer *p, const uint8_t *field);
 void peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length, const char *data);
 void peer_on_request(struct peer *p, uint32_t index, uint32_t begin,

@@ -23,8 +23,7 @@ enum shake_state {
     SHAKE_ID,
     NET_MSGSIZE,
     NET_MSGHEAD,
-    NET_MSGBODY,
-    NET_MSGPIECE
+    NET_MSGBODY
 };
 
 void net_set_state(struct peer *p, int state, size_t size);
@@ -40,6 +39,6 @@ int net_connect2(struct sockaddr *sa, socklen_t salen, int *sd);
 int net_connect(const char *ip, int port, int *sd);
 
 void net_write32(void *buf, uint32_t num);
-uint32_t net_read32(void *buf);
+uint32_t net_read32(const void *buf);
 
 #endif

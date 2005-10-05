@@ -362,7 +362,7 @@ peer_on_have(struct peer *p, uint32_t index)
 }
 
 void
-peer_on_bitfield(struct peer *p, uint8_t *field)
+peer_on_bitfield(struct peer *p, const uint8_t *field)
 {
     btpd_log(BTPD_L_MSG, "received bitfield from %p\n", p);
     assert(p->npieces == 0);

@@ -31,7 +31,7 @@ net_write32(void *buf, uint32_t num)
 }
 
 uint32_t
-net_read32(void *buf)
+net_read32(const void *buf)
 {
     return ntohl(*(uint32_t *)buf);
 }
@@ -124,7 +124,7 @@ net_set_state(struct peer *p, int state, size_t size)
 }
 
 static int
-net_dispatch_msg(struct peer *p, uint8_t *buf)
+net_dispatch_msg(struct peer *p, const char *buf)
 {
     uint32_t index, begin, length;
     int res = 0;
@@ -208,37 +208,37 @@ net_mh_ok(struct peer *p)
 static void
 net_progress(struct peer *p, size_t length)
 {
-    if (p->net_state == NET_MSGPIECE) {
+    if (p->net_state == NET_MSGBODY && p->msg_num == MSG_PIECE) {
 	p->tp->downloaded += length;
 	p->rate_to_me[btpd.seconds % RATEHISTORY] += length;
     }
 }
 
-static ssize_t
-net_state(struct peer *p, struct io_buffer *iob)
+static int
+net_state(struct peer *p, const char *buf)
 {
     switch (p->net_state) {
     case SHAKE_PSTR:
-	if (bcmp(iob->buf, "\x13""BitTorrent protocol", 20) != 0)
+        if (bcmp(buf, "\x13""BitTorrent protocol", 20) != 0)
 	    goto bad;
 	net_set_state(p, SHAKE_INFO, 20);
-	return 28;
+        break;
     case SHAKE_INFO:
 	if (p->flags & PF_INCOMING) {
-	    struct torrent *tp = torrent_get_by_hash(iob->buf);
+	    struct torrent *tp = torrent_get_by_hash(buf);
 	    if (tp == NULL)
 		goto bad;
 	    p->tp = tp;
 	    peer_send(p, nb_create_shake(p->tp));
-	} else if (bcmp(iob->buf, p->tp->meta.info_hash, 20) != 0)
+	} else if (bcmp(buf, p->tp->meta.info_hash, 20) != 0)
 	    goto bad;
 	net_set_state(p, SHAKE_ID, 20);
-	return 20;
+        break;
     case SHAKE_ID:
-	if ((torrent_has_peer(p->tp, iob->buf)
-		|| bcmp(iob->buf, btpd.peer_id, 20) == 0))
+	if ((torrent_has_peer(p->tp, buf)
+             || bcmp(buf, btpd.peer_id, 20) == 0))
 	    goto bad;
-	bcopy(iob->buf, p->id, 20);
+	bcopy(buf, p->id, 20);
 	btpd_log(BTPD_L_CONN, "Got whole shake.\n");
 	p->piece_field = btpd_calloc(1, (int)ceil(p->tp->meta.npieces / 8.0));
 	if (p->tp->have_npieces > 0) {
@@ -251,38 +251,36 @@ net_state(struct peer *p, struct io_buffer *iob)
 	}
 	cm_on_new_peer(p);
 	net_set_state(p, NET_MSGSIZE, 4);
-	return 20;
+        break;
     case NET_MSGSIZE:
-	p->msg_len = net_read32(iob->buf);
+	p->msg_len = net_read32(buf);
 	if (p->msg_len != 0)
 	    net_set_state(p, NET_MSGHEAD, 1);
-	return 4;
+        break;
     case NET_MSGHEAD:
-	p->msg_num = iob->buf[0];
+	p->msg_num = buf[0];
 	if (!net_mh_ok(p))
 	    goto bad;
 	else if (p->msg_len == 1) {
-	    if (net_dispatch_msg(p, iob->buf) != 0)
+	    if (net_dispatch_msg(p, buf) != 0)
 		goto bad;
 	    net_set_state(p, NET_MSGSIZE, 4);
 	} else {
-	    uint8_t nstate =
-		p->msg_num == MSG_PIECE ? NET_MSGPIECE : NET_MSGBODY;
-	    net_set_state(p, nstate, p->msg_len - 1);
+	    net_set_state(p, NET_MSGBODY, p->msg_len - 1);
 	}
-	return 1;
-    case NET_MSGPIECE:
+        break;
     case NET_MSGBODY:
-	if (net_dispatch_msg(p, iob->buf) != 0)
+	if (net_dispatch_msg(p, buf) != 0)
 	    goto bad;
 	net_set_state(p, NET_MSGSIZE, 4);
-	return p->msg_len - 1;
+        break;
     default:
 	abort();
     }
 
+    return 0;
 bad:
-    btpd_log(BTPD_L_CONN, "bad data.\n");
+    btpd_log(BTPD_L_CONN, "bad data from %p.\n", p);
     peer_kill(p);
     return -1;
 }
@@ -330,7 +328,7 @@ net_read(struct peer *p, unsigned long rmax)
 	    goto out;
 	}
 	net_progress(p, rest);
-	if (net_state(p, &p->net_in) < 0)
+	if (net_state(p, p->net_in.buf) != 0)
 	    return nread;
 	free(p->net_in.buf);
 	bzero(&p->net_in, sizeof(p->net_in));
@@ -339,12 +337,12 @@ net_read(struct peer *p, unsigned long rmax)
     struct io_buffer iob = { 0, nread - rest, buf };
 
     while (p->state_bytes <= iob.buf_len) {
-	net_progress(p, p->state_bytes);
-	ssize_t chomped = net_state(p, &iob);
-	if (chomped < 0)
+        ssize_t consumed = p->state_bytes;
+	net_progress(p, consumed);
+	if (net_state(p, iob.buf) != 0)
 	    return nread;
-	iob.buf += chomped;
-	iob.buf_len -= chomped;
+	iob.buf += consumed;
+	iob.buf_len -= consumed;
     }
 
     if (iob.buf_len > 0) {
