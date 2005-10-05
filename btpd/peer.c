@@ -303,6 +303,22 @@ peer_create_out_compact(struct torrent *tp, const char *compact)
 }
 
 void
+peer_on_shake(struct peer *p)
+{
+    btpd_log(BTPD_L_MSG, "received shake from %p.\n", p);
+    p->piece_field = btpd_calloc(1, (int)ceil(p->tp->meta.npieces / 8.0));
+    if (p->tp->have_npieces > 0) {
+        if (p->tp->have_npieces * 9 < 5 + ceil(p->tp->meta.npieces / 8.0))
+            peer_send(p, nb_create_multihave(p->tp));
+        else {
+            peer_send(p, nb_create_bitfield(p->tp));
+            peer_send(p, nb_create_bitdata(p->tp));
+        }
+    }
+    cm_on_new_peer(p);
+}
+
+void
 peer_on_choke(struct peer *p)
 {
     btpd_log(BTPD_L_MSG, "received choke from %p\n", p);

@@ -239,17 +239,7 @@ net_state(struct peer *p, const char *buf)
              || bcmp(buf, btpd.peer_id, 20) == 0))
 	    goto bad;
 	bcopy(buf, p->id, 20);
-	btpd_log(BTPD_L_CONN, "Got whole shake.\n");
-	p->piece_field = btpd_calloc(1, (int)ceil(p->tp->meta.npieces / 8.0));
-	if (p->tp->have_npieces > 0) {
-	    if (p->tp->have_npieces * 9 < 5 + ceil(p->tp->meta.npieces / 8.0))
-		peer_send(p, nb_create_multihave(p->tp));
-	    else {
-		peer_send(p, nb_create_bitfield(p->tp));
-		peer_send(p, nb_create_bitdata(p->tp));
-	    }
-	}
-	cm_on_new_peer(p);
+        peer_on_shake(p);
 	net_set_state(p, NET_MSGSIZE, 4);
         break;
     case NET_MSGSIZE:
@@ -265,9 +255,8 @@ net_state(struct peer *p, const char *buf)
 	    if (net_dispatch_msg(p, buf) != 0)
 		goto bad;
 	    net_set_state(p, NET_MSGSIZE, 4);
-	} else {
+	} else
 	    net_set_state(p, NET_MSGBODY, p->net.msg_len - 1);
-	}
         break;
     case NET_MSGBODY:
 	if (net_dispatch_msg(p, buf) != 0)
