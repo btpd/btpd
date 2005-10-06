@@ -109,7 +109,11 @@ btpd_init(void)
 
     btpd.version = BTPD_VERSION;
 
-    btpd.logmask = BTPD_L_BTPD | BTPD_L_ERROR;
+#ifdef DEBUG
+    btpd.logmask = BTPD_L_ALL;
+#else
+    btpd.logmask =  BTPD_L_BTPD | BTPD_L_ERROR;
+#endif
 
     BTPDQ_INIT(&btpd.kids);
 
