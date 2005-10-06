@@ -2,6 +2,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+#include <ctype.h>
 #include <math.h>
 #include <string.h>
 #include <unistd.h>
@@ -305,6 +306,13 @@ peer_create_out_compact(struct torrent *tp, const char *compact)
 void
 peer_on_shake(struct peer *p)
 {
+    uint8_t printid[21];
+    int i;
+    for (i = 0; i < 20 && isprint(p->id[i]); i++)
+	printid[i] = p->id[i];
+    printid[i] = '\0';
+    btpd_log(BTPD_L_MSG, "received shake with id=\'%s\', from %p.\n",
+	printid, p);
     btpd_log(BTPD_L_MSG, "received shake from %p.\n", p);
     p->piece_field = btpd_calloc(1, (int)ceil(p->tp->meta.npieces / 8.0));
     if (p->tp->have_npieces > 0) {
@@ -395,21 +403,20 @@ void
 peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length, const char *data)
 {
-    btpd_log(BTPD_L_MSG, "received piece(%u,%u,%u) from %p\n",
-	index, begin, length, p);
     struct block_request *req = BTPDQ_FIRST(&p->my_reqs);
-    if (req == NULL)
-	return;
-    struct net_buf *nb = req->blk->msg;
-    if (nb_get_begin(nb) == begin &&
-	nb_get_index(nb) == index &&
-	nb_get_length(nb) == length) {
-
+    if ((req != NULL &&
+	    nb_get_begin(req->blk->msg) == begin &&
+	    nb_get_index(req->blk->msg) == index &&
+	    nb_get_length(req->blk->msg) == length)) {
+	btpd_log(BTPD_L_MSG, "received piece(%u,%u,%u) from %p\n",
+	    index, begin, length, p);
 	assert(p->nreqs_out > 0);
 	p->nreqs_out--;
 	BTPDQ_REMOVE(&p->my_reqs, req, p_entry);
 	cm_on_block(p, req, index, begin, length, data);
-    }
+    } else
+	btpd_log(BTPD_L_MSG, "discarded piece(%u,%u,%u) from %p\n",
+	    index, begin, length, p);
 }
 
 void
