@@ -18,10 +18,6 @@
 
 #include "btpd.h"
 
-#ifndef IOV_MAX
-#define IOV_MAX 1024
-#endif
-
 #define min(x, y) ((x) <= (y) ? (x) : (y))
 
 void
@@ -117,7 +113,7 @@ net_write(struct peer *p, unsigned long wmax)
 }
 
 void
-net_set_state(struct peer *p, int state, size_t size)
+net_set_state(struct peer *p, enum net_state state, size_t size)
 {
     p->net.state = state;
     p->net.st_bytes = size;
@@ -213,7 +209,7 @@ net_mh_ok(struct peer *p)
 static void
 net_progress(struct peer *p, size_t length)
 {
-    if (p->net.state == NET_MSGBODY && p->net.msg_num == MSG_PIECE) {
+    if (p->net.state == BTP_MSGBODY && p->net.msg_num == MSG_PIECE) {
 	p->tp->downloaded += length;
 	p->rate_to_me[btpd.seconds % RATEHISTORY] += length;
     }
@@ -245,28 +241,28 @@ net_state(struct peer *p, const char *buf)
 	    goto bad;
 	bcopy(buf, p->id, 20);
         peer_on_shake(p);
-	net_set_state(p, NET_MSGSIZE, 4);
+	net_set_state(p, BTP_MSGSIZE, 4);
         break;
-    case NET_MSGSIZE:
+    case BTP_MSGSIZE:
 	p->net.msg_len = net_read32(buf);
 	if (p->net.msg_len != 0)
-	    net_set_state(p, NET_MSGHEAD, 1);
+	    net_set_state(p, BTP_MSGHEAD, 1);
         break;
-    case NET_MSGHEAD:
+    case BTP_MSGHEAD:
 	p->net.msg_num = buf[0];
 	if (!net_mh_ok(p))
 	    goto bad;
 	else if (p->net.msg_len == 1) {
 	    if (net_dispatch_msg(p, buf) != 0)
 		goto bad;
-	    net_set_state(p, NET_MSGSIZE, 4);
+	    net_set_state(p, BTP_MSGSIZE, 4);
 	} else
-	    net_set_state(p, NET_MSGBODY, p->net.msg_len - 1);
+	    net_set_state(p, BTP_MSGBODY, p->net.msg_len - 1);
         break;
-    case NET_MSGBODY:
+    case BTP_MSGBODY:
 	if (net_dispatch_msg(p, buf) != 0)
 	    goto bad;
-	net_set_state(p, NET_MSGSIZE, 4);
+	net_set_state(p, BTP_MSGSIZE, 4);
         break;
     default:
 	abort();
@@ -332,7 +328,7 @@ net_read(struct peer *p, unsigned long rmax)
 
     iov[1].iov_len = nread - rest;
     while (p->net.st_bytes <= iov[1].iov_len) {
-        ssize_t consumed = p->net.st_bytes;
+        size_t consumed = p->net.st_bytes;
 	net_progress(p, consumed);
 	if (net_state(p, iov[1].iov_base) != 0)
 	    return nread;

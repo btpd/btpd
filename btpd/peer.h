@@ -52,7 +52,7 @@ struct peer {
     struct {
         uint32_t msg_len;
         uint8_t msg_num;
-        uint8_t state;
+        enum net_state state;
         size_t st_bytes;
         char *buf;
         size_t off;

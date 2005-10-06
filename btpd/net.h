@@ -15,16 +15,16 @@
 
 #define SHAKE_LEN 68
 
-enum shake_state {
+enum net_state {
     SHAKE_PSTR,
     SHAKE_INFO,
     SHAKE_ID,
-    NET_MSGSIZE,
-    NET_MSGHEAD,
-    NET_MSGBODY
+    BTP_MSGSIZE,
+    BTP_MSGHEAD,
+    BTP_MSGBODY
 };
 
-void net_set_state(struct peer *p, int state, size_t size);
+void net_set_state(struct peer *p, enum net_state state, size_t size);
 
 void net_connection_cb(int sd, short type, void *arg);
 void net_bw_rate(void);
