@@ -245,7 +245,9 @@ net_state(struct peer *p, const char *buf)
         break;
     case BTP_MSGSIZE:
 	p->net.msg_len = net_read32(buf);
-	if (p->net.msg_len != 0)
+	if (p->net.msg_len == 0)
+	    btpd_log(BTPD_L_MSG, "received keep alive from %p\n", p);
+	else
 	    net_set_state(p, BTP_MSGHEAD, 1);
         break;
     case BTP_MSGHEAD:
