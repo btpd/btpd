@@ -186,6 +186,8 @@ peer_cancel(struct peer *p, struct block_request *req, struct net_buf *nb)
     }
     if (!removed)
 	peer_send(p, nb);
+    if (p->nreqs_out == 0)
+	peer_on_no_reqs(p);
 }
 
 void
@@ -220,12 +222,14 @@ peer_want(struct peer *p, uint32_t index)
     assert(p->nwant < p->npieces);
     p->nwant++;
     if (p->nwant == 1) {
-	int unsent = 0;
-	struct nb_link *nl = BTPDQ_LAST(&p->outq, nb_tq);
-	if (nl != NULL && nl->nb->type == NB_UNINTEREST)
-	    unsent = peer_unsend(p, nl);
-	if (!unsent)
-	    peer_send(p, btpd.interest_msg);
+	if (p->nreqs_out == 0) {
+	    int unsent = 0;
+	    struct nb_link *nl = BTPDQ_LAST(&p->outq, nb_tq);
+	    if (nl != NULL && nl->nb->type == NB_UNINTEREST)
+		unsent = peer_unsend(p, nl);
+	    if (!unsent)
+		peer_send(p, btpd.interest_msg);
+	}
 	p->flags |= PF_I_WANT;
     }
 }
@@ -237,7 +241,8 @@ peer_unwant(struct peer *p, uint32_t index)
     p->nwant--;
     if (p->nwant == 0) {
 	p->flags &= ~PF_I_WANT;
-	peer_send(p, btpd.uninterest_msg);
+	if (p->nreqs_out == 0)
+	    peer_send(p, btpd.uninterest_msg);
     }
 }
 
@@ -304,6 +309,13 @@ peer_create_out_compact(struct torrent *tp, const char *compact)
 }
 
 void
+peer_on_no_reqs(struct peer *p)
+{
+    if (p->nwant == 0)
+	peer_send(p, btpd.uninterest_msg);
+}
+
+void
 peer_on_shake(struct peer *p)
 {
     uint8_t printid[21];
@@ -331,6 +343,8 @@ peer_on_choke(struct peer *p)
     if ((p->flags & PF_P_CHOKE) != 0)
 	return;
     else {
+	if (p->nreqs_out > 0)
+	    peer_on_no_reqs(p);
 	p->flags |= PF_P_CHOKE;
 	cm_on_choke(p);
 	struct nb_link *nl = BTPDQ_FIRST(&p->outq);
@@ -421,6 +435,8 @@ peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
 	p->nreqs_out--;
 	BTPDQ_REMOVE(&p->my_reqs, req, p_entry);
 	cm_on_block(p, req, index, begin, length, data);
+	if (p->nreqs_out == 0)
+	    peer_on_no_reqs(p);
     } else
 	btpd_log(BTPD_L_MSG, "discarded piece(%u,%u,%u) from %p\n",
 	    index, begin, length, p);
