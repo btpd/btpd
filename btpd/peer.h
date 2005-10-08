@@ -89,6 +89,7 @@ void peer_create_out_compact(struct torrent *tp, const char *compact);
 void peer_kill(struct peer *p);
 
 void peer_on_no_reqs(struct peer *p);
+void peer_on_keepalive(struct peer *p);
 void peer_on_shake(struct peer *p);
 void peer_on_interest(struct peer *p);
 void peer_on_uninterest(struct peer *p);

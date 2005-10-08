@@ -316,6 +316,12 @@ peer_on_no_reqs(struct peer *p)
 }
 
 void
+peer_on_keepalive(struct peer *p)
+{
+    btpd_log(BTPD_L_MSG, "received keep alive from %p\n", p);
+}
+
+void
 peer_on_shake(struct peer *p)
 {
     uint8_t printid[21];
