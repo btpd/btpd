@@ -335,6 +335,13 @@ peer_on_choke(struct peer *p)
     else {
 	p->flags |= PF_P_CHOKE;
 	cm_on_choke(p);
+	struct nb_link *nl = BTPDQ_FIRST(&p->outq);
+	while (nl != NULL) {
+	    struct nb_link *next = BTPDQ_NEXT(nl, entry);
+	    if (nl->nb->type == NB_REQUEST)
+		peer_unsend(p, nl);
+	    nl = next;
+	}
     }
 }
 
