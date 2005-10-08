@@ -311,9 +311,7 @@ peer_on_shake(struct peer *p)
     for (i = 0; i < 20 && isprint(p->id[i]); i++)
 	printid[i] = p->id[i];
     printid[i] = '\0';
-    btpd_log(BTPD_L_MSG, "received shake with id=\'%s\', from %p.\n",
-	printid, p);
-    btpd_log(BTPD_L_MSG, "received shake from %p.\n", p);
+    btpd_log(BTPD_L_MSG, "received shake(%s) from %p\n", printid, p);
     p->piece_field = btpd_calloc(1, (int)ceil(p->tp->meta.npieces / 8.0));
     if (p->tp->have_npieces > 0) {
         if (p->tp->have_npieces * 9 < 5 + ceil(p->tp->meta.npieces / 8.0))
