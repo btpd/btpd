@@ -171,10 +171,8 @@ net_dispatch_msg(struct peer *p, const char *buf)
 	peer_on_cancel(p, index, begin, length);
 	break;
     case MSG_PIECE:
-	index = net_read32(buf);
-	begin = net_read32(buf + 4);
 	length = p->net.msg_len - 9;
-	peer_on_piece(p, index, begin, length, buf + 8);
+	peer_on_piece(p, p->net.pc_index, p->net.pc_begin, length, buf);
 	break;
     default:
 	abort();
@@ -258,9 +256,16 @@ net_state(struct peer *p, const char *buf)
 	    if (net_dispatch_msg(p, buf) != 0)
 		goto bad;
 	    net_set_state(p, BTP_MSGSIZE, 4);
-	} else
+	} else if (p->net.msg_num == MSG_PIECE)
+	    net_set_state(p, BTP_PIECEMETA, 8);
+	else
 	    net_set_state(p, BTP_MSGBODY, p->net.msg_len - 1);
         break;
+    case BTP_PIECEMETA:
+	p->net.pc_index = net_read32(buf);
+	p->net.pc_begin = net_read32(buf + 4);
+	net_set_state(p, BTP_MSGBODY, p->net.msg_len - 9);
+	break;
     case BTP_MSGBODY:
 	if (net_dispatch_msg(p, buf) != 0)
 	    goto bad;

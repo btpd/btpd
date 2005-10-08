@@ -21,6 +21,7 @@ enum net_state {
     SHAKE_ID,
     BTP_MSGSIZE,
     BTP_MSGHEAD,
+    BTP_PIECEMETA,
     BTP_MSGBODY
 };
 
