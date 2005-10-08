@@ -408,11 +408,13 @@ void
 peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length, const char *data)
 {
-    struct block_request *req = BTPDQ_FIRST(&p->my_reqs);
-    if ((req != NULL &&
-	    nb_get_begin(req->blk->msg) == begin &&
-	    nb_get_index(req->blk->msg) == index &&
-	    nb_get_length(req->blk->msg) == length)) {
+    struct block_request *req;
+    BTPDQ_FOREACH(req, &p->my_reqs, p_entry)
+	if ((nb_get_begin(req->blk->msg) == begin &&
+		nb_get_index(req->blk->msg) == index &&
+		nb_get_length(req->blk->msg) == length))
+	    break;
+    if (req != NULL) {
 	btpd_log(BTPD_L_MSG, "received piece(%u,%u,%u) from %p\n",
 	    index, begin, length, p);
 	assert(p->nreqs_out > 0);
