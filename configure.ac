@@ -1,4 +1,4 @@
-AC_INIT(btpd, 0.6, btpd@murmeldjur.se)
+AC_INIT(btpd, 0.7, btpd@murmeldjur.se)
 
 AM_INIT_AUTOMAKE([foreign])
 

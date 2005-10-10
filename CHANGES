@@ -1,3 +1,10 @@
+btpd-0.7:
+---------
+
+Bug fixes:
+- Some communication stupidities was fixed, resulting in better download
+  performance.
+
 btpd-0.6:
 ---------
 
