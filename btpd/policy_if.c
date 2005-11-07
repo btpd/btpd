@@ -7,17 +7,17 @@
 void
 cm_by_second(struct torrent *tp)
 {
-    if (btpd.seconds == tp->tracker_time)
+    if (btpd_seconds == tp->tracker_time)
 	tracker_req(tp, TR_EMPTY);
 
-    if (btpd.seconds == tp->opt_time)
+    if (btpd_seconds == tp->opt_time)
 	next_optimistic(tp, NULL);
 
-    if (btpd.seconds == tp->choke_time)
+    if (btpd_seconds == tp->choke_time)
 	choke_alg(tp);
 
     struct peer *p;
-    int ri = btpd.seconds % RATEHISTORY;
+    int ri = btpd_seconds % RATEHISTORY;
 
     BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
 	p->rate_to_me[ri] = 0;
@@ -192,7 +192,7 @@ cm_on_new_peer(struct peer *p)
 
     tp->npeers++;
     p->flags |= PF_ATTACHED;
-    BTPDQ_REMOVE(&btpd.unattached, p, cm_entry);
+    BTPDQ_REMOVE(&net_unattached, p, cm_entry);
 
     if (tp->npeers == 1) {
 	BTPDQ_INSERT_HEAD(&tp->peers, p, cm_entry);

@@ -13,7 +13,10 @@
 
 #define WRITE_TIMEOUT (& (struct timeval) { 60, 0 })
 
-#define SHAKE_LEN 68
+extern struct peer_tq net_unattached;
+extern struct peer_tq net_bw_readq;
+extern struct peer_tq net_bw_writeq;
+extern unsigned net_npeers;
 
 enum net_state {
     SHAKE_PSTR,
@@ -27,8 +30,7 @@ enum net_state {
 
 void net_set_state(struct peer *p, enum net_state state, size_t size);
 
-void net_connection_cb(int sd, short type, void *arg);
-void net_bw_rate(void);
+void net_init(void);
 void net_bw_cb(int sd, short type, void *arg);
 
 void net_read_cb(int sd, short type, void *arg);

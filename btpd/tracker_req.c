@@ -43,7 +43,7 @@ maybe_connect_to(struct torrent *tp, const char *pinfo)
     if (benc_dget_str(pinfo, "peer id", &pid, &len) != 0 || len != 20)
 	return;
 
-    if (bcmp(btpd.peer_id, pid, 20) == 0)
+    if (bcmp(btpd_get_peer_id(), pid, 20) == 0)
 	return;
 
     if (torrent_has_peer(tp, pid))
@@ -63,16 +63,16 @@ out:
 }
 
 static void
-tracker_done(struct child *child)
+tracker_done(pid_t pid, void *arg)
 {
-    struct tracker_req *req = child->data;
+    struct tracker_req *req = arg;
     int failed = 0;
     char *buf;
     const char *peers;
     uint32_t interval;
     struct torrent *tp;
 
-    if ((tp = torrent_get_by_hash(req->info_hash)) == NULL)
+    if ((tp = btpd_get_torrent(req->info_hash)) == NULL)
 	goto out;
 
     if (benc_validate(req->res->buf, req->res->buf_off) != 0
@@ -100,14 +100,14 @@ tracker_done(struct child *child)
 	goto out;
     }
 
-    tp->tracker_time = btpd.seconds + interval;
+    tp->tracker_time = btpd_seconds + interval;
 
     int error = 0;
     size_t length;
 
     if ((error = benc_dget_lst(req->res->buf, "peers", &peers)) == 0) {
 	for (peers = benc_first(peers);
-	     peers != NULL && btpd.npeers < btpd.maxpeers;
+	     peers != NULL && net_npeers < net_max_peers;
 	     peers = benc_next(peers))
 	    maybe_connect_to(tp, peers);
     }
@@ -116,7 +116,7 @@ tracker_done(struct child *child)
 	error = benc_dget_str(req->res->buf, "peers", &peers, &length);
 	if (error == 0 && length % 6 == 0) {
             size_t i;
-            for (i = 0; i < length && btpd.npeers < btpd.maxpeers; i += 6)
+            for (i = 0; i < length && net_npeers < net_max_peers; i += 6)
 		peer_create_out_compact(tp, peers + i);
 	}
     }
@@ -134,7 +134,7 @@ out:
 	        "Start request failed for %s.\n", tp->relpath);
 	    torrent_unload(tp);
 	} else
-	    tp->tracker_time = btpd.seconds + 10;
+	    tp->tracker_time = btpd_seconds + 10;
     }
     munmap(req->res, REQ_SIZE);
     free(req);
@@ -162,6 +162,7 @@ static int
 create_url(struct tracker_req *req, struct torrent *tp, char **url)
 {
     char e_hash[61], e_id[61];
+    const uint8_t *peer_id = btpd_get_peer_id();
     char qc;
     int i;
     uint64_t left;
@@ -175,7 +176,7 @@ create_url(struct tracker_req *req, struct torrent *tp, char **url)
 	snprintf(e_hash + i * 3, 4, "%%%.2x", tp->meta.info_hash[i]);
 
     for (i = 0; i < 20; i++)
-	snprintf(e_id + i * 3, 4, "%%%.2x", btpd.peer_id[i]);
+	snprintf(e_id + i * 3, 4, "%%%.2x", peer_id[i]);
 
     left = torrent_bytes_left(tp);
 
@@ -187,7 +188,7 @@ create_url(struct tracker_req *req, struct torrent *tp, char **url)
 		 "&left=%" PRIu64
 		 "&compact=1"
 		 "%s%s",
-		 tp->meta.announce, qc, e_hash, e_id, btpd.port,
+		 tp->meta.announce, qc, e_hash, e_id, net_port,
 		 tp->uploaded, tp->downloaded, left,
 		 req->tr_event == TR_EMPTY ? "" : "&event=",
 		 event);
@@ -231,7 +232,7 @@ http_helper(struct tracker_req *req, struct torrent *tp)
 
     err = curl_easy_setopt(handle, CURLOPT_URL, url);
     if (err == 0)
-	err = curl_easy_setopt(handle, CURLOPT_USERAGENT, btpd.version);
+	err = curl_easy_setopt(handle, CURLOPT_USERAGENT, BTPD_VERSION);
     if (err == 0)
 	err = curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, http_cb);
     if (err == 0)
@@ -276,13 +277,13 @@ void
 tracker_req(struct torrent *tp, enum tr_event tr_event)
 {
     struct tracker_req *req;
-    struct child *child;
+    pid_t pid;
 
     btpd_log(BTPD_L_TRACKER,
         "request for %s, event: %s.\n",
 	tp->relpath, event2str(tr_event));
 
-    req = (struct tracker_req *)btpd_calloc(1, sizeof(*req) + sizeof(*child));
+    req = (struct tracker_req *)btpd_calloc(1, sizeof(*req));
 
     req->res = mmap(NULL, REQ_SIZE, PROT_READ | PROT_WRITE,
         MAP_ANON | MAP_SHARED, -1, 0);
@@ -299,18 +300,14 @@ tracker_req(struct torrent *tp, enum tr_event tr_event)
 
     fflush(NULL);
 
-    child = (struct child *)(req + 1);
-    child->data = req;
-    child->child_done = tracker_done;
-    BTPDQ_INSERT_TAIL(&btpd.kids, child, entry);
-
-    child->pid = fork();
-    if (child->pid < 0) {
+    pid = fork();
+    if (pid < 0) {
 	btpd_err("Couldn't fork (%s).\n", strerror(errno));
-    } else if (child->pid == 0) { // Child
+    } else if (pid == 0) { // Child
 	int nfiles = getdtablesize();
 	for (int i = 0; i < nfiles; i++)
 	    close(i);
 	http_helper(req, tp);
-    }
+    } else
+	btpd_add_child(pid, tracker_done, req);
 }

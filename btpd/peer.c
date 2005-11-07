@@ -28,11 +28,11 @@ peer_kill(struct peer *p)
     if (p->flags & PF_ATTACHED)
 	cm_on_lost_peer(p);
     else
-	BTPDQ_REMOVE(&btpd.unattached, p, cm_entry);
+	BTPDQ_REMOVE(&net_unattached, p, cm_entry);
     if (p->flags & PF_ON_READQ)
-	BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
+	BTPDQ_REMOVE(&net_bw_readq, p, rq_entry);
     if (p->flags & PF_ON_WRITEQ)
-	BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
+	BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
 
     close(p->sd);
     event_del(&p->in_ev);
@@ -51,7 +51,7 @@ peer_kill(struct peer *p)
     if (p->piece_field != NULL)
         free(p->piece_field);
     free(p);
-    btpd.npeers--;
+    net_npeers--;
 }
 
 void
@@ -88,7 +88,7 @@ peer_unsend(struct peer *p, struct nb_link *nl)
 	free(nl);
 	if (BTPDQ_EMPTY(&p->outq)) {
 	    if (p->flags & PF_ON_WRITEQ) {
-		BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
+		BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
 		p->flags &= ~PF_ON_WRITEQ;
 	    } else
 		event_del(&p->out_ev);
@@ -194,7 +194,7 @@ void
 peer_unchoke(struct peer *p)
 {
     p->flags &= ~PF_I_CHOKE;
-    peer_send(p, btpd.unchoke_msg);
+    peer_send(p, nb_create_unchoke());
 }
 
 void
@@ -213,7 +213,7 @@ peer_choke(struct peer *p)
     }
 
     p->flags |= PF_I_CHOKE;
-    peer_send(p, btpd.choke_msg);
+    peer_send(p, nb_create_choke());
 }
 
 void
@@ -228,7 +228,7 @@ peer_want(struct peer *p, uint32_t index)
 	    if (nl != NULL && nl->nb->type == NB_UNINTEREST)
 		unsent = peer_unsend(p, nl);
 	    if (!unsent)
-		peer_send(p, btpd.interest_msg);
+		peer_send(p, nb_create_interest());
 	}
 	p->flags |= PF_I_WANT;
     }
@@ -242,7 +242,7 @@ peer_unwant(struct peer *p, uint32_t index)
     if (p->nwant == 0) {
 	p->flags &= ~PF_I_WANT;
 	if (p->nreqs_out == 0)
-	    peer_send(p, btpd.uninterest_msg);
+	    peer_send(p, nb_create_uninterest());
     }
 }
 
@@ -262,8 +262,8 @@ peer_create_common(int sd)
     event_set(&p->in_ev, p->sd, EV_READ, net_read_cb, p);
     event_add(&p->in_ev, NULL);
 
-    BTPDQ_INSERT_TAIL(&btpd.unattached, p, cm_entry);
-    btpd.npeers++;
+    BTPDQ_INSERT_TAIL(&net_unattached, p, cm_entry);
+    net_npeers++;
     return p;
 }
 
@@ -312,7 +312,7 @@ void
 peer_on_no_reqs(struct peer *p)
 {
     if (p->nwant == 0)
-	peer_send(p, btpd.uninterest_msg);
+	peer_send(p, nb_create_uninterest());
 }
 
 void
@@ -461,8 +461,8 @@ peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
 	peer_send(p, nb_create_torrentdata(content, length));
 	p->npiece_msgs++;
 	if (p->npiece_msgs >= MAXPIECEMSGS) {
-	    peer_send(p, btpd.choke_msg);
-	    peer_send(p, btpd.unchoke_msg);
+	    peer_send(p, nb_create_choke());
+	    peer_send(p, nb_create_unchoke());
 	    p->flags |= PF_NO_REQUESTS;
 	}
     }

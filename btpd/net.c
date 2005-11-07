@@ -20,6 +20,18 @@
 
 #define min(x, y) ((x) <= (y) ? (x) : (y))
 
+static struct event m_bw_timer;
+static unsigned long m_bw_bytes_in;
+static unsigned long m_bw_bytes_out;
+
+static struct event m_net_incoming;
+
+unsigned net_npeers;
+
+struct peer_tq net_bw_readq = BTPDQ_HEAD_INITIALIZER(net_bw_readq);
+struct peer_tq net_bw_writeq = BTPDQ_HEAD_INITIALIZER(net_bw_writeq);
+struct peer_tq net_unattached = BTPDQ_HEAD_INITIALIZER(net_unattached);
+
 void
 net_write32(void *buf, uint32_t num)
 {
@@ -89,7 +101,7 @@ net_write(struct peer *p, unsigned long wmax)
 	    peer_sent(p, nl->nb);
 	    if (nl->nb->type == NB_TORRENTDATA) {
 		p->tp->uploaded += bufdelta;
-		p->rate_from_me[btpd.seconds % RATEHISTORY] += bufdelta;
+		p->rate_from_me[btpd_seconds % RATEHISTORY] += bufdelta;
 	    }
 	    bcount -= bufdelta;
 	    BTPDQ_REMOVE(&p->outq, nl, entry);
@@ -100,7 +112,7 @@ net_write(struct peer *p, unsigned long wmax)
 	} else {
 	    if (nl->nb->type == NB_TORRENTDATA) {
 		p->tp->uploaded += bcount;
-		p->rate_from_me[btpd.seconds % RATEHISTORY] += bcount;
+		p->rate_from_me[btpd_seconds % RATEHISTORY] += bcount;
 	    }
 	    p->outq_off +=  bcount;
 	    bcount = 0;
@@ -209,7 +221,7 @@ net_progress(struct peer *p, size_t length)
 {
     if (p->net.state == BTP_MSGBODY && p->net.msg_num == MSG_PIECE) {
 	p->tp->downloaded += length;
-	p->rate_to_me[btpd.seconds % RATEHISTORY] += length;
+	p->rate_to_me[btpd_seconds % RATEHISTORY] += length;
     }
 }
 
@@ -224,7 +236,7 @@ net_state(struct peer *p, const char *buf)
         break;
     case SHAKE_INFO:
 	if (p->flags & PF_INCOMING) {
-	    struct torrent *tp = torrent_get_by_hash(buf);
+	    struct torrent *tp = btpd_get_torrent(buf);
 	    if (tp == NULL)
 		goto bad;
 	    p->tp = tp;
@@ -235,7 +247,7 @@ net_state(struct peer *p, const char *buf)
         break;
     case SHAKE_ID:
 	if ((torrent_has_peer(p->tp, buf)
-             || bcmp(buf, btpd.peer_id, 20) == 0))
+             || bcmp(buf, btpd_get_peer_id(), 20) == 0))
 	    goto bad;
 	bcopy(buf, p->id, 20);
         peer_on_shake(p);
@@ -378,7 +390,7 @@ net_connect(const char *ip, int port, int *sd)
     struct addrinfo hints, *res;
     char portstr[6];
     
-    assert(btpd.npeers < btpd.maxpeers);
+    assert(net_npeers < net_max_peers);
 
     if (snprintf(portstr, sizeof(portstr), "%d", port) >= sizeof(portstr))
 	return EINVAL;
@@ -412,8 +424,8 @@ net_connection_cb(int sd, short type, void *arg)
 	return;
     }
 
-    assert(btpd.npeers <= btpd.maxpeers);
-    if (btpd.npeers == btpd.maxpeers) {
+    assert(net_npeers <= net_max_peers);
+    if (net_npeers == net_max_peers) {
 	close(nsd);
 	return;
     }
@@ -424,17 +436,13 @@ net_connection_cb(int sd, short type, void *arg)
 }
 
 void
-net_bw_rate(void)
+add_bw_timer(void)
 {
-    unsigned sum = 0;
-    for (int i = 0; i < BWCALLHISTORY - 1; i++) {
-	btpd.bwrate[i] = btpd.bwrate[i + 1];
-	sum += btpd.bwrate[i];
-    }
-    btpd.bwrate[BWCALLHISTORY - 1] = btpd.bwcalls;
-    sum += btpd.bwrate[BWCALLHISTORY - 1];
-    btpd.bwcalls = 0;
-    btpd.bw_hz_avg = sum / 5.0;
+    long wait = 1000000 / net_bw_hz;
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    wait = wait - now.tv_usec % wait;
+    evtimer_add(&m_bw_timer, (& (struct timeval) { 0, wait}));
 }
 
 void
@@ -442,58 +450,50 @@ net_bw_cb(int sd, short type, void *arg)
 {
     struct peer *p;
 
-    btpd.bwcalls++;
+    m_bw_bytes_out = net_bw_limit_out / net_bw_hz;
+    m_bw_bytes_in = net_bw_limit_in / net_bw_hz;
 
-    double avg_hz;
-    if (btpd.seconds < BWCALLHISTORY)
-	avg_hz = btpd.bw_hz;
-    else
-	avg_hz = btpd.bw_hz_avg;
-
-    btpd.obw_left = btpd.obwlim / avg_hz;
-    btpd.ibw_left = btpd.ibwlim / avg_hz;
-
-    if (btpd.ibwlim > 0) {
-	while ((p = BTPDQ_FIRST(&btpd.readq)) != NULL && btpd.ibw_left > 0) {
-	    BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
+    if (net_bw_limit_in > 0) {
+	while ((p = BTPDQ_FIRST(&net_bw_readq)) != NULL && m_bw_bytes_in > 0) {
+	    BTPDQ_REMOVE(&net_bw_readq, p, rq_entry);
 	    p->flags &= ~PF_ON_READQ;
-	    btpd.ibw_left -= net_read(p, btpd.ibw_left);
+	    m_bw_bytes_in -= net_read(p, m_bw_bytes_in);
 	}
     } else {
-	while ((p = BTPDQ_FIRST(&btpd.readq)) != NULL) {
-	    BTPDQ_REMOVE(&btpd.readq, p, rq_entry);
+	while ((p = BTPDQ_FIRST(&net_bw_readq)) != NULL) {
+	    BTPDQ_REMOVE(&net_bw_readq, p, rq_entry);
 	    p->flags &= ~PF_ON_READQ;
 	    net_read(p, 0);
 	}
     }
 
-    if (btpd.obwlim) {
-	while ((p = BTPDQ_FIRST(&btpd.writeq)) != NULL && btpd.obw_left > 0) {
-	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
+    if (net_bw_limit_out) {
+	while ((p = BTPDQ_FIRST(&net_bw_writeq)) != NULL && m_bw_bytes_out > 0) {
+	    BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
 	    p->flags &= ~PF_ON_WRITEQ;
-	    btpd.obw_left -=  net_write(p, btpd.obw_left);
+	    m_bw_bytes_out -=  net_write(p, m_bw_bytes_out);
 	}
     } else {
-	while ((p = BTPDQ_FIRST(&btpd.writeq)) != NULL) {
-	    BTPDQ_REMOVE(&btpd.writeq, p, wq_entry);
+	while ((p = BTPDQ_FIRST(&net_bw_writeq)) != NULL) {
+	    BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
 	    p->flags &= ~PF_ON_WRITEQ;
 	    net_write(p, 0);
 	}
     }
-    event_add(&btpd.bwlim, (& (struct timeval) { 0, 1000000 / btpd.bw_hz }));
+    add_bw_timer();
 }
 
 void
 net_read_cb(int sd, short type, void *arg)
 {
     struct peer *p = (struct peer *)arg;
-    if (btpd.ibwlim == 0)
+    if (net_bw_limit_in == 0)
 	net_read(p, 0);
-    else if (btpd.ibw_left > 0)
-	btpd.ibw_left -= net_read(p, btpd.ibw_left);
+    else if (m_bw_bytes_in > 0)
+	m_bw_bytes_in -= net_read(p, m_bw_bytes_in);
     else {
 	p->flags |= PF_ON_READQ;
-	BTPDQ_INSERT_TAIL(&btpd.readq, p, rq_entry);
+	BTPDQ_INSERT_TAIL(&net_bw_readq, p, rq_entry);
     }
 }
 
@@ -506,12 +506,53 @@ net_write_cb(int sd, short type, void *arg)
 	peer_kill(p);
 	return;
     }
-    if (btpd.obwlim == 0) {
+    if (net_bw_limit_out == 0) {
 	net_write(p, 0);
-    } else if (btpd.obw_left > 0) {
-	btpd.obw_left -= net_write(p, btpd.obw_left);
+    } else if (m_bw_bytes_out > 0) {
+	m_bw_bytes_out -= net_write(p, m_bw_bytes_out);
     } else {
 	p->flags |= PF_ON_WRITEQ;
-	BTPDQ_INSERT_TAIL(&btpd.writeq, p, wq_entry);
+	BTPDQ_INSERT_TAIL(&net_bw_writeq, p, wq_entry);
     }
+}
+
+void
+net_init(void)
+{
+    m_bw_bytes_out = net_bw_limit_out / net_bw_hz;
+    m_bw_bytes_in = net_bw_limit_in / net_bw_hz;
+
+    int nfiles = getdtablesize();
+    if (nfiles <= 20)
+	btpd_err("Too few open files allowed (%d). "
+		 "Check \"ulimit -n\"\n", nfiles);
+    else if (nfiles < 64)
+	btpd_log(BTPD_L_BTPD,
+		 "You have restricted the number of open files to %d. "
+		 "More could be beneficial to the download performance.\n",
+		 nfiles);
+    net_max_peers = nfiles - 20;
+
+    int sd;
+    int flag = 1;
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(net_port);
+
+    if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+	btpd_err("socket: %s\n", strerror(errno));
+    setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
+    if (bind(sd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
+	btpd_err("bind: %s\n", strerror(errno));
+    listen(sd, 10);
+    set_nonblocking(sd);
+
+    event_set(&m_net_incoming, sd, EV_READ | EV_PERSIST,
+        net_connection_cb, NULL);
+    event_add(&m_net_incoming, NULL);
+
+    evtimer_set(&m_bw_timer, net_bw_cb, NULL);
+    if (net_bw_limit_out > 0 || net_bw_limit_in > 0)
+	add_bw_timer();
 }

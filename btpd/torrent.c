@@ -62,10 +62,9 @@ torrent_load3(const char *file, struct metainfo *mi, char *mem, size_t memsiz)
     tp->meta = *mi;
     free(mi);
 
-    BTPDQ_INSERT_TAIL(&btpd.cm_list, tp, entry);
+    btpd_add_torrent(tp);
 
     tracker_req(tp, TR_STARTED);
-    btpd.ntorrents++;
 
     return 0;
 }
@@ -128,7 +127,7 @@ torrent_load(const char *file)
 	return error;
     }
 
-    if (torrent_get_by_hash(mi->info_hash) != NULL) {
+    if (btpd_get_torrent(mi->info_hash) != NULL) {
 	btpd_log(BTPD_L_BTPD, "%s has same hash as an already loaded torrent.\n", file);
 	error = EEXIST;
     }
@@ -158,12 +157,12 @@ torrent_unload(struct torrent *tp)
     while (peer != NULL) {
         struct peer *next = BTPDQ_NEXT(peer, cm_entry);
 	BTPDQ_REMOVE(&tp->peers, peer, cm_entry);
-	BTPDQ_INSERT_TAIL(&btpd.unattached, peer, cm_entry);
+	BTPDQ_INSERT_TAIL(&net_unattached, peer, cm_entry);
         peer->flags &= ~PF_ATTACHED;
         peer = next;
     }
 
-    peer = BTPDQ_FIRST(&btpd.unattached);
+    peer = BTPDQ_FIRST(&net_unattached);
     while (peer != NULL) {
 	struct peer *next = BTPDQ_NEXT(peer, cm_entry);
 	if (peer->tp == tp)
@@ -181,9 +180,8 @@ torrent_unload(struct torrent *tp)
 
     munmap(tp->imem, tp->isiz);
 
-    BTPDQ_REMOVE(&btpd.cm_list, tp, entry);
+    btpd_del_torrent(tp);
     free(tp);
-    btpd.ntorrents--;
 }
 
 off_t
@@ -239,15 +237,6 @@ torrent_has_peer(struct torrent *tp, const uint8_t *id)
 	p = BTPDQ_NEXT(p, cm_entry);
     }
     return has;
-}
-
-struct torrent *
-torrent_get_by_hash(const uint8_t *hash)
-{
-    struct torrent *tp = BTPDQ_FIRST(&btpd.cm_list);
-    while (tp != NULL && bcmp(hash, tp->meta.info_hash, 20) != 0)
-	tp = BTPDQ_NEXT(tp, entry);
-    return tp;
 }
 
 off_t

@@ -1,6 +1,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
 
 #include <inttypes.h>
 #include <limits.h>
@@ -17,6 +19,8 @@
 
 #define buf_swrite(iob, s) buf_write(iob, s, sizeof(s) - 1)
 
+static struct event m_cli_incoming;
+
 static void
 errdie(int error)
 {
@@ -32,11 +36,11 @@ cmd_stat(int argc, const char *args, FILE *fp)
     errdie(buf_init(&iob, (1 << 14)));
     
     errdie(buf_swrite(&iob, "d"));
-    errdie(buf_print(&iob, "6:npeersi%ue", btpd.npeers));
-    errdie(buf_print(&iob, "9:ntorrentsi%ue", btpd.ntorrents));
-    errdie(buf_print(&iob, "7:secondsi%lue", btpd.seconds));
+    errdie(buf_print(&iob, "6:npeersi%ue", net_npeers));
+    errdie(buf_print(&iob, "9:ntorrentsi%ue", btpd_get_ntorrents()));
+    errdie(buf_print(&iob, "7:secondsi%lue", btpd_seconds));
     errdie(buf_swrite(&iob, "8:torrentsl"));
-    BTPDQ_FOREACH(tp, &btpd.cm_list, entry) {
+    BTPDQ_FOREACH(tp, btpd_get_torrents(), entry) {
         uint32_t seen_npieces = 0;
         for (uint32_t i = 0; i < tp->meta.npieces; i++)
             if (tp->piece_count[i] > 0)
@@ -116,7 +120,7 @@ cmd_del(int argc, const char *args, FILE *fp)
             return;
         }
 
-        tp = torrent_get_by_hash(hash);
+        tp = btpd_get_torrent(hash);
         if (tp != NULL) {
 	    btpd_log(BTPD_L_BTPD, "del request for %s.\n", tp->relpath);
             torrent_unload(tp);
@@ -222,4 +226,36 @@ client_connection_cb(int sd, short type, void *arg)
     do_ipc(fp);
 
     fclose(fp);
+}
+
+void
+ipc_init(void)
+{
+    int sd;
+    struct sockaddr_un addr;
+    size_t psiz = sizeof(addr.sun_path);
+
+    addr.sun_family = PF_UNIX;
+    if (snprintf(addr.sun_path, psiz, "%s/sock", btpd_dir) >= psiz)
+	btpd_err("'%s/sock' is too long.\n", btpd_dir);
+    
+    if ((sd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+	btpd_err("sock: %s\n", strerror(errno));
+    if (bind(sd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+	if (errno == EADDRINUSE) {
+	    unlink(addr.sun_path);
+	    if (bind(sd, (struct sockaddr *)&addr, sizeof(addr)) != 0)
+		btpd_err("bind: %s\n", strerror(errno));
+	} else
+	    btpd_err("bind: %s\n", strerror(errno));
+    }
+
+    if (chmod(addr.sun_path, 0600) == -1)
+	btpd_err("chmod: %s (%s).\n", addr.sun_path, strerror(errno));
+    listen(sd, 4);
+    set_nonblocking(sd);
+
+    event_set(&m_cli_incoming, sd, EV_READ | EV_PERSIST,
+	client_connection_cb, NULL);
+    event_add(&m_cli_incoming, NULL);
 }

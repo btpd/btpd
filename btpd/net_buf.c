@@ -3,16 +3,26 @@
 
 #include "btpd.h"
 
+static struct net_buf *m_choke;
+static struct net_buf *m_unchoke;
+static struct net_buf *m_interest;
+static struct net_buf *m_uninterest;
+
 static void
 kill_buf_no(char *buf, size_t len)
 {
-
 }
 
 static void
 kill_buf_free(char *buf, size_t len)
 {
     free(buf);
+}
+
+static void
+kill_buf_abort(char *buf, size_t len)
+{
+    abort();
 }
 
 static struct net_buf *
@@ -45,6 +55,13 @@ nb_create_onesized(char mtype, int btype)
     net_write32(out->buf, 1);
     out->buf[4] = mtype;
     return out;
+}
+
+static struct net_buf *nb_singleton(struct net_buf *nb)
+{
+    nb_hold(nb);
+    nb->kill_buf = kill_buf_abort;
+    return nb;
 }
 
 struct net_buf *
@@ -119,25 +136,35 @@ nb_create_multihave(struct torrent *tp)
 struct net_buf *
 nb_create_unchoke(void)
 {
-    return nb_create_onesized(MSG_UNCHOKE, NB_UNCHOKE);
+    if (m_unchoke == NULL)
+	m_unchoke = nb_singleton(nb_create_onesized(MSG_UNCHOKE, NB_UNCHOKE));
+    return m_unchoke;
 }
 
 struct net_buf *
 nb_create_choke(void)
 {
-    return nb_create_onesized(MSG_CHOKE, NB_CHOKE);
+    if (m_choke == NULL)
+	m_choke = nb_singleton(nb_create_onesized(MSG_CHOKE, NB_CHOKE));
+    return m_choke;
 }
 
 struct net_buf *
 nb_create_uninterest(void)
 {
-    return nb_create_onesized(MSG_UNINTEREST, NB_UNINTEREST);
+    if (m_uninterest == NULL)
+	m_uninterest =
+	    nb_singleton(nb_create_onesized(MSG_UNINTEREST, NB_UNINTEREST));
+    return m_uninterest;
 }
 
 struct net_buf *
 nb_create_interest(void)
 {
-    return nb_create_onesized(MSG_INTEREST, NB_INTEREST);
+    if (m_interest == NULL)
+	m_interest =
+	    nb_singleton(nb_create_onesized(MSG_INTEREST, NB_INTEREST));
+    return m_interest;
 }
 
 struct net_buf *
@@ -166,7 +193,7 @@ nb_create_shake(struct torrent *tp)
     struct net_buf *out = nb_create_alloc(NB_SHAKE, 68);
     bcopy("\x13""BitTorrent protocol\0\0\0\0\0\0\0\0", out->buf, 28);
     bcopy(tp->meta.info_hash, out->buf + 28, 20);
-    bcopy(btpd.peer_id, out->buf + 48, 20);
+    bcopy(btpd_get_peer_id(), out->buf + 48, 20);
     return out;
 }
 

@@ -1,6 +1,8 @@
 bin_PROGRAMS=btpd
 btpd_SOURCES=\
+	main.c util.c\
 	btpd.c btpd.h\
+	opts.c opts.h\
 	cli_if.c\
 	net.c net.h\
 	net_buf.c net_buf.h\

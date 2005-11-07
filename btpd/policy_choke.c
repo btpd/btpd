@@ -67,7 +67,7 @@ choke_alg(struct torrent *tp)
 	}
     }
 
-    tp->choke_time = btpd.seconds + 10;
+    tp->choke_time = btpd_seconds + 10;
 }
 
 void
@@ -86,5 +86,5 @@ next_optimistic(struct torrent *tp, struct peer *np)
     }
     assert(tp->optimistic != NULL);
     choke_alg(tp);
-    tp->opt_time = btpd.seconds + 30;
+    tp->opt_time = btpd_seconds + 30;
 }

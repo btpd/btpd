@@ -25,69 +25,11 @@
 #include "policy.h"
 #include "subr.h"
 
+#include "opts.h"
+
 #define BTPD_VERSION (PACKAGE_NAME "/" PACKAGE_VERSION)
 
-#define BWCALLHISTORY 5
-
-struct child {
-    pid_t pid;
-    void *data;
-    void (*child_done)(struct child *child);
-    BTPDQ_ENTRY(child) entry;
-};
-
-BTPDQ_HEAD(child_tq, child);
-
-struct btpd {
-    uint8_t peer_id[20];
-
-    const char *version;
-
-    uint32_t logmask;
-
-    struct child_tq kids;
-
-    unsigned ntorrents;
-    struct torrent_tq cm_list;
-
-    struct peer_tq readq;
-    struct peer_tq writeq;
-
-    struct peer_tq unattached;
-
-    int port;
-    int peer4_sd;
-    int ipc_sd;
-
-    unsigned bw_hz;
-    double bw_hz_avg;
-    unsigned bwcalls;
-    unsigned bwrate[BWCALLHISTORY];
-    unsigned long obwlim, ibwlim;
-    unsigned long ibw_left, obw_left;
-    struct event bwlim;    
-
-    unsigned npeers;
-    unsigned maxpeers;
-
-    unsigned long seconds;
-
-    struct event cli;
-    struct event accept4;
-
-    struct event heartbeat;
-
-    struct event sigint;
-    struct event sigterm;
-    struct event sigchld;
-
-    struct net_buf *choke_msg;
-    struct net_buf *unchoke_msg;
-    struct net_buf *interest_msg;
-    struct net_buf *uninterest_msg;
-};
-
-extern struct btpd btpd;
+extern unsigned long btpd_seconds;
 
 #define BTPD_L_ALL	0xffffffff
 #define BTPD_L_ERROR	0x00000001
@@ -97,6 +39,8 @@ extern struct btpd btpd;
 #define BTPD_L_BTPD	0x00000010
 #define BTPD_L_POL	0x00000020
 
+void btpd_init(void);
+
 void btpd_log(uint32_t type, const char *fmt, ...);
 
 void btpd_err(const char *fmt, ...);
@@ -105,5 +49,14 @@ void *btpd_malloc(size_t size);
 void *btpd_calloc(size_t nmemb, size_t size);
 
 void btpd_shutdown(void);
+
+void btpd_add_child(pid_t pid, void (*cb)(pid_t, void *), void *arg);
+
+struct torrent * btpd_get_torrent(const uint8_t *hash);
+const struct torrent_tq *btpd_get_torrents(void);
+void btpd_add_torrent(struct torrent *tp);
+void btpd_del_torrent(struct torrent *tp);
+unsigned btpd_get_ntorrents(void);
+const uint8_t *btpd_get_peer_id(void);
 
 #endif

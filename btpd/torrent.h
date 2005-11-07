@@ -80,8 +80,6 @@ void torrent_unload(struct torrent *tp);
 
 int torrent_has_peer(struct torrent *tp, const uint8_t *id);
 
-struct torrent *torrent_get_by_hash(const uint8_t *hash);
-
 off_t torrent_piece_size(struct torrent *tp, uint32_t index);
 uint32_t torrent_block_size(struct piece *pc, uint32_t index);
 
