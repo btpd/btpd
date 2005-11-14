@@ -10,6 +10,7 @@
 #define PF_ATTACHED	 0x40
 #define PF_NO_REQUESTS	 0x80
 #define PF_INCOMING	0x100
+#define PF_DO_UNWANT	0x200
 
 #define RATEHISTORY 20
 #define MAXPIECEMSGS 128

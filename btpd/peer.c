@@ -223,12 +223,16 @@ peer_want(struct peer *p, uint32_t index)
     p->nwant++;
     if (p->nwant == 1) {
 	if (p->nreqs_out == 0) {
+	    assert((p->flags & PF_DO_UNWANT) == 0);
 	    int unsent = 0;
 	    struct nb_link *nl = BTPDQ_LAST(&p->outq, nb_tq);
 	    if (nl != NULL && nl->nb->type == NB_UNINTEREST)
 		unsent = peer_unsend(p, nl);
 	    if (!unsent)
 		peer_send(p, nb_create_interest());
+	} else {
+	    assert((p->flags & PF_DO_UNWANT) != 0);
+	    p->flags &= ~PF_DO_UNWANT;
 	}
 	p->flags |= PF_I_WANT;
     }
@@ -243,6 +247,8 @@ peer_unwant(struct peer *p, uint32_t index)
 	p->flags &= ~PF_I_WANT;
 	if (p->nreqs_out == 0)
 	    peer_send(p, nb_create_uninterest());
+	else
+	    p->flags |= PF_DO_UNWANT;
     }
 }
 
@@ -311,8 +317,11 @@ peer_create_out_compact(struct torrent *tp, const char *compact)
 void
 peer_on_no_reqs(struct peer *p)
 {
-    if (p->nwant == 0)
+    if ((p->flags & PF_DO_UNWANT) != 0) {
+	assert(p->nwant == 0);
+	p->flags &= ~PF_DO_UNWANT;
 	peer_send(p, nb_create_uninterest());
+    }
 }
 
 void
