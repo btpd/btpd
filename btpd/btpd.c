@@ -43,7 +43,7 @@ static struct event m_sigterm;
 static struct event m_sigchld;
 static struct child_tq m_kids = BTPDQ_HEAD_INITIALIZER(m_kids);
 static unsigned m_ntorrents;
-static struct torrent_tq m_cm_list = BTPDQ_HEAD_INITIALIZER(m_cm_list);
+static struct torrent_tq m_torrents = BTPDQ_HEAD_INITIALIZER(m_torrents);
 
 unsigned long btpd_seconds;
 
@@ -52,7 +52,7 @@ btpd_shutdown(void)
 {
     struct torrent *tp;
 
-    tp = BTPDQ_FIRST(&m_cm_list);
+    tp = BTPDQ_FIRST(&m_torrents);
     while (tp != NULL) {
         struct torrent *next = BTPDQ_NEXT(tp, entry);
         torrent_unload(tp);
@@ -105,7 +105,7 @@ heartbeat_cb(int sd, short type, void *arg)
 
     btpd_seconds++;
 
-    BTPDQ_FOREACH(tp, &m_cm_list, entry)
+    BTPDQ_FOREACH(tp, &m_torrents, entry)
 	cm_by_second(tp);
 
     evtimer_add(&m_heartbeat, (& (struct timeval) { 1, 0 }));
@@ -114,21 +114,21 @@ heartbeat_cb(int sd, short type, void *arg)
 void
 btpd_add_torrent(struct torrent *tp)
 {
-    BTPDQ_INSERT_TAIL(&m_cm_list, tp, entry);
+    BTPDQ_INSERT_TAIL(&m_torrents, tp, entry);
     m_ntorrents++;
 }
 
 void 
 btpd_del_torrent(struct torrent *tp)
 {
-    BTPDQ_REMOVE(&m_cm_list, tp, entry);
+    BTPDQ_REMOVE(&m_torrents, tp, entry);
     m_ntorrents--;
 }
 
 const struct torrent_tq *
 btpd_get_torrents(void)
 {
-    return &m_cm_list;
+    return &m_torrents;
 }
 
 unsigned
@@ -140,7 +140,7 @@ btpd_get_ntorrents(void)
 struct torrent *
 btpd_get_torrent(const uint8_t *hash)
 {
-    struct torrent *tp = BTPDQ_FIRST(&m_cm_list);
+    struct torrent *tp = BTPDQ_FIRST(&m_torrents);
     while (tp != NULL && bcmp(hash, tp->meta.info_hash, 20) != 0)
 	tp = BTPDQ_NEXT(tp, entry);
     return tp;
