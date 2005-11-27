@@ -23,14 +23,14 @@ static int
 ro_fd_cb(const char *path, int *fd, void *arg)
 {
     struct torrent *tp = arg;
-    return vopen(fd, O_RDONLY, "%s.d/%s", tp->relpath, path);
+    return vopen(fd, O_RDONLY, "%s/content/%s", tp->relpath, path);
 }
 
 static int
 wo_fd_cb(const char *path, int *fd, void *arg)
 {
     struct torrent *tp = arg;
-    return vopen(fd, O_WRONLY|O_CREAT, "%s.d/%s", tp->relpath, path);
+    return vopen(fd, O_WRONLY|O_CREAT, "%s/content/%s", tp->relpath, path);
 }
 
 static int
@@ -70,14 +70,15 @@ torrent_load3(const char *file, struct metainfo *mi, char *mem, size_t memsiz)
 }
 
 static int
-torrent_load2(const char *file, struct metainfo *mi)
+torrent_load2(const char *name, struct metainfo *mi)
 {
     int error, ifd;
     struct stat sb;
     char *mem;
     size_t memsiz;
+    const char *file = name;
 
-    if ((error = vopen(&ifd, O_RDWR, "%s.i", file)) != 0) {
+    if ((error = vopen(&ifd, O_RDWR, "%s/resume", file)) != 0) {
 	btpd_log(BTPD_L_ERROR, "Error opening %s.i: %s.\n",
 	    file, strerror(error));
 	return error;
@@ -116,10 +117,12 @@ torrent_load2(const char *file, struct metainfo *mi)
 }
 
 int
-torrent_load(const char *file)
+torrent_load(const char *name)
 {
     struct metainfo *mi;
     int error;
+    char file[PATH_MAX];
+    snprintf(file, PATH_MAX, "%s/torrent", name);
 
     if ((error = load_metainfo(file, -1, 0, &mi)) != 0) {
 	btpd_log(BTPD_L_ERROR, "Couldn't load metainfo file %s: %s.\n",
@@ -133,7 +136,7 @@ torrent_load(const char *file)
     }
 
     if (error == 0)
-	error = torrent_load2(file, mi);
+	error = torrent_load2(name, mi);
 
     if (error != 0) {
 	clear_metainfo(mi);

@@ -206,7 +206,7 @@ test_hash(struct torrent *tp, uint8_t *hash, unsigned long index)
 	int bufi;
 	int err;
 
-	err = vopen(&fd, O_RDONLY, "%s", tp->relpath);
+	err = vopen(&fd, O_RDONLY, "%s/torrent", tp->relpath);
 	if (err != 0)
 	    btpd_err("test_hash: %s\n", strerror(err));
 
@@ -231,7 +231,7 @@ static int
 ro_fd_cb(const char *path, int *fd, void *arg)
 {
     struct torrent *tp = arg;
-    return vopen(fd, O_RDONLY, "%s.d/%s", tp->relpath, path);
+    return vopen(fd, O_RDONLY, "%s/content/%s", tp->relpath, path);
 }
 
 static void

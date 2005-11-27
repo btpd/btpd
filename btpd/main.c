@@ -174,6 +174,7 @@ args_done:
     event_init();
 
     btpd_init();
+    torrent_load("test");
 
     event_dispatch();
     btpd_err("Unexpected exit from libevent.\n");
