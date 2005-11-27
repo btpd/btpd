@@ -158,16 +158,16 @@ torrent_unload(struct torrent *tp)
 
     peer = BTPDQ_FIRST(&tp->peers);
     while (peer != NULL) {
-        struct peer *next = BTPDQ_NEXT(peer, cm_entry);
-	BTPDQ_REMOVE(&tp->peers, peer, cm_entry);
-	BTPDQ_INSERT_TAIL(&net_unattached, peer, cm_entry);
+        struct peer *next = BTPDQ_NEXT(peer, p_entry);
+	BTPDQ_REMOVE(&tp->peers, peer, p_entry);
+	BTPDQ_INSERT_TAIL(&net_unattached, peer, p_entry);
         peer->flags &= ~PF_ATTACHED;
         peer = next;
     }
 
     peer = BTPDQ_FIRST(&net_unattached);
     while (peer != NULL) {
-	struct peer *next = BTPDQ_NEXT(peer, cm_entry);
+	struct peer *next = BTPDQ_NEXT(peer, p_entry);
 	if (peer->tp == tp)
 	    peer_kill(peer);
 	peer = next;
@@ -237,7 +237,7 @@ torrent_has_peer(struct torrent *tp, const uint8_t *id)
 	    has = 1;
 	    break;
 	}
-	p = BTPDQ_NEXT(p, cm_entry);
+	p = BTPDQ_NEXT(p, p_entry);
     }
     return has;
 }

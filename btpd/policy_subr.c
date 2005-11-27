@@ -105,7 +105,7 @@ piece_full(struct piece *pc)
 }
 
 static int
-cm_should_enter_endgame(struct torrent *tp)
+dl_should_enter_endgame(struct torrent *tp)
 {
     int should;
     if (tp->have_npieces + tp->npcs_busy == tp->meta.npieces) {
@@ -123,7 +123,7 @@ cm_should_enter_endgame(struct torrent *tp)
 }
 
 static void
-cm_piece_insert_eg(struct piece *pc)
+dl_piece_insert_eg(struct piece *pc)
 {
     struct piece_tq *getlst = &pc->tp->getlst;
     if (pc->nblocks == pc->ngot)
@@ -144,14 +144,14 @@ cm_piece_insert_eg(struct piece *pc)
 }
 
 void
-cm_piece_reorder_eg(struct piece *pc)
+dl_piece_reorder_eg(struct piece *pc)
 {
     BTPDQ_REMOVE(&pc->tp->getlst, pc, entry);
-    cm_piece_insert_eg(pc);
+    dl_piece_insert_eg(pc);
 }
 
 static void
-cm_enter_endgame(struct torrent *tp)
+dl_enter_endgame(struct torrent *tp)
 {
     struct peer *p;
     struct piece *pc;
@@ -172,21 +172,21 @@ cm_enter_endgame(struct torrent *tp)
     BTPDQ_INIT(&tp->getlst);
     while (pi > 0) {
 	pi--;
-	cm_piece_insert_eg(pcs[pi]);
+	dl_piece_insert_eg(pcs[pi]);
     }
-    BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
+    BTPDQ_FOREACH(p, &tp->peers, p_entry) {
 	assert(p->nwant == 0);
 	BTPDQ_FOREACH(pc, &tp->getlst, entry) {
 	    if (peer_has(p, pc->index))
 		peer_want(p, pc->index);
 	}
 	if (p->nwant > 0 && peer_leech_ok(p) && !peer_laden(p))
-	    cm_assign_requests_eg(p);
+	    dl_assign_requests_eg(p);
     }
 }
 
 struct piece *
-cm_find_piece(struct torrent *tp, uint32_t index)
+dl_find_piece(struct torrent *tp, uint32_t index)
 {
     struct piece *pc;
     BTPDQ_FOREACH(pc, &tp->getlst, entry)
@@ -253,19 +253,19 @@ torrent_test_piece(struct piece *pc)
     bts_close_ro(bts);
 
     if (test_hash(tp, hash, pc->index) == 0)
-	cm_on_ok_piece(pc);
+	dl_on_ok_piece(pc);
     else
-	cm_on_bad_piece(pc);
+	dl_on_bad_piece(pc);
 }
 
 void
-cm_on_piece(struct piece *pc)
+dl_on_piece(struct piece *pc)
 {
     torrent_test_piece(pc);
 }
 
 static int
-cm_piece_startable(struct peer *p, uint32_t index)
+dl_piece_startable(struct peer *p, uint32_t index)
 {
     return peer_has(p, index) && !has_bit(p->tp->piece_field, index)
 	&& !has_bit(p->tp->busy_field, index);
@@ -279,14 +279,14 @@ cm_piece_startable(struct peer *p, uint32_t index)
  * Return 0 or ENOENT, index in res.
  */
 static int
-cm_choose_rarest(struct peer *p, uint32_t *res)
+dl_choose_rarest(struct peer *p, uint32_t *res)
 {
     uint32_t i;
     struct torrent *tp = p->tp;
 
     assert(tp->endgame == 0);
 
-    for (i = 0; i < tp->meta.npieces && !cm_piece_startable(p, i); i++)
+    for (i = 0; i < tp->meta.npieces && !dl_piece_startable(p, i); i++)
 	;
 
     if (i == tp->meta.npieces)
@@ -295,7 +295,7 @@ cm_choose_rarest(struct peer *p, uint32_t *res)
     uint32_t min_i = i;
     uint32_t min_c = 1;
     for(i++; i < tp->meta.npieces; i++) {
-	if (cm_piece_startable(p, i)) {
+	if (dl_piece_startable(p, i)) {
 	    if (tp->piece_count[i] == tp->piece_count[min_i])
 		min_c++;
 	    else if (tp->piece_count[i] < tp->piece_count[min_i]) {
@@ -307,7 +307,7 @@ cm_choose_rarest(struct peer *p, uint32_t *res)
     if (min_c > 1) {
 	min_c = 1 + rint((double)random() * (min_c - 1) / RAND_MAX);
 	for (i = min_i; min_c > 0; i++) {
-	    if (cm_piece_startable(p, i)
+	    if (dl_piece_startable(p, i)
 		&& tp->piece_count[i] == tp->piece_count[min_i]) {
 		min_c--;
 		min_i = i;
@@ -319,21 +319,21 @@ cm_choose_rarest(struct peer *p, uint32_t *res)
 }
 
 /*
- * Called from either cm_piece_assign_requests or cm_new_piece, 
+ * Called from either dl_piece_assign_requests or dl_new_piece, 
  * when a pice becomes full. The wanted level of the peers
  * that has this piece will be decreased. This function is
  * the only one that may trigger end game.
  */
 static void
-cm_on_piece_full(struct piece *pc)
+dl_on_piece_full(struct piece *pc)
 {
     struct peer *p;
-    BTPDQ_FOREACH(p, &pc->tp->peers, cm_entry) {
+    BTPDQ_FOREACH(p, &pc->tp->peers, p_entry) {
 	if (peer_has(p, pc->index))
 	    peer_unwant(p, pc->index);
     }
-    if (cm_should_enter_endgame(pc->tp))
-	cm_enter_endgame(pc->tp);
+    if (dl_should_enter_endgame(pc->tp))
+	dl_enter_endgame(pc->tp);
 }
 
 /*
@@ -346,15 +346,15 @@ cm_on_piece_full(struct piece *pc)
  * Return the piece or NULL.
  */
 struct piece *
-cm_new_piece(struct torrent *tp, uint32_t index)
+dl_new_piece(struct torrent *tp, uint32_t index)
 {
     btpd_log(BTPD_L_POL, "Started on piece %u.\n", index);
     struct piece *pc = piece_alloc(tp, index);
     if (pc->ngot == pc->nblocks) {
-	cm_on_piece_full(pc);
-	cm_on_piece(pc);
-	if (cm_should_enter_endgame(tp))
-	    cm_enter_endgame(tp);
+	dl_on_piece_full(pc);
+	dl_on_piece(pc);
+	if (dl_should_enter_endgame(tp))
+	    dl_enter_endgame(tp);
 	return NULL;
     } else
 	return pc;
@@ -368,19 +368,19 @@ cm_new_piece(struct torrent *tp, uint32_t index)
  * try to assign requests for this piece.
  */
 void
-cm_on_piece_unfull(struct piece *pc)
+dl_on_piece_unfull(struct piece *pc)
 {
     struct torrent *tp = pc->tp;
     struct peer *p;
     assert(!piece_full(pc) && tp->endgame == 0);
-    BTPDQ_FOREACH(p, &tp->peers, cm_entry)
+    BTPDQ_FOREACH(p, &tp->peers, p_entry)
 	if (peer_has(p, pc->index))
 	    peer_want(p, pc->index);
     p = BTPDQ_FIRST(&tp->peers);
     while (p != NULL && !piece_full(pc)) {
 	if (peer_leech_ok(p) && !peer_laden(p))
-	    cm_piece_assign_requests(pc, p); // Cannot provoke end game here.
-	p = BTPDQ_NEXT(p, cm_entry);
+	    dl_piece_assign_requests(pc, p); // Cannot provoke end game here.
+	p = BTPDQ_NEXT(p, p_entry);
     }
 }
 
@@ -390,12 +390,12 @@ cm_on_piece_unfull(struct piece *pc)
 
 /*
  * Request as many blocks as possible on this piece from
- * the peer. If the piece becomes full we call cm_on_piece_full.
+ * the peer. If the piece becomes full we call dl_on_piece_full.
  *
  * Return the number of requests sent.
  */
 unsigned
-cm_piece_assign_requests(struct piece *pc, struct peer *p)
+dl_piece_assign_requests(struct piece *pc, struct peer *p)
 {
     assert(!piece_full(pc) && !peer_laden(p));
     unsigned count = 0;
@@ -420,7 +420,7 @@ cm_piece_assign_requests(struct piece *pc, struct peer *p)
     } while (!piece_full(pc) && !peer_laden(p));
 
     if (piece_full(pc))
-	cm_on_piece_full(pc);
+	dl_on_piece_full(pc);
 
     return count;
 }
@@ -429,7 +429,7 @@ cm_piece_assign_requests(struct piece *pc, struct peer *p)
  * Request as many blocks as possible from the peer. Puts
  * requests on already active pieces before starting on new
  * ones. Care must be taken since end game mode may be triggered
- * by the calls to cm_piece_assign_requests.
+ * by the calls to dl_piece_assign_requests.
  *
  * Returns number of requests sent.
  *
@@ -437,7 +437,7 @@ cm_piece_assign_requests(struct piece *pc, struct peer *p)
  *      already started piece to put requests on.
  */
 unsigned
-cm_assign_requests(struct peer *p)
+dl_assign_requests(struct peer *p)
 {
     assert(!p->tp->endgame && !peer_laden(p));
     struct piece *pc;
@@ -446,7 +446,7 @@ cm_assign_requests(struct peer *p)
     BTPDQ_FOREACH(pc, &tp->getlst, entry) {
 	if (piece_full(pc) || !peer_has(p, pc->index))
 	    continue;
-	count += cm_piece_assign_requests(pc, p);
+	count += dl_piece_assign_requests(pc, p);
 	if (tp->endgame)
 	    break;
 	if (!piece_full(pc))
@@ -456,10 +456,10 @@ cm_assign_requests(struct peer *p)
     }
     while (!peer_laden(p) && !tp->endgame) {
 	uint32_t index;
-	if (cm_choose_rarest(p, &index) == 0) {
-	    pc = cm_new_piece(tp, index);
+	if (dl_choose_rarest(p, &index) == 0) {
+	    pc = dl_new_piece(tp, index);
 	    if (pc != NULL)
-		count += cm_piece_assign_requests(pc, p);
+		count += dl_piece_assign_requests(pc, p);
 	} else
 	    break;
     }
@@ -467,7 +467,7 @@ cm_assign_requests(struct peer *p)
 }
 
 void
-cm_unassign_requests(struct peer *p)
+dl_unassign_requests(struct peer *p)
 {
     while (p->nreqs_out > 0) {
 	struct block_request *req = BTPDQ_FIRST(&p->my_reqs);
@@ -495,13 +495,13 @@ cm_unassign_requests(struct peer *p)
 	}
 
 	if (was_full && !piece_full(pc))
-	    cm_on_piece_unfull(pc);
+	    dl_on_piece_unfull(pc);
     }
     assert(BTPDQ_EMPTY(&p->my_reqs));
 }
 
 static void
-cm_piece_assign_requests_eg(struct piece *pc, struct peer *p)
+dl_piece_assign_requests_eg(struct piece *pc, struct peer *p)
 {
     unsigned first_block = pc->next_block;
     do {
@@ -521,7 +521,7 @@ cm_piece_assign_requests_eg(struct piece *pc, struct peer *p)
 }
 
 void
-cm_assign_requests_eg(struct peer *p)
+dl_assign_requests_eg(struct peer *p)
 {
     assert(!peer_laden(p));
     struct torrent *tp = p->tp;
@@ -532,7 +532,7 @@ cm_assign_requests_eg(struct peer *p)
     while (!peer_laden(p) && pc != NULL) {
 	struct piece *next = BTPDQ_NEXT(pc, entry);
 	if (peer_has(p, pc->index) && pc->nblocks != pc->ngot) {
-	    cm_piece_assign_requests_eg(pc, p);
+	    dl_piece_assign_requests_eg(pc, p);
 	    BTPDQ_REMOVE(&tp->getlst, pc, entry);
 	    BTPDQ_INSERT_HEAD(&tmp, pc, entry);
 	}
@@ -542,13 +542,13 @@ cm_assign_requests_eg(struct peer *p)
     pc = BTPDQ_FIRST(&tmp);
     while (pc != NULL) {
 	struct piece *next = BTPDQ_NEXT(pc, entry);
-	cm_piece_insert_eg(pc);
+	dl_piece_insert_eg(pc);
 	pc = next;
     }
 }
 
 void
-cm_unassign_requests_eg(struct peer *p)
+dl_unassign_requests_eg(struct peer *p)
 {
     struct block_request *req;
     struct piece *pc;
@@ -580,7 +580,7 @@ cm_unassign_requests_eg(struct peer *p)
     pc = BTPDQ_FIRST(&tmp);
     while (pc != NULL) {
 	struct piece *next = BTPDQ_NEXT(pc, entry);
-	cm_piece_insert_eg(pc);
+	dl_piece_insert_eg(pc);
 	pc = next;
     }
 }

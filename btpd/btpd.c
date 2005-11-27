@@ -106,7 +106,7 @@ heartbeat_cb(int sd, short type, void *arg)
     btpd_seconds++;
 
     BTPDQ_FOREACH(tp, &m_torrents, entry)
-	cm_by_second(tp);
+	dl_by_second(tp);
 
     evtimer_add(&m_heartbeat, (& (struct timeval) { 1, 0 }));
 }

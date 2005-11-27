@@ -26,9 +26,9 @@ peer_kill(struct peer *p)
     btpd_log(BTPD_L_CONN, "killed peer %p\n", p);
 
     if (p->flags & PF_ATTACHED)
-	cm_on_lost_peer(p);
+	dl_on_lost_peer(p);
     else
-	BTPDQ_REMOVE(&net_unattached, p, cm_entry);
+	BTPDQ_REMOVE(&net_unattached, p, p_entry);
     if (p->flags & PF_ON_READQ)
 	BTPDQ_REMOVE(&net_bw_readq, p, rq_entry);
     if (p->flags & PF_ON_WRITEQ)
@@ -268,7 +268,7 @@ peer_create_common(int sd)
     event_set(&p->in_ev, p->sd, EV_READ, net_read_cb, p);
     event_add(&p->in_ev, NULL);
 
-    BTPDQ_INSERT_TAIL(&net_unattached, p, cm_entry);
+    BTPDQ_INSERT_TAIL(&net_unattached, p, p_entry);
     net_npeers++;
     return p;
 }
@@ -348,7 +348,7 @@ peer_on_shake(struct peer *p)
             peer_send(p, nb_create_bitdata(p->tp));
         }
     }
-    cm_on_new_peer(p);
+    dl_on_new_peer(p);
 }
 
 void
@@ -361,7 +361,7 @@ peer_on_choke(struct peer *p)
 	if (p->nreqs_out > 0)
 	    peer_on_no_reqs(p);
 	p->flags |= PF_P_CHOKE;
-	cm_on_choke(p);
+	dl_on_choke(p);
 	struct nb_link *nl = BTPDQ_FIRST(&p->outq);
 	while (nl != NULL) {
 	    struct nb_link *next = BTPDQ_NEXT(nl, entry);
@@ -380,7 +380,7 @@ peer_on_unchoke(struct peer *p)
 	return;
     else {
 	p->flags &= ~PF_P_CHOKE;
-	cm_on_unchoke(p);
+	dl_on_unchoke(p);
     }
 }
 
@@ -392,7 +392,7 @@ peer_on_interest(struct peer *p)
 	return;
     else {
 	p->flags |= PF_P_WANT;
-	cm_on_interest(p);
+	dl_on_interest(p);
     }
 }
 
@@ -404,7 +404,7 @@ peer_on_uninterest(struct peer *p)
 	return;
     else {
 	p->flags &= ~PF_P_WANT;
-	cm_on_uninterest(p);
+	dl_on_uninterest(p);
     }
 }
 
@@ -415,7 +415,7 @@ peer_on_have(struct peer *p, uint32_t index)
     if (!has_bit(p->piece_field, index)) {
 	set_bit(p->piece_field, index);
 	p->npieces++;
-	cm_on_piece_ann(p, index);
+	dl_on_piece_ann(p, index);
     }
 }
 
@@ -428,7 +428,7 @@ peer_on_bitfield(struct peer *p, const uint8_t *field)
     for (uint32_t i = 0; i < p->tp->meta.npieces; i++) {
 	if (has_bit(p->piece_field, i)) {
 	    p->npieces++;
-	    cm_on_piece_ann(p, i);
+	    dl_on_piece_ann(p, i);
 	}
     }
 }
@@ -449,7 +449,7 @@ peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
 	assert(p->nreqs_out > 0);
 	p->nreqs_out--;
 	BTPDQ_REMOVE(&p->my_reqs, req, p_entry);
-	cm_on_block(p, req, index, begin, length, data);
+	dl_on_block(p, req, index, begin, length, data);
 	if (p->nreqs_out == 0)
 	    peer_on_no_reqs(p);
     } else

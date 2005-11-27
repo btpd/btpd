@@ -37,7 +37,7 @@ choke_alg(struct torrent *tp)
     struct peer *psort[tp->npeers];
 
     i = 0;
-    BTPDQ_FOREACH(p, &tp->peers, cm_entry)
+    BTPDQ_FOREACH(p, &tp->peers, p_entry)
 	psort[i++] = p;
     
     if (tp->have_npieces == tp->meta.npieces)
@@ -78,7 +78,7 @@ next_optimistic(struct torrent *tp, struct peer *np)
     else if (tp->optimistic == NULL)
 	tp->optimistic = BTPDQ_FIRST(&tp->peers);
     else {
-	np = BTPDQ_NEXT(tp->optimistic, cm_entry);
+	np = BTPDQ_NEXT(tp->optimistic, p_entry);
 	if (np != NULL)
 	    tp->optimistic = np;
 	else

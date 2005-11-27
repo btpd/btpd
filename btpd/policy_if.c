@@ -5,7 +5,7 @@
 #include "tracker_req.h"
 
 void
-cm_by_second(struct torrent *tp)
+dl_by_second(struct torrent *tp)
 {
     if (btpd_seconds == tp->tracker_time)
 	tracker_req(tp, TR_EMPTY);
@@ -19,7 +19,7 @@ cm_by_second(struct torrent *tp)
     struct peer *p;
     int ri = btpd_seconds % RATEHISTORY;
 
-    BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
+    BTPDQ_FOREACH(p, &tp->peers, p_entry) {
 	p->rate_to_me[ri] = 0;
 	p->rate_from_me[ri] = 0;
     }
@@ -29,103 +29,103 @@ cm_by_second(struct torrent *tp)
  * Called when a peer announces it's got a new piece.
  *
  * If the piece is missing or unfull we increase the peer's
- * wanted level and if possible call cm_on_download.
+ * wanted level and if possible call dl_on_download.
  */
 void
-cm_on_piece_ann(struct peer *p, uint32_t index)
+dl_on_piece_ann(struct peer *p, uint32_t index)
 {
     struct torrent *tp = p->tp;
     tp->piece_count[index]++;
     if (has_bit(tp->piece_field, index))
 	return;
-    struct piece *pc = cm_find_piece(tp, index);
+    struct piece *pc = dl_find_piece(tp, index);
     if (tp->endgame) {
 	assert(pc != NULL);
 	peer_want(p, index);
 	if (!peer_chokes(p) && !peer_laden(p))
-	    cm_assign_requests_eg(p);
+	    dl_assign_requests_eg(p);
     } else if (pc == NULL) {
 	peer_want(p, index);
 	if (!peer_chokes(p) && !peer_laden(p)) {
-	    pc = cm_new_piece(tp, index);
+	    pc = dl_new_piece(tp, index);
 	    if (pc != NULL)
-		cm_piece_assign_requests(pc, p);
+		dl_piece_assign_requests(pc, p);
 	}
     } else if (!piece_full(pc)) {
 	peer_want(p, index);
 	if (!peer_chokes(p) && !peer_laden(p))
-	    cm_piece_assign_requests(pc, p);
+	    dl_piece_assign_requests(pc, p);
     }
 }
 
 void
-cm_on_download(struct peer *p)
+dl_on_download(struct peer *p)
 {
     assert(peer_wanted(p));
     struct torrent *tp = p->tp;
     if (tp->endgame) {
-	cm_assign_requests_eg(p);
+	dl_assign_requests_eg(p);
     } else {
-	unsigned count = cm_assign_requests(p);
+	unsigned count = dl_assign_requests(p);
 	if (count == 0 && !p->tp->endgame) // We may have entered end game.
 	    assert(!peer_wanted(p) || peer_laden(p));
     }
 }
 
 void
-cm_on_unchoke(struct peer *p)
+dl_on_unchoke(struct peer *p)
 {
     if (peer_wanted(p))
-	cm_on_download(p);
+	dl_on_download(p);
 }
 
 void
-cm_on_undownload(struct peer *p)
+dl_on_undownload(struct peer *p)
 {
     if (!p->tp->endgame)
-	cm_unassign_requests(p);
+	dl_unassign_requests(p);
     else
-	cm_unassign_requests_eg(p);
+	dl_unassign_requests_eg(p);
 }
 
 void
-cm_on_choke(struct peer *p)
+dl_on_choke(struct peer *p)
 {
     if (p->nreqs_out > 0)
-	cm_on_undownload(p);
+	dl_on_undownload(p);
 }
 
 void
-cm_on_upload(struct peer *p)
+dl_on_upload(struct peer *p)
 {
     choke_alg(p->tp);
 }
 
 void
-cm_on_interest(struct peer *p)
+dl_on_interest(struct peer *p)
 {
     if ((p->flags & PF_I_CHOKE) == 0)
-	cm_on_upload(p);
+	dl_on_upload(p);
 }
 
 void
-cm_on_unupload(struct peer *p)
+dl_on_unupload(struct peer *p)
 {
     choke_alg(p->tp);
 }
 
 void
-cm_on_uninterest(struct peer *p)
+dl_on_uninterest(struct peer *p)
 {
     if ((p->flags & PF_I_CHOKE) == 0)
-	cm_on_unupload(p);
+	dl_on_unupload(p);
 }
 
 /**
  * Called when a piece has been tested positively.
  */
 void
-cm_on_ok_piece(struct piece *pc)
+dl_on_ok_piece(struct piece *pc)
 {
     struct peer *p;
     struct torrent *tp = pc->tp;
@@ -137,11 +137,11 @@ cm_on_ok_piece(struct piece *pc)
     msync(tp->imem, tp->isiz, MS_ASYNC);
 
     struct net_buf *have = nb_create_have(pc->index);
-    BTPDQ_FOREACH(p, &tp->peers, cm_entry)
+    BTPDQ_FOREACH(p, &tp->peers, p_entry)
 	peer_send(p, have);
 
     if (tp->endgame)
-	BTPDQ_FOREACH(p, &tp->peers, cm_entry)
+	BTPDQ_FOREACH(p, &tp->peers, p_entry)
 	    if (peer_has(p, pc->index))
 		peer_unwant(p, pc->index);
 
@@ -151,7 +151,7 @@ cm_on_ok_piece(struct piece *pc)
     if (torrent_has_all(tp)) {
 	btpd_log(BTPD_L_BTPD, "Finished: %s.\n", tp->relpath);
 	tracker_req(tp, TR_COMPLETED);
-	BTPDQ_FOREACH(p, &tp->peers, cm_entry)
+	BTPDQ_FOREACH(p, &tp->peers, p_entry)
 	    assert(p->nwant == 0);
     }
 }
@@ -160,7 +160,7 @@ cm_on_ok_piece(struct piece *pc)
  * Called when a piece has been tested negatively.
  */
 void
-cm_on_bad_piece(struct piece *pc)
+dl_on_bad_piece(struct piece *pc)
 {
     struct torrent *tp = pc->tp;
 
@@ -177,54 +177,54 @@ cm_on_bad_piece(struct piece *pc)
 
     if (tp->endgame) {
 	struct peer *p;
-	BTPDQ_FOREACH(p, &tp->peers, cm_entry) {
+	BTPDQ_FOREACH(p, &tp->peers, p_entry) {
 	    if (peer_has(p, pc->index) && peer_leech_ok(p) && !peer_laden(p))
-		cm_assign_requests_eg(p);
+		dl_assign_requests_eg(p);
 	}
     } else
-	cm_on_piece_unfull(pc); // XXX: May get bad data again.
+	dl_on_piece_unfull(pc); // XXX: May get bad data again.
 }
 
 void
-cm_on_new_peer(struct peer *p)
+dl_on_new_peer(struct peer *p)
 {
     struct torrent *tp = p->tp;
 
     tp->npeers++;
     p->flags |= PF_ATTACHED;
-    BTPDQ_REMOVE(&net_unattached, p, cm_entry);
+    BTPDQ_REMOVE(&net_unattached, p, p_entry);
 
     if (tp->npeers == 1) {
-	BTPDQ_INSERT_HEAD(&tp->peers, p, cm_entry);
+	BTPDQ_INSERT_HEAD(&tp->peers, p, p_entry);
 	next_optimistic(tp, p);
     } else {
 	if (random() > RAND_MAX / 3)
-	    BTPDQ_INSERT_AFTER(&tp->peers, tp->optimistic, p, cm_entry);
+	    BTPDQ_INSERT_AFTER(&tp->peers, tp->optimistic, p, p_entry);
 	else
-	    BTPDQ_INSERT_TAIL(&tp->peers, p, cm_entry);
+	    BTPDQ_INSERT_TAIL(&tp->peers, p, p_entry);
     }
 }
 
 void
-cm_on_lost_peer(struct peer *p)
+dl_on_lost_peer(struct peer *p)
 {
     struct torrent *tp = p->tp;
 
     tp->npeers--;
     p->flags &= ~PF_ATTACHED;
     if (tp->npeers == 0) {
-	BTPDQ_REMOVE(&tp->peers, p, cm_entry);
+	BTPDQ_REMOVE(&tp->peers, p, p_entry);
 	tp->optimistic = NULL;
 	tp->choke_time = tp->opt_time = 0;
     } else if (tp->optimistic == p) {
-	struct peer *next = BTPDQ_NEXT(p, cm_entry);
-	BTPDQ_REMOVE(&tp->peers, p, cm_entry);
+	struct peer *next = BTPDQ_NEXT(p, p_entry);
+	BTPDQ_REMOVE(&tp->peers, p, p_entry);
 	next_optimistic(tp, next);
     } else if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT) {
-	BTPDQ_REMOVE(&tp->peers, p, cm_entry);
-	cm_on_unupload(p);
+	BTPDQ_REMOVE(&tp->peers, p, p_entry);
+	dl_on_unupload(p);
     } else {
-	BTPDQ_REMOVE(&tp->peers, p, cm_entry);
+	BTPDQ_REMOVE(&tp->peers, p, p_entry);
     }
 
     for (uint32_t i = 0; i < tp->meta.npieces; i++)
@@ -232,20 +232,20 @@ cm_on_lost_peer(struct peer *p)
 	    tp->piece_count[i]--;
 
     if (p->nreqs_out > 0)
-	cm_on_undownload(p);
+	dl_on_undownload(p);
 #if 0
     struct piece *pc = BTPDQ_FIRST(&tp->getlst);
     while (pc != NULL) {
 	struct piece *next = BTPDQ_NEXT(pc, entry);
 	if (peer_has(p, pc->index) && tp->piece_count[pc->index] == 0)
-	    cm_on_peerless_piece(pc);
+	    dl_on_peerless_piece(pc);
 	pc = next;
     }
 #endif
 }
 
 void
-cm_on_block(struct peer *p, struct block_request *req,
+dl_on_block(struct peer *p, struct block_request *req,
     uint32_t index, uint32_t begin, uint32_t length, const char *data)
 {
     struct torrent *tp = p->tp;
@@ -268,18 +268,18 @@ cm_on_block(struct peer *p, struct block_request *req,
             pc->nreqs--;
         }
         nb_drop(cancel);
-        cm_piece_reorder_eg(pc);
+        dl_piece_reorder_eg(pc);
         req = BTPDQ_FIRST(&blk->reqs);
         while (req != NULL) {
             struct block_request *next = BTPDQ_NEXT(req, blk_entry);
             if (peer_leech_ok(req->p) && !peer_laden(req->p))
-                cm_assign_requests_eg(req->p);
+                dl_assign_requests_eg(req->p);
             free(req);
             req = next;
         }
         BTPDQ_INIT(&blk->reqs);
         if (pc->ngot == pc->nblocks)
-            cm_on_piece(pc);
+            dl_on_piece(pc);
     } else {
         BTPDQ_REMOVE(&blk->reqs, req, blk_entry);
         free(req);
@@ -288,8 +288,8 @@ cm_on_block(struct peer *p, struct block_request *req,
 	clear_bit(pc->down_field, begin / PIECE_BLOCKLEN);
 	pc->nbusy--;
 	if (pc->ngot == pc->nblocks)
-	    cm_on_piece(pc);
+	    dl_on_piece(pc);
 	if (peer_leech_ok(p) && !peer_laden(p))
-	    cm_assign_requests(p);
+	    dl_assign_requests(p);
     }
 }

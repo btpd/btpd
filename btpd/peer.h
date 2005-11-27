@@ -61,7 +61,7 @@ struct peer {
         size_t off;
     } net;
 
-    BTPDQ_ENTRY(peer) cm_entry;
+    BTPDQ_ENTRY(peer) p_entry;
 
     BTPDQ_ENTRY(peer) rq_entry;
     BTPDQ_ENTRY(peer) wq_entry;
