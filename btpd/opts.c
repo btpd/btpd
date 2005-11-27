@@ -10,5 +10,4 @@ uint32_t btpd_logmask =  BTPD_L_BTPD | BTPD_L_ERROR;
 unsigned net_max_peers;
 unsigned net_bw_limit_in;
 unsigned net_bw_limit_out;
-short net_bw_hz = 8;
 int net_port = 6881;

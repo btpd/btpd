@@ -12,7 +12,6 @@
 #define PF_INCOMING	0x100
 #define PF_DO_UNWANT	0x200
 
-#define RATEHISTORY 20
 #define MAXPIECEMSGS 128
 #define MAXPIPEDREQUESTS 10
 
@@ -47,8 +46,8 @@ struct peer {
     struct event in_ev;
     struct event out_ev;
 
-    unsigned long rate_to_me[RATEHISTORY];
-    unsigned long rate_from_me[RATEHISTORY];
+    long rate_up, rate_dwn;
+    long count_up, count_dwn;
 
     struct {
         uint32_t msg_len;
@@ -83,8 +82,6 @@ void peer_cancel(struct peer *p, struct block_request *req,
 
 int peer_requested(struct peer *p, struct block *blk);
 
-unsigned long peer_get_rate(unsigned long *rates);
-
 void peer_create_in(int sd);
 void peer_create_out(struct torrent *tp, const uint8_t *id,
     const char *ip, int port);
@@ -107,6 +104,8 @@ void peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
 void peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length);
 
+int peer_active_down(struct peer *p);
+int peer_active_up(struct peer *p);
 int peer_chokes(struct peer *p);
 int peer_wanted(struct peer *p);
 int peer_laden(struct peer *p);

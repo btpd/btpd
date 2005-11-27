@@ -9,15 +9,6 @@
 
 #include "btpd.h"
 
-unsigned long
-peer_get_rate(unsigned long *rates)
-{
-    unsigned long ret = 0;
-    for (int i = 0; i < RATEHISTORY; i++)
-	ret += rates[i];
-    return ret;
-}
-
 void
 peer_kill(struct peer *p)
 {
@@ -524,4 +515,17 @@ int
 peer_leech_ok(struct peer *p)
 {
     return (p->flags & (PF_I_WANT|PF_P_CHOKE)) == PF_I_WANT;
+}
+
+int
+peer_active_down(struct peer *p)
+{
+    return peer_leech_ok(p) || p->nreqs_out > 0;
+}
+
+int
+peer_active_up(struct peer *p)
+{
+    return (p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT
+	|| p->npiece_msgs > 0;
 }

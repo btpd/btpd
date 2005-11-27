@@ -1,7 +1,7 @@
 #include "btpd.h"
 
 static int
-rate_cmp(unsigned long rate1, unsigned long rate2)
+rate_cmp(long rate1, long rate2)
 {
     if (rate1 < rate2)
 	return -1;
@@ -14,16 +14,16 @@ rate_cmp(unsigned long rate1, unsigned long rate2)
 static int
 dwnrate_cmp(const void *p1, const void *p2)
 {
-    unsigned long rate1 = peer_get_rate((*(struct peer **)p1)->rate_to_me);
-    unsigned long rate2 = peer_get_rate((*(struct peer **)p2)->rate_to_me);
+    long rate1 = (*(struct peer **)p1)->rate_dwn;
+    long rate2 = (*(struct peer **)p2)->rate_dwn;
     return rate_cmp(rate1, rate2);
 }
 
 static int
 uprate_cmp(const void *p1, const void *p2)
 {
-    unsigned long rate1 = peer_get_rate((*(struct peer **)p1)->rate_from_me);
-    unsigned long rate2 = peer_get_rate((*(struct peer **)p2)->rate_from_me);
+    long rate1 = (*(struct peer **)p1)->rate_up;
+    long rate2 = (*(struct peer **)p2)->rate_up;
     return rate_cmp(rate1, rate2);
 }
 

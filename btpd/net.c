@@ -101,7 +101,7 @@ net_write(struct peer *p, unsigned long wmax)
 	    peer_sent(p, nl->nb);
 	    if (nl->nb->type == NB_TORRENTDATA) {
 		p->tp->uploaded += bufdelta;
-		p->rate_from_me[btpd_seconds % RATEHISTORY] += bufdelta;
+		p->count_up += bufdelta;
 	    }
 	    bcount -= bufdelta;
 	    BTPDQ_REMOVE(&p->outq, nl, entry);
@@ -112,7 +112,7 @@ net_write(struct peer *p, unsigned long wmax)
 	} else {
 	    if (nl->nb->type == NB_TORRENTDATA) {
 		p->tp->uploaded += bcount;
-		p->rate_from_me[btpd_seconds % RATEHISTORY] += bcount;
+		p->count_up += bcount;
 	    }
 	    p->outq_off +=  bcount;
 	    bcount = 0;
@@ -221,7 +221,7 @@ net_progress(struct peer *p, size_t length)
 {
     if (p->net.state == BTP_MSGBODY && p->net.msg_num == MSG_PIECE) {
 	p->tp->downloaded += length;
-	p->rate_to_me[btpd_seconds % RATEHISTORY] += length;
+	p->count_dwn += length;
     }
 }
 
@@ -435,14 +435,37 @@ net_connection_cb(int sd, short type, void *arg)
     btpd_log(BTPD_L_CONN, "got connection.\n");
 }
 
-void
-add_bw_timer(void)
+#define RATEHISTORY 20
+
+long
+compute_rate_sub(long rate)
 {
-    long wait = 1000000 / net_bw_hz;
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    wait = wait - now.tv_usec % wait;
-    evtimer_add(&m_bw_timer, (& (struct timeval) { 0, wait}));
+    if (rate > 256 * RATEHISTORY)
+	return rate / RATEHISTORY;
+    else
+	return 256;
+}
+
+static void
+compute_peer_rates(void) {
+    struct torrent *tp;
+    BTPDQ_FOREACH(tp, btpd_get_torrents(), entry) {
+	struct peer *p;
+	BTPDQ_FOREACH(p, &tp->peers, p_entry) {
+	    if (p->count_up > 0 || peer_active_up(p)) {
+		p->rate_up += p->count_up - compute_rate_sub(p->rate_up);
+		if (p->rate_up < 0)
+		    p->rate_up = 0;
+		p->count_up = 0;
+	    }
+	    if (p->count_dwn > 0 || peer_active_down(p)) {
+		p->rate_dwn += p->count_dwn - compute_rate_sub(p->rate_dwn);
+		if (p->rate_dwn < 0)
+		    p->rate_dwn = 0;
+		p->count_dwn = 0;
+	    }
+	}
+    }
 }
 
 void
@@ -450,8 +473,12 @@ net_bw_cb(int sd, short type, void *arg)
 {
     struct peer *p;
 
-    m_bw_bytes_out = net_bw_limit_out / net_bw_hz;
-    m_bw_bytes_in = net_bw_limit_in / net_bw_hz;
+    evtimer_add(&m_bw_timer, (& (struct timeval) { 1, 0 }));
+
+    compute_peer_rates();
+
+    m_bw_bytes_out = net_bw_limit_out;
+    m_bw_bytes_in = net_bw_limit_in;
 
     if (net_bw_limit_in > 0) {
 	while ((p = BTPDQ_FIRST(&net_bw_readq)) != NULL && m_bw_bytes_in > 0) {
@@ -480,7 +507,6 @@ net_bw_cb(int sd, short type, void *arg)
 	    net_write(p, 0);
 	}
     }
-    add_bw_timer();
 }
 
 void
@@ -519,8 +545,8 @@ net_write_cb(int sd, short type, void *arg)
 void
 net_init(void)
 {
-    m_bw_bytes_out = net_bw_limit_out / net_bw_hz;
-    m_bw_bytes_in = net_bw_limit_in / net_bw_hz;
+    m_bw_bytes_out = net_bw_limit_out;
+    m_bw_bytes_in = net_bw_limit_in;
 
     int nfiles = getdtablesize();
     if (nfiles <= 20)
@@ -553,6 +579,5 @@ net_init(void)
     event_add(&m_net_incoming, NULL);
 
     evtimer_set(&m_bw_timer, net_bw_cb, NULL);
-    if (net_bw_limit_out > 0 || net_bw_limit_in > 0)
-	add_bw_timer();
+    evtimer_add(&m_bw_timer, (& (struct timeval) { 1, 0 }));
 }

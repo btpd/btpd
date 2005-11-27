@@ -118,7 +118,6 @@ static int longval = 0;
 
 static struct option longopts[] = {
     { "port",	required_argument,	NULL,		'p' },
-    { "bw-hz",	required_argument,	&longval,	6 },
     { "bw-in",	required_argument,	&longval,	1 },
     { "bw-out",	required_argument,	&longval,	2 },
     { "help",	no_argument,		&longval,	5 },
@@ -149,9 +148,6 @@ main(int argc, char **argv)
 		break;
 	    case 2:
 		net_bw_limit_out = atoi(optarg) * 1024;
-		break;
-	    case 6:
-		net_bw_hz = atoi(optarg);
 		break;
 	    default:
 		usage();
