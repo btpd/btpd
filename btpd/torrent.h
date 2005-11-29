@@ -52,10 +52,6 @@ struct torrent {
 
     uint64_t uploaded, downloaded;
     
-    unsigned long choke_time;
-    unsigned long opt_time;
-    unsigned long tracker_time;    
-
     short ndown;
     struct peer *optimistic;
     

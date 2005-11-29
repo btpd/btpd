@@ -38,7 +38,6 @@ cmd_stat(int argc, const char *args, FILE *fp)
     errdie(buf_swrite(&iob, "d"));
     errdie(buf_print(&iob, "6:npeersi%ue", net_npeers));
     errdie(buf_print(&iob, "9:ntorrentsi%ue", btpd_get_ntorrents()));
-    errdie(buf_print(&iob, "7:secondsi%lue", btpd_seconds));
     errdie(buf_swrite(&iob, "8:torrentsl"));
     BTPDQ_FOREACH(tp, btpd_get_torrents(), entry) {
         uint32_t seen_npieces = 0;

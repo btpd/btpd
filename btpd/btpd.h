@@ -22,14 +22,13 @@
 #include "net.h"
 #include "peer.h"
 #include "torrent.h"
-#include "policy.h"
+#include "download.h"
+#include "upload.h"
 #include "subr.h"
 
 #include "opts.h"
 
 #define BTPD_VERSION (PACKAGE_NAME "/" PACKAGE_VERSION)
-
-extern unsigned long btpd_seconds;
 
 #define BTPD_L_ALL	0xffffffff
 #define BTPD_L_ERROR	0x00000001

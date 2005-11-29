@@ -4,19 +4,6 @@
 #include "btpd.h"
 #include "tracker_req.h"
 
-void
-dl_by_second(struct torrent *tp)
-{
-    if (btpd_seconds == tp->tracker_time)
-	tracker_req(tp, TR_EMPTY);
-
-    if (btpd_seconds == tp->opt_time)
-	next_optimistic(tp, NULL);
-
-    if (btpd_seconds == tp->choke_time)
-	choke_alg(tp);
-}
-
 /*
  * Called when a peer announces it's got a new piece.
  *
@@ -87,32 +74,6 @@ dl_on_choke(struct peer *p)
 	dl_on_undownload(p);
 }
 
-void
-dl_on_upload(struct peer *p)
-{
-    choke_alg(p->tp);
-}
-
-void
-dl_on_interest(struct peer *p)
-{
-    if ((p->flags & PF_I_CHOKE) == 0)
-	dl_on_upload(p);
-}
-
-void
-dl_on_unupload(struct peer *p)
-{
-    choke_alg(p->tp);
-}
-
-void
-dl_on_uninterest(struct peer *p)
-{
-    if ((p->flags & PF_I_CHOKE) == 0)
-	dl_on_unupload(p);
-}
-
 /**
  * Called when a piece has been tested positively.
  */
@@ -181,20 +142,11 @@ void
 dl_on_new_peer(struct peer *p)
 {
     struct torrent *tp = p->tp;
-
     tp->npeers++;
     p->flags |= PF_ATTACHED;
     BTPDQ_REMOVE(&net_unattached, p, p_entry);
-
-    if (tp->npeers == 1) {
-	BTPDQ_INSERT_HEAD(&tp->peers, p, p_entry);
-	next_optimistic(tp, p);
-    } else {
-	if (random() > RAND_MAX / 3)
-	    BTPDQ_INSERT_AFTER(&tp->peers, tp->optimistic, p, p_entry);
-	else
-	    BTPDQ_INSERT_TAIL(&tp->peers, p, p_entry);
-    }
+    BTPDQ_INSERT_HEAD(&tp->peers, p, p_entry);
+    ul_on_new_peer(p);
 }
 
 void
@@ -202,26 +154,15 @@ dl_on_lost_peer(struct peer *p)
 {
     struct torrent *tp = p->tp;
 
+    assert(tp->npeers > 0 && (p->flags & PF_ATTACHED) != 0);
     tp->npeers--;
     p->flags &= ~PF_ATTACHED;
-    if (tp->npeers == 0) {
-	BTPDQ_REMOVE(&tp->peers, p, p_entry);
-	tp->optimistic = NULL;
-	tp->choke_time = tp->opt_time = 0;
-    } else if (tp->optimistic == p) {
-	struct peer *next = BTPDQ_NEXT(p, p_entry);
-	BTPDQ_REMOVE(&tp->peers, p, p_entry);
-	next_optimistic(tp, next);
-    } else if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT) {
-	BTPDQ_REMOVE(&tp->peers, p, p_entry);
-	dl_on_unupload(p);
-    } else {
-	BTPDQ_REMOVE(&tp->peers, p, p_entry);
-    }
+
+    ul_on_lost_peer(p);
 
     for (uint32_t i = 0; i < tp->meta.npieces; i++)
-	if (peer_has(p, i))
-	    tp->piece_count[i]--;
+        if (peer_has(p, i))
+                tp->piece_count[i]--;
 
     if (p->nreqs_out > 0)
 	dl_on_undownload(p);

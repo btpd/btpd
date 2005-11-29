@@ -383,7 +383,7 @@ peer_on_interest(struct peer *p)
 	return;
     else {
 	p->flags |= PF_P_WANT;
-	dl_on_interest(p);
+	ul_on_interest(p);
     }
 }
 
@@ -395,7 +395,7 @@ peer_on_uninterest(struct peer *p)
 	return;
     else {
 	p->flags &= ~PF_P_WANT;
-	dl_on_uninterest(p);
+	ul_on_uninterest(p);
     }
 }
 

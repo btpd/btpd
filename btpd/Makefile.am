@@ -8,9 +8,10 @@ btpd_SOURCES=\
 	net_buf.c net_buf.h\
 	queue.h \
 	peer.c peer.h\
-	policy_choke.c policy_if.c policy_subr.c policy.h\
+	download.c download_subr.c download.h\
 	torrent.c torrent.h\
-	tracker_req.c tracker_req.h
+	tracker_req.c tracker_req.h\
+	upload.c upload.h
 
 btpd_LDADD=../misc/libmisc.a -levent -lcrypto -lm
 btpd_CPPFLAGS=-I$(top_srcdir)/misc @event_CPPFLAGS@ @openssl_CPPFLAGS@

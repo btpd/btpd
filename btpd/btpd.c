@@ -37,15 +37,12 @@ struct child {
 BTPDQ_HEAD(child_tq, child);
 
 static uint8_t m_peer_id[20];
-static struct event m_heartbeat;
 static struct event m_sigint;
 static struct event m_sigterm;
 static struct event m_sigchld;
 static struct child_tq m_kids = BTPDQ_HEAD_INITIALIZER(m_kids);
 static unsigned m_ntorrents;
 static struct torrent_tq m_torrents = BTPDQ_HEAD_INITIALIZER(m_torrents);
-
-unsigned long btpd_seconds;
 
 void
 btpd_shutdown(void)
@@ -96,19 +93,6 @@ child_cb(int signal, short type, void *arg)
 	    free(kid);
 	}
     }
-}
-
-static void
-heartbeat_cb(int sd, short type, void *arg)
-{
-    struct torrent *tp;
-
-    btpd_seconds++;
-
-    BTPDQ_FOREACH(tp, &m_torrents, entry)
-	dl_by_second(tp);
-
-    evtimer_add(&m_heartbeat, (& (struct timeval) { 1, 0 }));
 }
 
 void
@@ -165,6 +149,7 @@ btpd_init(void)
 
     net_init();
     ipc_init();
+    ul_init();
 
     signal(SIGPIPE, SIG_IGN);
 
@@ -174,7 +159,4 @@ btpd_init(void)
     signal_add(&m_sigterm, NULL);
     signal_set(&m_sigchld, SIGCHLD, child_cb, NULL);
     signal_add(&m_sigchld, NULL);
-
-    evtimer_set(&m_heartbeat, heartbeat_cb,  NULL);
-    evtimer_add(&m_heartbeat, (& (struct timeval) { 1, 0 }));
 }

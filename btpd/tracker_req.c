@@ -100,7 +100,7 @@ tracker_done(pid_t pid, void *arg)
 	goto out;
     }
 
-    tp->tracker_time = btpd_seconds + interval;
+    //tp->tracker_time = btpd_seconds + interval;
 
     int error = 0;
     size_t length;
@@ -134,7 +134,7 @@ out:
 	        "Start request failed for %s.\n", tp->relpath);
 	    torrent_unload(tp);
 	} else
-	    tp->tracker_time = btpd_seconds + 10;
+            ;//tp->tracker_time = btpd_seconds + 10;
     }
     munmap(req->res, REQ_SIZE);
     free(req);
