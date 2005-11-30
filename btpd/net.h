@@ -31,7 +31,9 @@ enum net_state {
 void net_set_state(struct peer *p, enum net_state state, size_t size);
 
 void net_init(void);
-void net_bw_cb(int sd, short type, void *arg);
+
+void net_add_torrent(struct torrent *tp);
+void net_del_torrent(struct torrent *tp);
 
 void net_read_cb(int sd, short type, void *arg);
 void net_write_cb(int sd, short type, void *arg);

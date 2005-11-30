@@ -26,11 +26,41 @@ static unsigned long m_bw_bytes_out;
 
 static struct event m_net_incoming;
 
+static unsigned m_ntorrents;
+static struct torrent_tq m_torrents = BTPDQ_HEAD_INITIALIZER(m_torrents);
+
 unsigned net_npeers;
 
 struct peer_tq net_bw_readq = BTPDQ_HEAD_INITIALIZER(net_bw_readq);
 struct peer_tq net_bw_writeq = BTPDQ_HEAD_INITIALIZER(net_bw_writeq);
 struct peer_tq net_unattached = BTPDQ_HEAD_INITIALIZER(net_unattached);
+
+void
+net_add_torrent(struct torrent *tp)
+{
+    BTPDQ_INSERT_HEAD(&m_torrents, tp, net_entry);
+    m_ntorrents++;
+    dl_start(tp);
+}
+
+void
+net_del_torrent(struct torrent *tp)
+{
+    assert(m_ntorrents > 0);
+    m_ntorrents--;
+    BTPDQ_REMOVE(&m_torrents, tp, net_entry);
+
+    ul_on_lost_torrent(tp);
+    dl_stop(tp);
+
+    struct peer *p = BTPDQ_FIRST(&net_unattached);
+    while (p != NULL) {
+	struct peer *next = BTPDQ_NEXT(p, p_entry);
+	if (p->tp == tp)
+	    peer_kill(p);
+	p = next;
+    }
+}
 
 void
 net_write32(void *buf, uint32_t num)
@@ -236,7 +266,10 @@ net_state(struct peer *p, const char *buf)
         break;
     case SHAKE_INFO:
 	if (p->flags & PF_INCOMING) {
-	    struct torrent *tp = btpd_get_torrent(buf);
+	    struct torrent *tp;
+            BTPDQ_FOREACH(tp, &m_torrents, net_entry)
+                if (bcmp(buf, tp->meta.info_hash, 20) == 0)
+                    break;
 	    if (tp == NULL)
 		goto bad;
 	    p->tp = tp;
@@ -449,7 +482,7 @@ compute_rate_sub(long rate)
 static void
 compute_peer_rates(void) {
     struct torrent *tp;
-    BTPDQ_FOREACH(tp, btpd_get_torrents(), entry) {
+    BTPDQ_FOREACH(tp, &m_torrents, net_entry) {
 	struct peer *p;
 	BTPDQ_FOREACH(p, &tp->peers, p_entry) {
 	    if (p->count_up > 0 || peer_active_up(p)) {

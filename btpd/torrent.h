@@ -36,6 +36,7 @@ struct torrent {
     struct metainfo meta;
 
     BTPDQ_ENTRY(torrent) entry;
+    BTPDQ_ENTRY(torrent) net_entry;
 
     void *imem;
     size_t isiz;
@@ -51,9 +52,6 @@ struct torrent {
     unsigned *piece_count;
 
     uint64_t uploaded, downloaded;
-    
-    short ndown;
-    struct peer *optimistic;
     
     unsigned npeers;
     struct peer_tq peers;

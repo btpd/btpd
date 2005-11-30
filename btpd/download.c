@@ -4,6 +4,30 @@
 #include "btpd.h"
 #include "tracker_req.h"
 
+void
+dl_start(struct torrent *tp)
+{
+}
+
+void
+dl_stop(struct torrent *tp)
+{
+    struct peer *peer;
+    struct piece *piece;
+
+    peer = BTPDQ_FIRST(&tp->peers);
+    while (peer != NULL) {
+        struct peer *next = BTPDQ_NEXT(peer, p_entry);
+	BTPDQ_REMOVE(&tp->peers, peer, p_entry);
+	BTPDQ_INSERT_TAIL(&net_unattached, peer, p_entry);
+        peer->flags &= ~PF_ATTACHED;
+        peer = next;
+    }
+
+    while ((piece = BTPDQ_FIRST(&tp->getlst)) != NULL)
+	piece_free(piece);
+}
+
 /*
  * Called when a peer announces it's got a new piece.
  *
@@ -146,7 +170,6 @@ dl_on_new_peer(struct peer *p)
     p->flags |= PF_ATTACHED;
     BTPDQ_REMOVE(&net_unattached, p, p_entry);
     BTPDQ_INSERT_HEAD(&tp->peers, p, p_entry);
-    ul_on_new_peer(p);
 }
 
 void
@@ -157,8 +180,6 @@ dl_on_lost_peer(struct peer *p)
     assert(tp->npeers > 0 && (p->flags & PF_ATTACHED) != 0);
     tp->npeers--;
     p->flags &= ~PF_ATTACHED;
-
-    ul_on_lost_peer(p);
 
     for (uint32_t i = 0; i < tp->meta.npieces; i++)
         if (peer_has(p, i))

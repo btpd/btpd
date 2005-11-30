@@ -20,6 +20,9 @@ void dl_piece_reorder_eg(struct piece *pc);
 
 // download.c
 
+void dl_start(struct torrent *tp);
+void dl_stop(struct torrent *tp);
+
 void dl_on_new_peer(struct peer *p);
 void dl_on_lost_peer(struct peer *p);
 

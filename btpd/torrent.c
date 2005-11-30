@@ -63,6 +63,7 @@ torrent_load3(const char *file, struct metainfo *mi, char *mem, size_t memsiz)
     free(mi);
 
     btpd_add_torrent(tp);
+    net_add_torrent(tp);
 
     tracker_req(tp, TR_STARTED);
 
@@ -149,32 +150,11 @@ torrent_load(const char *name)
 void
 torrent_unload(struct torrent *tp)
 {
-    struct peer *peer;
-    struct piece *piece;
-
     btpd_log(BTPD_L_BTPD, "Unloading %s.\n", tp->relpath);
 
+    net_del_torrent(tp);
+
     tracker_req(tp, TR_STOPPED);
-
-    peer = BTPDQ_FIRST(&tp->peers);
-    while (peer != NULL) {
-        struct peer *next = BTPDQ_NEXT(peer, p_entry);
-	BTPDQ_REMOVE(&tp->peers, peer, p_entry);
-	BTPDQ_INSERT_TAIL(&net_unattached, peer, p_entry);
-        peer->flags &= ~PF_ATTACHED;
-        peer = next;
-    }
-
-    peer = BTPDQ_FIRST(&net_unattached);
-    while (peer != NULL) {
-	struct peer *next = BTPDQ_NEXT(peer, p_entry);
-	if (peer->tp == tp)
-	    peer_kill(peer);
-	peer = next;
-    }
-
-    while ((piece = BTPDQ_FIRST(&tp->getlst)) != NULL)
-	piece_free(piece);
 
     free(tp->piece_count);
     free(tp->busy_field);
