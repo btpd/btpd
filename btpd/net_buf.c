@@ -123,12 +123,12 @@ nb_create_multihave(struct torrent *tp)
 {
     struct net_buf *out = nb_create_alloc(NB_MULTIHAVE, 9 * tp->have_npieces);
     for (uint32_t i = 0, count = 0; count < tp->have_npieces; i++) {
-	if (has_bit(tp->piece_field, i)) {
-	    net_write32(out->buf + count * 9, 5);
-	    out->buf[count * 9 + 4] = MSG_HAVE;
-	    net_write32(out->buf + count * 9 + 5, i);
-	    count++;
-	}
+        if (has_bit(tp->piece_field, i)) {
+            net_write32(out->buf + count * 9, 5);
+            out->buf[count * 9 + 4] = MSG_HAVE;
+            net_write32(out->buf + count * 9 + 5, i);
+            count++;
+        }
     }
     return out;
 }
@@ -137,7 +137,7 @@ struct net_buf *
 nb_create_unchoke(void)
 {
     if (m_unchoke == NULL)
-	m_unchoke = nb_singleton(nb_create_onesized(MSG_UNCHOKE, NB_UNCHOKE));
+        m_unchoke = nb_singleton(nb_create_onesized(MSG_UNCHOKE, NB_UNCHOKE));
     return m_unchoke;
 }
 
@@ -145,7 +145,7 @@ struct net_buf *
 nb_create_choke(void)
 {
     if (m_choke == NULL)
-	m_choke = nb_singleton(nb_create_onesized(MSG_CHOKE, NB_CHOKE));
+        m_choke = nb_singleton(nb_create_onesized(MSG_CHOKE, NB_CHOKE));
     return m_choke;
 }
 
@@ -153,8 +153,8 @@ struct net_buf *
 nb_create_uninterest(void)
 {
     if (m_uninterest == NULL)
-	m_uninterest =
-	    nb_singleton(nb_create_onesized(MSG_UNINTEREST, NB_UNINTEREST));
+        m_uninterest =
+            nb_singleton(nb_create_onesized(MSG_UNINTEREST, NB_UNINTEREST));
     return m_uninterest;
 }
 
@@ -162,8 +162,8 @@ struct net_buf *
 nb_create_interest(void)
 {
     if (m_interest == NULL)
-	m_interest =
-	    nb_singleton(nb_create_onesized(MSG_INTEREST, NB_INTEREST));
+        m_interest =
+            nb_singleton(nb_create_onesized(MSG_INTEREST, NB_INTEREST));
     return m_interest;
 }
 
@@ -183,7 +183,7 @@ nb_create_bitdata(struct torrent *tp)
 {
     uint32_t plen = ceil(tp->meta.npieces / 8.0);
     struct net_buf *out =
-	nb_create_set(NB_BITDATA, tp->piece_field, plen, kill_buf_no);
+        nb_create_set(NB_BITDATA, tp->piece_field, plen, kill_buf_no);
     return out;
 }
 
@@ -205,9 +205,9 @@ nb_get_index(struct net_buf *nb)
     case NB_HAVE:
     case NB_PIECE:
     case NB_REQUEST:
-	return net_read32(nb->buf + 5);
+        return net_read32(nb->buf + 5);
     default:
-	abort();
+        abort();
     }
 }
 
@@ -218,9 +218,9 @@ nb_get_begin(struct net_buf *nb)
     case NB_CANCEL:
     case NB_PIECE:
     case NB_REQUEST:
-	return net_read32(nb->buf + 9);
+        return net_read32(nb->buf + 9);
     default:
-	abort();
+        abort();
     }
 }
 
@@ -230,11 +230,11 @@ nb_get_length(struct net_buf *nb)
     switch (nb->type) {
     case NB_CANCEL:
     case NB_REQUEST:
-	return net_read32(nb->buf + 13);
+        return net_read32(nb->buf + 13);
     case NB_PIECE:
-	return net_read32(nb->buf) - 9;
+        return net_read32(nb->buf) - 9;
     default:
-	abort();
+        abort();
     }
 }
 
@@ -244,11 +244,11 @@ nb_drop(struct net_buf *nb)
     assert(nb->refs > 0);
     nb->refs--;
     if (nb->refs == 0) {
-	nb->kill_buf(nb->buf, nb->len);
-	free(nb);
-	return 1;
+        nb->kill_buf(nb->buf, nb->len);
+        free(nb);
+        return 1;
     } else
-	return 0;
+        return 0;
 }
 
 void

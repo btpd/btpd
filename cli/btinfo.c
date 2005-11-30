@@ -27,26 +27,26 @@ main(int argc, char **argv)
     int ch;
 
     while ((ch = getopt_long(argc, argv, "", longopts, NULL)) != -1)
-	usage();
+        usage();
 
     argc -= optind;
     argv += optind;
 
     if (argc < 1)
-	usage();
+        usage();
 
     while (argc > 0) {
-	struct metainfo *mi;
+        struct metainfo *mi;
 
-	if ((errno = load_metainfo(*argv, -1, 1, &mi)) != 0)
-	    err(1, "load_metainfo: %s", *argv);
+        if ((errno = load_metainfo(*argv, -1, 1, &mi)) != 0)
+            err(1, "load_metainfo: %s", *argv);
 
-	print_metainfo(mi);
-	clear_metainfo(mi);
-	free(mi);
+        print_metainfo(mi);
+        clear_metainfo(mi);
+        free(mi);
 
-	argc--;
-	argv++;
+        argc--;
+        argv++;
     }
 
     return 0;

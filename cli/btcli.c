@@ -24,16 +24,16 @@ static void
 usage()
 {
     printf("Usage: btcli command [options] [files]\n"
-	   "Commands:\n"
-	   "add <file_1> ... [file_n]\n"
-	   "\tAdd the given torrents to btpd.\n"
-	   "\n"
-	   "del <file_1> ... [file_n]\n"
-	   "\tRemove the given torrents from btpd.\n"
-	   "\n"
-	   "die\n"
-	   "\tShut down btpd.\n"
-	   "\n"
+           "Commands:\n"
+           "add <file_1> ... [file_n]\n"
+           "\tAdd the given torrents to btpd.\n"
+           "\n"
+           "del <file_1> ... [file_n]\n"
+           "\tRemove the given torrents from btpd.\n"
+           "\n"
+           "die\n"
+           "\tShut down btpd.\n"
+           "\n"
            "list\n"
            "\tList active torrents.\n"
            "\n"
@@ -47,13 +47,13 @@ usage()
            "-w n\n"
            "\tRepeat every n seconds.\n"
            "\n"
-	   "Common options:\n"
-	   "--ipc key\n"
-	   "\tTalk to the btpd started with the same key.\n"
-	   "\n"
-	   "--help\n"
-	   "\tShow this help.\n"
-	   "\n");
+           "Common options:\n"
+           "--ipc key\n"
+           "\tTalk to the btpd started with the same key.\n"
+           "\n"
+           "--help\n"
+           "\tShow this help.\n"
+           "\n");
     exit(1);
 }
 
@@ -62,12 +62,12 @@ handle_error(int error)
 {
     switch (error) {
     case 0:
-	break;
+        break;
     case ENOENT:
     case ECONNREFUSED:
-	errx(1, "Couldn't connect. Check that btpd is running.");
+        errx(1, "Couldn't connect. Check that btpd is running.");
     default:
-	errx(1, "%s", strerror(error));
+        errx(1, "%s", strerror(error));
     }
 }
 
@@ -76,11 +76,11 @@ do_ipc_open(char *ipctok, struct ipc **ipc)
 {
     switch (ipc_open(ipctok, ipc)) {
     case 0:
-	break;
+        break;
     case EINVAL:
-	errx(1, "--ipc argument only takes letters and digits.");
+        errx(1, "--ipc argument only takes letters and digits.");
     case ENAMETOOLONG:
-	errx(1, "--ipc argument is too long.");
+        errx(1, "--ipc argument is too long.");
     }
 }
 
@@ -96,10 +96,10 @@ hash_cb(uint32_t index, uint8_t *hash, void *arg)
 {
     struct cb *cb = arg;
     if (hash != NULL)
-	if (bcmp(hash, cb->meta->piece_hash[index], SHA_DIGEST_LENGTH) == 0) {
-	    set_bit(cb->piece_field, index);
+        if (bcmp(hash, cb->meta->piece_hash[index], SHA_DIGEST_LENGTH) == 0) {
+            set_bit(cb->piece_field, index);
             cb->have++;
-	}
+        }
     printf("\rTested: %5.1f%%", 100.0 * (index + 1) / cb->meta->npieces);
     fflush(stdout);
 }
@@ -120,7 +120,7 @@ gen_ifile(char *path)
     size_t field_len;
 
     if ((errno = load_metainfo(path, -1, 1, &mi)) != 0)
-	err(1, "load_metainfo: %s", path);
+        err(1, "load_metainfo: %s", path);
 
     field_len = ceil(mi->npieces / 8.0);
     cb.path = path;
@@ -129,24 +129,24 @@ gen_ifile(char *path)
     cb.meta = mi;
 
     if (cb.piece_field == NULL)
-	errx(1, "Out of memory.\n");
+        errx(1, "Out of memory.\n");
 
     if ((errno = bts_hashes(mi, fd_cb, hash_cb, &cb)) != 0)
-	err(1, "bts_hashes");
+        err(1, "bts_hashes");
     printf("\nHave: %5.1f%%\n", 100.0 * cb.have / cb.meta->npieces);
 
     if ((errno = vopen(&fd, O_WRONLY|O_CREAT, "%s.i", path)) != 0)
-	err(1, "opening %s.i", path);
+        err(1, "opening %s.i", path);
 
     if (ftruncate(fd, field_len + mi->npieces *
-	    (off_t)ceil(mi->piece_length / (double)(1 << 17))) < 0)
-	err(1, "ftruncate: %s", path);
+            (off_t)ceil(mi->piece_length / (double)(1 << 17))) < 0)
+        err(1, "ftruncate: %s", path);
 
     if (write(fd, cb.piece_field, field_len) != field_len)
-	err(1, "write %s.i", path);
+        err(1, "write %s.i", path);
 
     if (close(fd) < 0)
-	err(1, "close %s.i", path);
+        err(1, "close %s.i", path);
 
     clear_metainfo(mi);
     free(mi);
@@ -173,45 +173,45 @@ cmd_add(int argc, char **argv)
     int ch;
     char *ipctok = NULL;
     while ((ch = getopt_long(argc, argv, "", add_opts, NULL)) != -1) {
-	switch(ch) {
-	case 1:
-	    ipctok = optarg;
-	    break;
-	default:
-	    usage();
-	}
+        switch(ch) {
+        case 1:
+            ipctok = optarg;
+            break;
+        default:
+            usage();
+        }
     }
     argc -= optind;
     argv += optind;
 
     if (argc < 1)
-	usage();
+        usage();
 
     for (int i = 0; i < argc; i++) {
-	int64_t code;
-	char *res;
-	int fd;
-	char *path;
-	errno = vopen(&fd, O_RDONLY, "%s.i", argv[i]);
-	if (errno == ENOENT) {
-	    printf("Testing %s for content.\n", argv[i]);
-	    gen_ifile(argv[i]);
-	} else if (errno != 0)
-	    err(1, "open %s.i", argv[i]);
-	else
-	    close(fd);
+        int64_t code;
+        char *res;
+        int fd;
+        char *path;
+        errno = vopen(&fd, O_RDONLY, "%s.i", argv[i]);
+        if (errno == ENOENT) {
+            printf("Testing %s for content.\n", argv[i]);
+            gen_ifile(argv[i]);
+        } else if (errno != 0)
+            err(1, "open %s.i", argv[i]);
+        else
+            close(fd);
 
-	if ((errno = canon_path(argv[i], &path)) != 0)
-	    err(1, "canon_path");
-	do_add(ipctok, &path, 1, &res);
-	free(path);
-	benc_dget_int64(benc_first(res), "code", &code);
-	if (code == EEXIST)
-	    printf("btpd already had %s.\n", argv[i]);
-	else if (code != 0) {
-	    printf("btpd indicates error: %s for %s.\n",
-	        strerror(code), argv[i]);
-	}
+        if ((errno = canon_path(argv[i], &path)) != 0)
+            err(1, "canon_path");
+        do_add(ipctok, &path, 1, &res);
+        free(path);
+        benc_dget_int64(benc_first(res), "code", &code);
+        if (code == EEXIST)
+            printf("btpd already had %s.\n", argv[i]);
+        else if (code != 0) {
+            printf("btpd indicates error: %s for %s.\n",
+                strerror(code), argv[i]);
+        }
         free(res);
     }
 }
@@ -237,45 +237,45 @@ cmd_del(int argc, char **argv)
     int ch;
     char *ipctok = NULL;
     while ((ch = getopt_long(argc, argv, "", del_opts, NULL)) != -1) {
-	switch(ch) {
-	case 1:
-	    ipctok = optarg;
-	    break;
-	default:
-	    usage();
-	}
+        switch(ch) {
+        case 1:
+            ipctok = optarg;
+            break;
+        default:
+            usage();
+        }
     }
     argc -= optind;
     argv += optind;
 
     if (argc < 1)
-	usage();
+        usage();
 
     uint8_t hashes[argc][20];
     char *res;
     const char *d;
 
     for (int i = 0; i < argc; i++) {
-	struct metainfo *mi;
-	if ((errno = load_metainfo(argv[i], -1, 0, &mi)) != 0)
-	    err(1, "load_metainfo: %s", argv[i]);
-	bcopy(mi->info_hash, hashes[i], 20);
-	clear_metainfo(mi);
-	free(mi);	
+        struct metainfo *mi;
+        if ((errno = load_metainfo(argv[i], -1, 0, &mi)) != 0)
+            err(1, "load_metainfo: %s", argv[i]);
+        bcopy(mi->info_hash, hashes[i], 20);
+        clear_metainfo(mi);
+        free(mi);
     }
-    
+
     do_del(ipctok, hashes, argc, &res);
     d = benc_first(res);
     for (int i = 0; i < argc; i++) {
-	int64_t code;
-	benc_dget_int64(d, "code", &code);
-	if (code == ENOENT)
-	    printf("btpd didn't have %s.\n", argv[i]);
-	else if (code != 0) {
-	    printf("btpd indicates error: %s for %s.\n",
-		   strerror(code), argv[i]);
-	}
-	d = benc_next(d);
+        int64_t code;
+        benc_dget_int64(d, "code", &code);
+        if (code == ENOENT)
+            printf("btpd didn't have %s.\n", argv[i]);
+        else if (code != 0) {
+            printf("btpd indicates error: %s for %s.\n",
+                   strerror(code), argv[i]);
+        }
+        d = benc_next(d);
     }
     free(res);
 }
@@ -302,13 +302,13 @@ cmd_die(int argc, char **argv)
     char *ipctok = NULL;
 
     while ((ch = getopt_long(argc, argv, "", die_opts, NULL)) != -1) {
-	switch (ch) {
-	case 1:
-	    ipctok = optarg;
-	    break;
-	default:
-	    usage();
-	}
+        switch (ch) {
+        case 1:
+            ipctok = optarg;
+            break;
+        default:
+            usage();
+        }
     }
     do_die(ipctok);
 }
@@ -420,14 +420,14 @@ grok_stat(char *ipctok, int iflag, int wait,
 again:
     do_stat(ipctok, &res);
     gettimeofday(&tv_cur, NULL);
-    if (old == NULL) 
-	ds = wait;
+    if (old == NULL)
+        ds = wait;
     else {
-	struct timeval delta;
-	timersub(&tv_old, &tv_cur, &delta);
-	ds = delta.tv_sec + delta.tv_usec / 1000000.0;
-	if (ds < 0)
-	    ds = wait;
+        struct timeval delta;
+        timersub(&tv_old, &tv_cur, &delta);
+        ds = delta.tv_sec + delta.tv_usec / 1000000.0;
+        if (ds < 0)
+            ds = wait;
     }
     tv_old = tv_cur;
     cur = parse_tors(res, hashes, nhashes);
@@ -484,7 +484,7 @@ cmd_stat(int argc, char **argv)
     int iflag = 0;
 
     while ((ch = getopt_long(argc, argv, "iw:", stat_opts, NULL)) != -1) {
-	switch (ch) {
+        switch (ch) {
         case 'i':
             iflag = 1;
             break;
@@ -493,12 +493,12 @@ cmd_stat(int argc, char **argv)
             if (wait <= 0)
                 errx(1, "-w argument must be an integer > 0.");
             break;
-	case 1:
-	    ipctok = optarg;
-	    break;
-	default:
-	    usage();
-	}
+        case 1:
+            ipctok = optarg;
+            break;
+        default:
+            usage();
+        }
     }
     argc -= optind;
     argv += optind;
@@ -531,13 +531,13 @@ cmd_list(int argc, char **argv)
     char *ipctok = NULL;
 
     while ((ch = getopt_long(argc, argv, "", list_opts, NULL)) != -1) {
-	switch (ch) {
-	case 1:
-	    ipctok = optarg;
-	    break;
-	default:
-	    usage();
-	}
+        switch (ch) {
+        case 1:
+            ipctok = optarg;
+            break;
+        default:
+            usage();
+        }
     }
     char *res;
     const char *p;
@@ -572,18 +572,18 @@ int
 main(int argc, char **argv)
 {
     if (argc < 2)
-	usage();
-    
+        usage();
+
     int found = 0;
     for (int i = 0; !found && i < ncmds; i++) {
-	if (strcmp(argv[1], cmd_table[i].name) == 0) {
-	    found = 1;
-	    cmd_table[i].fun(argc - 1, argv + 1);
-	}
+        if (strcmp(argv[1], cmd_table[i].name) == 0) {
+            found = 1;
+            cmd_table[i].fun(argc - 1, argv + 1);
+        }
     }
 
     if (!found)
-	usage();
+        usage();
 
     return 0;
 }

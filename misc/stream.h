@@ -31,6 +31,6 @@ int bts_close_wo(struct bt_stream_wo *bts);
 
 int bts_sha(struct bt_stream_ro *bts, off_t length, uint8_t *hash);
 int bts_hashes(struct metainfo *, F_fdcb fd_cb,
-	       void (*cb)(uint32_t, uint8_t *, void *), void *arg);
+               void (*cb)(uint32_t, uint8_t *, void *), void *arg);
 
 #endif

@@ -52,7 +52,7 @@ struct torrent {
     unsigned *piece_count;
 
     uint64_t uploaded, downloaded;
-    
+
     unsigned npeers;
     struct peer_tq peers;
 
@@ -66,7 +66,7 @@ off_t torrent_bytes_left(struct torrent *tp);
 
 char *torrent_get_bytes(struct torrent *tp, off_t start, size_t len);
 void torrent_put_bytes(struct torrent *tp, const char *buf,
-		       off_t start, size_t len);
+                       off_t start, size_t len);
 
 int torrent_load(const char *metafile);
 

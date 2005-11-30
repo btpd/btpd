@@ -1,16 +1,16 @@
 #ifndef BTPD_PEER_H
 #define BTPD_PEER_H
 
-#define PF_I_WANT	  0x1	/* We want to download from the peer */
-#define PF_I_CHOKE	  0x2	/* We choke the peer */
-#define PF_P_WANT	  0x4	/* The peer wants to download from us */
-#define PF_P_CHOKE	  0x8	/* The peer is choking us */
-#define PF_ON_READQ	 0x10
-#define PF_ON_WRITEQ	 0x20
-#define PF_ATTACHED	 0x40
-#define PF_NO_REQUESTS	 0x80
-#define PF_INCOMING	0x100
-#define PF_DO_UNWANT	0x200
+#define PF_I_WANT         0x1   /* We want to download from the peer */
+#define PF_I_CHOKE        0x2   /* We choke the peer */
+#define PF_P_WANT         0x4   /* The peer wants to download from us */
+#define PF_P_CHOKE        0x8   /* The peer is choking us */
+#define PF_ON_READQ      0x10
+#define PF_ON_WRITEQ     0x20
+#define PF_ATTACHED      0x40
+#define PF_NO_REQUESTS   0x80
+#define PF_INCOMING     0x100
+#define PF_DO_UNWANT    0x200
 
 #define MAXPIECEMSGS 128
 #define MAXPIPEDREQUESTS 10
@@ -52,8 +52,8 @@ struct peer {
     struct {
         uint32_t msg_len;
         uint8_t msg_num;
-	uint32_t pc_index;
-	uint32_t pc_begin;
+        uint32_t pc_index;
+        uint32_t pc_begin;
         enum net_state state;
         size_t st_bytes;
         char *buf;

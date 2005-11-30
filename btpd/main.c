@@ -28,15 +28,15 @@ find_homedir(void)
 {
     char *res = getenv("BTPD_HOME");
     if (res == NULL) {
-	char *home = getenv("HOME");
-	if (home == NULL) {
-	    struct passwd *pwent = getpwuid(getuid());
-	    if (pwent == NULL)
-		errx(1, "Can't find my home directory.\n");
-	    home = pwent->pw_dir;
-	    endpwent();
-	}
-	asprintf(&res, "%s/.btpd", home);
+        char *home = getenv("HOME");
+        if (home == NULL) {
+            struct passwd *pwent = getpwuid(getuid());
+            if (pwent == NULL)
+                errx(1, "Can't find my home directory.\n");
+            home = pwent->pw_dir;
+            endpwent();
+        }
+        asprintf(&res, "%s/.btpd", home);
     }
     return res;
 }
@@ -47,7 +47,7 @@ setup_daemon(const char *dir)
     int pidfd;
 
     if (dir == NULL)
-	dir = find_homedir();
+        dir = find_homedir();
 
     btpd_dir = dir;
 
@@ -79,49 +79,49 @@ static void
 usage(void)
 {
     printf("Usage: btpd [options]\n"
-	"\n"
-	"Options:\n"
-	"\n"
-	"--bw-hz n\n"
-	"\tRun the bandwidth limiter at n hz.\n"
-	"\tDefault is 8 hz.\n"
-	"\n"
-	"--bw-in n\n"
-	"\tLimit incoming BitTorrent traffic to n kB/s.\n"
-	"\tDefault is 0 which means unlimited.\n"
-	"\n"
-	"--bw-out n\n"
-	"\tLimit outgoing BitTorrent traffic to n kB/s.\n"
-	"\tDefault is 0 which means unlimited.\n"
-	"\n"
-	"-d\n"
-	"\tKeep the btpd process in the foregorund and log to std{out,err}.\n"
-	"\tThis option is intended for debugging purposes.\n"
-	"\n"
-	"--ipc key\n"
-	"\tThe same key must be used by the cli to talk to this\n"
-	"\tbtpd instance. You shouldn't need to use this option.\n"
-	"\n"
-	"--logfile file\n"
-	"\tLog to the given file. By default btpd logs to ./btpd.log.\n"
-	"\n"
-	"-p n, --port n\n"
-	"\tListen at port n. Default is 6881.\n"
-	"\n"
-	"--help\n"
-	"\tShow this help.\n"
-	"\n");
+        "\n"
+        "Options:\n"
+        "\n"
+        "--bw-hz n\n"
+        "\tRun the bandwidth limiter at n hz.\n"
+        "\tDefault is 8 hz.\n"
+        "\n"
+        "--bw-in n\n"
+        "\tLimit incoming BitTorrent traffic to n kB/s.\n"
+        "\tDefault is 0 which means unlimited.\n"
+        "\n"
+        "--bw-out n\n"
+        "\tLimit outgoing BitTorrent traffic to n kB/s.\n"
+        "\tDefault is 0 which means unlimited.\n"
+        "\n"
+        "-d\n"
+        "\tKeep the btpd process in the foregorund and log to std{out,err}.\n"
+        "\tThis option is intended for debugging purposes.\n"
+        "\n"
+        "--ipc key\n"
+        "\tThe same key must be used by the cli to talk to this\n"
+        "\tbtpd instance. You shouldn't need to use this option.\n"
+        "\n"
+        "--logfile file\n"
+        "\tLog to the given file. By default btpd logs to ./btpd.log.\n"
+        "\n"
+        "-p n, --port n\n"
+        "\tListen at port n. Default is 6881.\n"
+        "\n"
+        "--help\n"
+        "\tShow this help.\n"
+        "\n");
     exit(1);
 }
 
 static int longval = 0;
 
 static struct option longopts[] = {
-    { "port",	required_argument,	NULL,		'p' },
-    { "bw-in",	required_argument,	&longval,	1 },
-    { "bw-out",	required_argument,	&longval,	2 },
-    { "help",	no_argument,		&longval,	5 },
-    { NULL,	0,			NULL,		0 }
+    { "port",   required_argument,      NULL,           'p' },
+    { "bw-in",  required_argument,      &longval,       1 },
+    { "bw-out", required_argument,      &longval,       2 },
+    { "help",   no_argument,            &longval,       5 },
+    { NULL,     0,                      NULL,           0 }
 };
 
 int
@@ -132,38 +132,38 @@ main(int argc, char **argv)
     setlocale(LC_ALL, "");
 
     for (;;) {
-	switch (getopt_long(argc, argv, "dp:", longopts, NULL)) {
-	case -1:
-	    goto args_done;
-	case 'd':
-	    btpd_daemon = 0;
-	    break;
-	case 'p':
-	    net_port = atoi(optarg);
-	    break;
-	case 0:
-	    switch (longval) {
-	    case 1:
-		net_bw_limit_in = atoi(optarg) * 1024;
-		break;
-	    case 2:
-		net_bw_limit_out = atoi(optarg) * 1024;
-		break;
-	    default:
-		usage();
-	    }
-	    break;
-	case '?':
-	default:
-	    usage();
-	}
+        switch (getopt_long(argc, argv, "dp:", longopts, NULL)) {
+        case -1:
+            goto args_done;
+        case 'd':
+            btpd_daemon = 0;
+            break;
+        case 'p':
+            net_port = atoi(optarg);
+            break;
+        case 0:
+            switch (longval) {
+            case 1:
+                net_bw_limit_in = atoi(optarg) * 1024;
+                break;
+            case 2:
+                net_bw_limit_out = atoi(optarg) * 1024;
+                break;
+            default:
+                usage();
+            }
+            break;
+        case '?':
+        default:
+            usage();
+        }
     }
 args_done:
     argc -= optind;
     argv += optind;
 
     if (argc != 0)
-	usage();
+        usage();
 
     setup_daemon(dir);
 

@@ -19,21 +19,21 @@ ipc_open(const char *key, struct ipc **out)
     struct ipc *res;
 
     if (key == NULL)
-	key = "default";
+        key = "default";
     keylen = strlen(key);
     for (int i = 0; i < keylen; i++)
-	if (!isalnum(key[i]))
-	    return EINVAL;
+        if (!isalnum(key[i]))
+            return EINVAL;
 
     res = malloc(sizeof(*res));
     if (res == NULL)
-	return ENOMEM;
+        return ENOMEM;
 
     plen = sizeof(res->addr.sun_path);
     if (snprintf(res->addr.sun_path, plen,
-		 "/tmp/btpd_%u_%s", geteuid(), key) >= plen) {
-	free(res);
-	return ENAMETOOLONG;
+                 "/tmp/btpd_%u_%s", geteuid(), key) >= plen) {
+        free(res);
+        return ENAMETOOLONG;
     }
     res->addr.sun_family = AF_UNIX;
     *out = res;
@@ -55,13 +55,13 @@ ipc_connect(struct ipc *ipc, FILE **out)
     int error;
 
     if ((sd = socket(PF_UNIX, SOCK_STREAM, 0)) == -1)
-	return errno;
+        return errno;
 
     if (connect(sd, (struct sockaddr *)&ipc->addr, sizeof(ipc->addr)) == -1)
-	goto error;
+        goto error;
 
     if ((fp = fdopen(sd, "r+")) == NULL)
-	goto error;
+        goto error;
 
     *out = fp;
     return 0;
@@ -78,23 +78,23 @@ ipc_response(FILE *fp, char **out, uint32_t *len)
     char *buf;
 
     if (fread(&size, sizeof(size), 1, fp) != 1) {
-	if (ferror(fp))
-	    return errno;
-	else
-	    return ECONNRESET;
+        if (ferror(fp))
+            return errno;
+        else
+            return ECONNRESET;
     }
 
     if (size == 0)
-	return EINVAL;
+        return EINVAL;
 
     if ((buf = malloc(size)) == NULL)
-	return ENOMEM;
+        return ENOMEM;
 
     if (fread(buf, 1, size, fp) != size) {
-	if (ferror(fp))
-	    return errno;
-	else
-	    return ECONNRESET;
+        if (ferror(fp))
+            return errno;
+        else
+            return ECONNRESET;
     }
 
     *out = buf;
@@ -104,25 +104,25 @@ ipc_response(FILE *fp, char **out, uint32_t *len)
 
 static int
 ipc_req_res(struct ipc *ipc,
-	    const char *req, uint32_t qlen,
-	    char **res, uint32_t *rlen)
+            const char *req, uint32_t qlen,
+            char **res, uint32_t *rlen)
 {
     FILE *fp;
     int error;
 
     if ((error = ipc_connect(ipc, &fp)) != 0)
-	return error;
+        return error;
 
     if (fwrite(&qlen, sizeof(qlen), 1, fp) != 1)
-	goto error;
+        goto error;
     if (fwrite(req, 1, qlen, fp) != qlen)
-	goto error;
+        goto error;
     if (fflush(fp) != 0)
-	goto error;
+        goto error;
     if ((errno = ipc_response(fp, res, rlen)) != 0)
-	goto error;
+        goto error;
     if ((errno = benc_validate(*res, *rlen)) != 0)
-	goto error;
+        goto error;
 
     fclose(fp);
     return 0;
@@ -142,14 +142,14 @@ btpd_die(struct ipc *ipc)
     uint32_t rsiz;
 
     if ((error = ipc_req_res(ipc, shutdown, size, &response, &rsiz)) != 0)
-	return error;
+        return error;
 
     error = benc_validate(response, rsiz);
 
     if (error == 0) {
-	int64_t tmp;
+        int64_t tmp;
         benc_dget_int64(response, "code", &tmp);
-	error = tmp;
+        error = tmp;
     }
 
     free(response);
@@ -172,12 +172,12 @@ btpd_add(struct ipc *ipc, char **paths, unsigned npaths, char **out)
         buf_write(&iob, paths[i], plen);
     }
     buf_print(&iob, "e");
-    
+
     error = ipc_req_res(ipc, iob.buf, iob.buf_off, &res, &reslen);
     free(iob.buf);
     if (error == 0)
-	*out = res;
-    
+        *out = res;
+
     return error;
 }
 
@@ -210,11 +210,11 @@ btpd_del(struct ipc *ipc, uint8_t (*hash)[20], unsigned nhashes, char **out)
         buf_write(&iob, hash[i], 20);
     }
     buf_write(&iob, "e", 1);
-    
+
     error = ipc_req_res(ipc, iob.buf, iob.buf_off, &res, &reslen);
     free(iob.buf);
     if (error != 0)
-	return error;
+        return error;
 
     *out = res;
     return 0;

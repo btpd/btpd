@@ -14,7 +14,7 @@ int ipc_close(struct ipc *ipc);
 
 int btpd_add(struct ipc *ipc, char **path, unsigned npaths, char **out);
 int btpd_del(struct ipc *ipc, uint8_t (*hash)[20],
-	     unsigned nhashes, char **out);
+             unsigned nhashes, char **out);
 int btpd_die(struct ipc *ipc);
 int btpd_stat(struct ipc *ipc, char **out);
 

@@ -1,19 +1,19 @@
 #ifndef BTPD_NET_BUF_H
 #define BTPD_NET_BUF_H
 
-#define NB_CHOKE	0
-#define NB_UNCHOKE	1
-#define NB_INTEREST	2
-#define NB_UNINTEREST	3
-#define NB_HAVE		4
-#define NB_BITFIELD	5
-#define NB_REQUEST	6
-#define NB_PIECE	7
-#define NB_CANCEL	8
-#define NB_TORRENTDATA	10
-#define NB_MULTIHAVE	11
-#define NB_BITDATA	12
-#define NB_SHAKE	13
+#define NB_CHOKE        0
+#define NB_UNCHOKE      1
+#define NB_INTEREST     2
+#define NB_UNINTEREST   3
+#define NB_HAVE         4
+#define NB_BITFIELD     5
+#define NB_REQUEST      6
+#define NB_PIECE        7
+#define NB_CANCEL       8
+#define NB_TORRENTDATA  10
+#define NB_MULTIHAVE    11
+#define NB_BITDATA      12
+#define NB_SHAKE        13
 
 struct net_buf {
     short type;

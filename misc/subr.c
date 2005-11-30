@@ -34,9 +34,9 @@ set_nonblocking(int fd)
 {
     int oflags;
     if ((oflags = fcntl(fd, F_GETFL, 0)) == -1)
-	return errno;
+        return errno;
     if (fcntl(fd, F_SETFL, oflags | O_NONBLOCK) == -1)
-	return errno;
+        return errno;
     return 0;
 }
 
@@ -45,9 +45,9 @@ set_blocking(int fd)
 {
     int oflags;
     if ((oflags = fcntl(fd, F_GETFL, 0)) == -1)
-	return errno;
+        return errno;
     if (fcntl(fd, F_SETFL, oflags & ~O_NONBLOCK) == -1)
-	return errno;
+        return errno;
     return 0;
 }
 
@@ -58,16 +58,16 @@ mkdirs(char *path)
     char *spos = strchr(path + 1, '/'); // Must ignore the root
 
     while (spos != NULL) {
-	*spos = '\0';
-	err = mkdir(path, 0777);
-	*spos = '/';
-	
-	if (err != 0 && errno != EEXIST) {
-	    err = errno;
-	    break;
-	}
+        *spos = '\0';
+        err = mkdir(path, 0777);
+        *spos = '/';
 
-	spos = strchr(spos + 1, '/');
+        if (err != 0 && errno != EEXIST) {
+            err = errno;
+            break;
+        }
+
+        spos = strchr(spos + 1, '/');
     }
     return err;
 }
@@ -81,8 +81,8 @@ vopen(int *res, int flags, const char *fmt, ...)
 
     va_start(ap, fmt);
     if (vsnprintf(path, PATH_MAX, fmt, ap) >= PATH_MAX) {
-	va_end(ap);
-	return ENAMETOOLONG;
+        va_end(ap);
+        return ENAMETOOLONG;
     }
     va_end(ap);
 
@@ -90,18 +90,18 @@ vopen(int *res, int flags, const char *fmt, ...)
 again:
     fd = open(path, flags, 0666);
     if (fd < 0 && errno == ENOENT && (flags & O_CREAT) != 0 && !didmkdirs) {
-	if (mkdirs(path) == 0) {
-	    didmkdirs = 1;
-	    goto again;
-	} else
-	    return errno;
+        if (mkdirs(path) == 0) {
+            didmkdirs = 1;
+            goto again;
+        } else
+            return errno;
     }
 
     if (fd >= 0) {
-	*res = fd;
-	return 0;
+        *res = fd;
+        return 0;
     } else
-	return errno;
+        return errno;
 }
 
 int
@@ -110,22 +110,22 @@ canon_path(const char *path, char **res)
     char rp[PATH_MAX];
 
     if (realpath(path, rp) == NULL)
-	return errno;
+        return errno;
 #if 0
     // This could be necessary on solaris.
     if (rp[0] != '/') {
-	char wd[MAXPATHLEN];
-	if (getcwd(wd, MAXPATHLEN) == NULL)
-	    return errno;
-	if (strlcat(wd, "/", MAXPATHLEN) >= MAXPATHLEN)
-	    return ENAMETOOLONG;
-	if (strlcat(wd, rp, MAXPATHLEN) >= MAXPATHLEN)
-	    return ENAMETOOLONG;
-	strcpy(rp, wd);
+        char wd[MAXPATHLEN];
+        if (getcwd(wd, MAXPATHLEN) == NULL)
+            return errno;
+        if (strlcat(wd, "/", MAXPATHLEN) >= MAXPATHLEN)
+            return ENAMETOOLONG;
+        if (strlcat(wd, rp, MAXPATHLEN) >= MAXPATHLEN)
+            return ENAMETOOLONG;
+        strcpy(rp, wd);
     }
 #endif
     if ((*res = strdup(rp)) == NULL)
-	return ENOMEM;
+        return ENOMEM;
 
     return 0;
 }
@@ -136,6 +136,6 @@ round_to_page(size_t size)
     size_t psize = getpagesize();
     size_t rem = size % psize;
     if (rem != 0)
-	size += psize - rem;
+        size += psize - rem;
     return size;
 }

@@ -25,7 +25,7 @@ static void
 errdie(int error)
 {
     if (error != 0)
-	btpd_err("io_buf: %s.\n", strerror(error));
+        btpd_err("io_buf: %s.\n", strerror(error));
 }
 
 static void
@@ -34,7 +34,7 @@ cmd_stat(int argc, const char *args, FILE *fp)
     struct torrent *tp;
     struct io_buffer iob;
     errdie(buf_init(&iob, (1 << 14)));
-    
+
     errdie(buf_swrite(&iob, "d"));
     errdie(buf_print(&iob, "6:npeersi%ue", net_npeers));
     errdie(buf_print(&iob, "9:ntorrentsi%ue", btpd_get_ntorrents()));
@@ -44,16 +44,16 @@ cmd_stat(int argc, const char *args, FILE *fp)
         for (uint32_t i = 0; i < tp->meta.npieces; i++)
             if (tp->piece_count[i] > 0)
                 seen_npieces++;
-	errdie(buf_print(&iob, "d4:downi%" PRIu64 "e", tp->downloaded));
-	errdie(buf_swrite(&iob, "4:hash20:"));
-	errdie(buf_write(&iob, tp->meta.info_hash, 20));
-	errdie(buf_print(&iob, "12:have npiecesi%ue", tp->have_npieces));
-	errdie(buf_print(&iob, "6:npeersi%ue", tp->npeers));
+        errdie(buf_print(&iob, "d4:downi%" PRIu64 "e", tp->downloaded));
+        errdie(buf_swrite(&iob, "4:hash20:"));
+        errdie(buf_write(&iob, tp->meta.info_hash, 20));
+        errdie(buf_print(&iob, "12:have npiecesi%ue", tp->have_npieces));
+        errdie(buf_print(&iob, "6:npeersi%ue", tp->npeers));
         errdie(buf_print(&iob, "7:npiecesi%ue", tp->meta.npieces));
         errdie(buf_print(&iob, "4:path%d:%s",
-			 (int)strlen(tp->relpath), tp->relpath));
-	errdie(buf_print(&iob, "12:seen npiecesi%ue", seen_npieces));
-	errdie(buf_print(&iob, "2:upi%" PRIu64 "ee", tp->uploaded));
+                         (int)strlen(tp->relpath), tp->relpath));
+        errdie(buf_print(&iob, "12:seen npiecesi%ue", seen_npieces));
+        errdie(buf_print(&iob, "2:upi%" PRIu64 "ee", tp->uploaded));
     }
     errdie(buf_swrite(&iob, "ee"));
 
@@ -71,33 +71,33 @@ cmd_add(int argc, const char *args, FILE *fp)
 
     errdie(buf_write(&iob, "l", 1));
     while (args != NULL) {
-	size_t plen;
-	char path[PATH_MAX];
-	const char *pathp;
+        size_t plen;
+        char path[PATH_MAX];
+        const char *pathp;
 
-	if (!benc_isstr(args)) {
-	    free(iob.buf);
-	    return;
-	}
+        if (!benc_isstr(args)) {
+            free(iob.buf);
+            return;
+        }
 
-	benc_str(args, &pathp, &plen, &args);
+        benc_str(args, &pathp, &plen, &args);
 
-	if (plen >= PATH_MAX) {
-	    errdie(buf_print(&iob, "d4:codei%dee", ENAMETOOLONG));
-	    continue;
-	}
-	
-	bcopy(pathp, path, plen);
-	path[plen] = '\0';
-	btpd_log(BTPD_L_BTPD, "add request for %s.\n", path);
-	errdie(buf_print(&iob, "d4:codei%dee", torrent_load(path)));
+        if (plen >= PATH_MAX) {
+            errdie(buf_print(&iob, "d4:codei%dee", ENAMETOOLONG));
+            continue;
+        }
+
+        bcopy(pathp, path, plen);
+        path[plen] = '\0';
+        btpd_log(BTPD_L_BTPD, "add request for %s.\n", path);
+        errdie(buf_print(&iob, "d4:codei%dee", torrent_load(path)));
     }
     errdie(buf_write(&iob, "e", 1));
 
     uint32_t len = iob.buf_off;
     fwrite(&len, sizeof(len), 1, fp);
     fwrite(iob.buf, 1, iob.buf_off, fp);
-    free(iob.buf);    
+    free(iob.buf);
 }
 
 static void
@@ -105,7 +105,7 @@ cmd_del(int argc, const char *args, FILE *fp)
 {
     struct io_buffer iob;
     errdie(buf_init(&iob, (1 << 10)));
-    
+
     errdie(buf_swrite(&iob, "l"));
 
     while (args != NULL) {
@@ -114,18 +114,18 @@ cmd_del(int argc, const char *args, FILE *fp)
         struct torrent *tp;
 
         if (!benc_isstr(args) ||
-	    benc_str(args, &hash, &len, &args) != 0 || len != 20) {
-	    free(iob.buf);
+            benc_str(args, &hash, &len, &args) != 0 || len != 20) {
+            free(iob.buf);
             return;
         }
 
         tp = btpd_get_torrent(hash);
         if (tp != NULL) {
-	    btpd_log(BTPD_L_BTPD, "del request for %s.\n", tp->relpath);
+            btpd_log(BTPD_L_BTPD, "del request for %s.\n", tp->relpath);
             torrent_unload(tp);
             errdie(buf_swrite(&iob, "d4:codei0ee"));
         } else {
-	    btpd_log(BTPD_L_BTPD, "del request didn't match.\n");
+            btpd_log(BTPD_L_BTPD, "del request didn't match.\n");
             errdie(buf_print(&iob, "d4:codei%dee", ENOENT));
         }
     }
@@ -154,10 +154,10 @@ static struct {
     int nlen;
     void (*fun)(int, const char *, FILE *);
 } cmd_table[] = {
-    { "add",	3, cmd_add },
-    { "del",	3, cmd_del },
-    { "die",	3, cmd_die },
-    { "stat",	4, cmd_stat }
+    { "add",    3, cmd_add },
+    { "del",    3, cmd_del },
+    { "die",    3, cmd_die },
+    { "stat",   4, cmd_stat }
 };
 
 static int ncmds = sizeof(cmd_table) / sizeof(cmd_table[0]);
@@ -208,20 +208,20 @@ client_connection_cb(int sd, short type, void *arg)
     FILE *fp;
 
     if ((nsd = accept(sd, NULL, NULL)) < 0) {
-	if (errno == EWOULDBLOCK || errno == ECONNABORTED)
-	    return;
-	else
+        if (errno == EWOULDBLOCK || errno == ECONNABORTED)
+            return;
+        else
             btpd_err("client accept: %s\n", strerror(errno));
     }
 
     if ((errno = set_blocking(nsd)) != 0)
-	btpd_err("set_blocking: %s.\n", strerror(errno));
+        btpd_err("set_blocking: %s.\n", strerror(errno));
 
     if ((fp = fdopen(nsd, "r+")) == NULL) {
-	close(nsd);
-	return;
+        close(nsd);
+        return;
     }
-   
+
     do_ipc(fp);
 
     fclose(fp);
@@ -236,25 +236,25 @@ ipc_init(void)
 
     addr.sun_family = PF_UNIX;
     if (snprintf(addr.sun_path, psiz, "%s/sock", btpd_dir) >= psiz)
-	btpd_err("'%s/sock' is too long.\n", btpd_dir);
-    
+        btpd_err("'%s/sock' is too long.\n", btpd_dir);
+
     if ((sd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
-	btpd_err("sock: %s\n", strerror(errno));
+        btpd_err("sock: %s\n", strerror(errno));
     if (bind(sd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-	if (errno == EADDRINUSE) {
-	    unlink(addr.sun_path);
-	    if (bind(sd, (struct sockaddr *)&addr, sizeof(addr)) != 0)
-		btpd_err("bind: %s\n", strerror(errno));
-	} else
-	    btpd_err("bind: %s\n", strerror(errno));
+        if (errno == EADDRINUSE) {
+            unlink(addr.sun_path);
+            if (bind(sd, (struct sockaddr *)&addr, sizeof(addr)) != 0)
+                btpd_err("bind: %s\n", strerror(errno));
+        } else
+            btpd_err("bind: %s\n", strerror(errno));
     }
 
     if (chmod(addr.sun_path, 0600) == -1)
-	btpd_err("chmod: %s (%s).\n", addr.sun_path, strerror(errno));
+        btpd_err("chmod: %s (%s).\n", addr.sun_path, strerror(errno));
     listen(sd, 4);
     set_nonblocking(sd);
 
     event_set(&m_cli_incoming, sd, EV_READ | EV_PERSIST,
-	client_connection_cb, NULL);
+        client_connection_cb, NULL);
     event_add(&m_cli_incoming, NULL);
 }

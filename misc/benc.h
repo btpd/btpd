@@ -21,7 +21,7 @@ int benc_dget_any(const char *p, const char *key, const char **val);
 int benc_dget_lst(const char *p, const char *key, const char **val);
 int benc_dget_dct(const char *p, const char *key, const char **val);
 int benc_dget_str(const char *p, const char *key,
-		  const char **val, size_t *len);
+                  const char **val, size_t *len);
 int benc_dget_stra(const char *p, const char *key, char **val, size_t *len);
 int benc_dget_strz(const char *p, const char *key, char **val, size_t *len);
 int benc_dget_int64(const char *p, const char *key, int64_t *val);

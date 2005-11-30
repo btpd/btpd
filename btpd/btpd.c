@@ -83,15 +83,15 @@ child_cb(int signal, short type, void *arg)
     pid_t pid;
 
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-	if (WIFEXITED(status) || WIFSIGNALED(status)) {
-	    struct child *kid = BTPDQ_FIRST(&m_kids);
-	    while (kid != NULL && kid->pid != pid)
-		kid = BTPDQ_NEXT(kid, entry);
-	    assert(kid != NULL);
-	    BTPDQ_REMOVE(&m_kids, kid, entry);
-	    kid->cb(kid->pid, kid->arg);
-	    free(kid);
-	}
+        if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            struct child *kid = BTPDQ_FIRST(&m_kids);
+            while (kid != NULL && kid->pid != pid)
+                kid = BTPDQ_NEXT(kid, entry);
+            assert(kid != NULL);
+            BTPDQ_REMOVE(&m_kids, kid, entry);
+            kid->cb(kid->pid, kid->arg);
+            free(kid);
+        }
     }
 }
 
@@ -102,7 +102,7 @@ btpd_add_torrent(struct torrent *tp)
     m_ntorrents++;
 }
 
-void 
+void
 btpd_del_torrent(struct torrent *tp)
 {
     BTPDQ_REMOVE(&m_torrents, tp, entry);
@@ -126,7 +126,7 @@ btpd_get_torrent(const uint8_t *hash)
 {
     struct torrent *tp = BTPDQ_FIRST(&m_torrents);
     while (tp != NULL && bcmp(hash, tp->meta.info_hash, 20) != 0)
-	tp = BTPDQ_NEXT(tp, entry);
+        tp = BTPDQ_NEXT(tp, entry);
     return tp;
 }
 
@@ -145,7 +145,7 @@ btpd_init(void)
     m_peer_id[sizeof(BTPD_VERSION) - 1] = '|';
     srandom(time(NULL));
     for (int i = sizeof(BTPD_VERSION); i < 20; i++)
-	m_peer_id[i] = rint(random() * 255.0 / RAND_MAX);
+        m_peer_id[i] = rint(random() * 255.0 / RAND_MAX);
 
     net_init();
     ipc_init();
