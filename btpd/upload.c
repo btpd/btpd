@@ -42,10 +42,12 @@ ul_on_lost_peer(struct peer *p)
 void
 ul_on_lost_torrent(struct torrent *tp)
 {
-    struct peer *p;
-    BTPDQ_FOREACH(p, &tp->peers, p_entry) {
+    struct peer *p = BTPDQ_FIRST(&m_peerq);
+    while (p != NULL) {
+        struct peer *next = BTPDQ_NEXT(p, p_entry);
         BTPDQ_REMOVE(&m_peerq, p, ul_entry);
         m_npeers--;
+        p = next;
     }
     choke_do();
 }
