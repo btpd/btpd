@@ -180,10 +180,11 @@ dl_on_lost_peer(struct peer *p)
     assert(tp->npeers > 0 && (p->flags & PF_ATTACHED) != 0);
     tp->npeers--;
     p->flags &= ~PF_ATTACHED;
+    BTPDQ_REMOVE(&tp->peers, p, p_entry);
 
     for (uint32_t i = 0; i < tp->meta.npieces; i++)
         if (peer_has(p, i))
-                tp->piece_count[i]--;
+            tp->piece_count[i]--;
 
     if (p->nreqs_out > 0)
         dl_on_undownload(p);
