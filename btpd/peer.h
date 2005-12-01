@@ -46,8 +46,8 @@ struct peer {
     struct event in_ev;
     struct event out_ev;
 
-    long rate_up, rate_dwn;
-    long count_up, count_dwn;
+    unsigned long rate_up, rate_dwn;
+    unsigned long count_up, count_dwn;
 
     struct {
         uint32_t msg_len;

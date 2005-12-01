@@ -24,6 +24,9 @@ static struct event m_bw_timer;
 static unsigned long m_bw_bytes_in;
 static unsigned long m_bw_bytes_out;
 
+static unsigned long m_rate_up;
+static unsigned long m_rate_dwn;
+
 static struct event m_net_incoming;
 
 static unsigned m_ntorrents;
@@ -470,35 +473,44 @@ net_connection_cb(int sd, short type, void *arg)
 
 #define RATEHISTORY 20
 
-long
-compute_rate_sub(long rate)
+static unsigned long
+compute_rate_sub(unsigned long rate)
 {
     if (rate > 256 * RATEHISTORY)
         return rate / RATEHISTORY;
     else
-        return 256;
+        return min(256, rate);
 }
 
 static void
-compute_peer_rates(void) {
+compute_rates(void) {
+    unsigned long tot_up = 0, tot_dwn = 0;
     struct torrent *tp;
     BTPDQ_FOREACH(tp, &m_torrents, net_entry) {
+        unsigned long tp_up = 0, tp_dwn = 0;
         struct peer *p;
         BTPDQ_FOREACH(p, &tp->peers, p_entry) {
             if (p->count_up > 0 || peer_active_up(p)) {
+                tp_up += p->count_up;
                 p->rate_up += p->count_up - compute_rate_sub(p->rate_up);
-                if (p->rate_up < 0)
-                    p->rate_up = 0;
                 p->count_up = 0;
             }
             if (p->count_dwn > 0 || peer_active_down(p)) {
+                tp_dwn += p->count_dwn;
                 p->rate_dwn += p->count_dwn - compute_rate_sub(p->rate_dwn);
-                if (p->rate_dwn < 0)
-                    p->rate_dwn = 0;
                 p->count_dwn = 0;
             }
         }
+        tp->rate_up += tp_up - compute_rate_sub(tp->rate_up);
+        tp->rate_dwn += tp_dwn - compute_rate_sub(tp->rate_dwn);
+        tot_up += tp_up;
+        tot_dwn += tp_dwn;
     }
+    m_rate_up += tot_up - compute_rate_sub(m_rate_up);
+    m_rate_dwn += tot_dwn - compute_rate_sub(m_rate_dwn);
+    btpd_log(BTPD_L_BTPD, "rates: %7.2fkB/s, %7.2fkB/s.\n",
+        (double)m_rate_up / 20 / (1 << 10),
+        (double)m_rate_dwn / 20 / (1 << 10));
 }
 
 void
@@ -508,7 +520,7 @@ net_bw_cb(int sd, short type, void *arg)
 
     evtimer_add(&m_bw_timer, (& (struct timeval) { 1, 0 }));
 
-    compute_peer_rates();
+    compute_rates();
 
     m_bw_bytes_out = net_bw_limit_out;
     m_bw_bytes_in = net_bw_limit_in;

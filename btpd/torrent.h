@@ -53,6 +53,8 @@ struct torrent {
 
     uint64_t uploaded, downloaded;
 
+    unsigned long rate_up, rate_dwn;
+
     unsigned npeers;
     struct peer_tq peers;
 
