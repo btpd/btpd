@@ -41,6 +41,8 @@ struct torrent {
     void *imem;
     size_t isiz;
 
+    int net_active;
+
     uint8_t *piece_field;
     uint8_t *block_field;
 

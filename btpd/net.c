@@ -41,6 +41,7 @@ struct peer_tq net_unattached = BTPDQ_HEAD_INITIALIZER(net_unattached);
 void
 net_add_torrent(struct torrent *tp)
 {
+    tp->net_active = 1;
     BTPDQ_INSERT_HEAD(&m_torrents, tp, net_entry);
     m_ntorrents++;
     dl_start(tp);
@@ -49,6 +50,7 @@ net_add_torrent(struct torrent *tp)
 void
 net_del_torrent(struct torrent *tp)
 {
+    tp->net_active = 0;
     assert(m_ntorrents > 0);
     m_ntorrents--;
     BTPDQ_REMOVE(&m_torrents, tp, net_entry);
@@ -61,6 +63,13 @@ net_del_torrent(struct torrent *tp)
         struct peer *next = BTPDQ_NEXT(p, p_entry);
         if (p->tp == tp)
             peer_kill(p);
+        p = next;
+    }
+
+    p = BTPDQ_FIRST(&tp->peers);
+    while (p != NULL) {
+        struct peer *next = BTPDQ_NEXT(p, p_entry);
+        peer_kill(p);
         p = next;
     }
 }

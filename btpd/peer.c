@@ -17,8 +17,12 @@ peer_kill(struct peer *p)
     btpd_log(BTPD_L_CONN, "killed peer %p\n", p);
 
     if (p->flags & PF_ATTACHED) {
-        ul_on_lost_peer(p);
-        dl_on_lost_peer(p);
+        if (p->tp->net_active) {
+            ul_on_lost_peer(p);
+            dl_on_lost_peer(p);
+        }
+        BTPDQ_REMOVE(&p->tp->peers, p, p_entry);
+        p->tp->npeers--;
     } else
         BTPDQ_REMOVE(&net_unattached, p, p_entry);
     if (p->flags & PF_ON_READQ)
@@ -340,6 +344,12 @@ peer_on_shake(struct peer *p)
             peer_send(p, nb_create_bitdata(p->tp));
         }
     }
+
+    BTPDQ_REMOVE(&net_unattached, p, p_entry);
+    BTPDQ_INSERT_HEAD(&p->tp->peers, p, p_entry);
+    p->flags |= PF_ATTACHED;
+    p->tp->npeers++;
+
     ul_on_new_peer(p);
     dl_on_new_peer(p);
 }

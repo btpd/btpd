@@ -12,20 +12,9 @@ dl_start(struct torrent *tp)
 void
 dl_stop(struct torrent *tp)
 {
-    struct peer *peer;
-    struct piece *piece;
-
-    peer = BTPDQ_FIRST(&tp->peers);
-    while (peer != NULL) {
-        struct peer *next = BTPDQ_NEXT(peer, p_entry);
-        BTPDQ_REMOVE(&tp->peers, peer, p_entry);
-        BTPDQ_INSERT_TAIL(&net_unattached, peer, p_entry);
-        peer->flags &= ~PF_ATTACHED;
-        peer = next;
-    }
-
-    while ((piece = BTPDQ_FIRST(&tp->getlst)) != NULL)
-        piece_free(piece);
+    struct piece *pc;
+    while ((pc = BTPDQ_FIRST(&tp->getlst)) != NULL)
+        piece_free(pc);
 }
 
 /*
@@ -165,11 +154,6 @@ dl_on_bad_piece(struct piece *pc)
 void
 dl_on_new_peer(struct peer *p)
 {
-    struct torrent *tp = p->tp;
-    tp->npeers++;
-    p->flags |= PF_ATTACHED;
-    BTPDQ_REMOVE(&net_unattached, p, p_entry);
-    BTPDQ_INSERT_HEAD(&tp->peers, p, p_entry);
 }
 
 void
@@ -177,26 +161,12 @@ dl_on_lost_peer(struct peer *p)
 {
     struct torrent *tp = p->tp;
 
-    assert(tp->npeers > 0 && (p->flags & PF_ATTACHED) != 0);
-    tp->npeers--;
-    p->flags &= ~PF_ATTACHED;
-    BTPDQ_REMOVE(&tp->peers, p, p_entry);
-
     for (uint32_t i = 0; i < tp->meta.npieces; i++)
         if (peer_has(p, i))
             tp->piece_count[i]--;
 
     if (p->nreqs_out > 0)
         dl_on_undownload(p);
-#if 0
-    struct piece *pc = BTPDQ_FIRST(&tp->getlst);
-    while (pc != NULL) {
-        struct piece *next = BTPDQ_NEXT(pc, entry);
-        if (peer_has(p, pc->index) && tp->piece_count[pc->index] == 0)
-            dl_on_peerless_piece(pc);
-        pc = next;
-    }
-#endif
 }
 
 void
