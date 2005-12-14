@@ -305,7 +305,7 @@ dl_choose_rarest(struct peer *p, uint32_t *res)
         }
     }
     if (min_c > 1) {
-        min_c = 1 + rint((double)random() * (min_c - 1) / RAND_MAX);
+        min_c = rand_between(1, min_c);
         for (i = min_i; min_c > 0; i++) {
             if (dl_piece_startable(p, i)
                 && tp->piece_count[i] == tp->piece_count[min_i]) {

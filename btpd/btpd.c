@@ -145,7 +145,7 @@ btpd_init(void)
     m_peer_id[sizeof(BTPD_VERSION) - 1] = '|';
     srandom(time(NULL));
     for (int i = sizeof(BTPD_VERSION); i < 20; i++)
-        m_peer_id[i] = rint(random() * 255.0 / RAND_MAX);
+        m_peer_id[i] = rand_between(0, 255);
 
     net_init();
     ipc_init();

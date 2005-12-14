@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -138,4 +139,10 @@ round_to_page(size_t size)
     if (rem != 0)
         size += psize - rem;
     return size;
+}
+
+long
+rand_between(long min, long max)
+{
+    return min + (long)rint((double)random() * (max - min) / RAND_MAX);
 }

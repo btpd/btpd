@@ -18,4 +18,6 @@ int canon_path(const char *path, char **res);
 
 size_t round_to_page(size_t size);
 
+long rand_between(long min, long max);
+
 #endif
