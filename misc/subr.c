@@ -25,7 +25,7 @@ clear_bit(uint8_t *bits, unsigned long index)
 }
 
 int
-has_bit(uint8_t *bits, unsigned long index)
+has_bit(const uint8_t *bits, unsigned long index)
 {
     return bits[index / 8] & (1 << (7 - index % 8));
 }
@@ -129,16 +129,6 @@ canon_path(const char *path, char **res)
         return ENOMEM;
 
     return 0;
-}
-
-size_t
-round_to_page(size_t size)
-{
-    size_t psize = getpagesize();
-    size_t rem = size % psize;
-    if (rem != 0)
-        size += psize - rem;
-    return size;
 }
 
 long
