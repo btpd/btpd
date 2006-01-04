@@ -25,7 +25,7 @@
 #include "download.h"
 #include "upload.h"
 #include "subr.h"
-
+#include "content.h"
 #include "opts.h"
 
 #define BTPD_VERSION (PACKAGE_NAME "/" PACKAGE_VERSION)

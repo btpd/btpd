@@ -1,5 +1,4 @@
-#include <sys/types.h>
-#include <sys/mman.h>
+#include <math.h>
 
 #include "btpd.h"
 #include "tracker_req.h"
@@ -7,6 +6,10 @@
 void
 dl_start(struct torrent *tp)
 {
+    BTPDQ_INIT(&tp->getlst);
+    tp->busy_field = btpd_calloc((size_t)ceil(tp->meta.npieces / 8.0), 1);
+    tp->piece_count = btpd_calloc(tp->meta.npieces,
+        sizeof(*(tp->piece_count)));
 }
 
 void
@@ -15,6 +18,8 @@ dl_stop(struct torrent *tp)
     struct piece *pc;
     while ((pc = BTPDQ_FIRST(&tp->getlst)) != NULL)
         piece_free(pc);
+    free(tp->busy_field);
+    free(tp->piece_count);
 }
 
 /*
@@ -28,7 +33,7 @@ dl_on_piece_ann(struct peer *p, uint32_t index)
 {
     struct torrent *tp = p->tp;
     tp->piece_count[index]++;
-    if (has_bit(tp->piece_field, index))
+    if (cm_has_piece(tp, index))
         return;
     struct piece *pc = dl_find_piece(tp, index);
     if (tp->endgame) {
@@ -98,10 +103,6 @@ dl_on_ok_piece(struct piece *pc)
 
     btpd_log(BTPD_L_POL, "Got piece: %u.\n", pc->index);
 
-    set_bit(tp->piece_field, pc->index);
-    tp->have_npieces++;
-    msync(tp->imem, tp->isiz, MS_ASYNC);
-
     struct net_buf *have = nb_create_have(pc->index);
     BTPDQ_FOREACH(p, &tp->peers, p_entry)
         peer_send(p, have);
@@ -114,7 +115,7 @@ dl_on_ok_piece(struct piece *pc)
     assert(pc->nreqs == 0);
     piece_free(pc);
 
-    if (torrent_has_all(tp)) {
+    if (cm_full(tp)) {
         btpd_log(BTPD_L_BTPD, "Finished: %s.\n", tp->relpath);
         tracker_req(tp, TR_COMPLETED);
         BTPDQ_FOREACH(p, &tp->peers, p_entry)
@@ -133,13 +134,11 @@ dl_on_bad_piece(struct piece *pc)
     btpd_log(BTPD_L_ERROR, "Bad hash for piece %u of %s.\n",
         pc->index, tp->relpath);
 
-    for (uint32_t i = 0; i < pc->nblocks; i++) {
+    for (uint32_t i = 0; i < pc->nblocks; i++)
         clear_bit(pc->down_field, i);
-        clear_bit(pc->have_field, i);
-    }
+
     pc->ngot = 0;
     pc->nbusy = 0;
-    msync(tp->imem, tp->isiz, MS_ASYNC);
 
     if (tp->endgame) {
         struct peer *p;
@@ -177,10 +176,7 @@ dl_on_block(struct peer *p, struct block_request *req,
     struct block *blk = req->blk;
     struct piece *pc = blk->pc;
 
-    off_t cbegin = index * p->tp->meta.piece_length + begin;
-    torrent_put_bytes(p->tp, data, cbegin, length);
-
-    set_bit(pc->have_field, begin / PIECE_BLOCKLEN);
+    cm_put_block(p->tp, index, begin / PIECE_BLOCKLEN, data);
     pc->ngot++;
 
     if (tp->endgame) {
@@ -204,7 +200,7 @@ dl_on_block(struct peer *p, struct block_request *req,
         }
         BTPDQ_INIT(&blk->reqs);
         if (pc->ngot == pc->nblocks)
-            dl_on_piece(pc);
+            cm_test_piece(pc);
     } else {
         BTPDQ_REMOVE(&blk->reqs, req, blk_entry);
         free(req);
@@ -213,7 +209,7 @@ dl_on_block(struct peer *p, struct block_request *req,
         clear_bit(pc->down_field, begin / PIECE_BLOCKLEN);
         pc->nbusy--;
         if (pc->ngot == pc->nblocks)
-            dl_on_piece(pc);
+            cm_test_piece(pc);
         if (peer_leech_ok(p) && !peer_laden(p))
             dl_assign_requests(p);
     }

@@ -19,8 +19,8 @@ rate_cmp(const void *arg1, const void *arg2)
 {
     struct peer *p1 = (*(struct peer_sort **)arg1)->p;
     struct peer *p2 = (*(struct peer_sort **)arg2)->p;
-    unsigned long rate1 = torrent_has_all(p1->tp) ? p1->rate_up : p1->rate_dwn;
-    unsigned long rate2 = torrent_has_all(p2->tp) ? p2->rate_up : p2->rate_dwn;
+    unsigned long rate1 = cm_full(p1->tp) ? p1->rate_up : p1->rate_dwn;
+    unsigned long rate2 = cm_full(p2->tp) ? p2->rate_up : p2->rate_dwn;
     if (rate1 < rate2)
         return -1;
     else if (rate1 == rate2)
@@ -51,8 +51,8 @@ choke_do(void)
         int unchoked[m_npeers];
 
         BTPDQ_FOREACH(p, &m_peerq, ul_entry) {
-            if (((torrent_has_all(p->tp) && p->rate_up > 0)
-                    || (!torrent_has_all(p->tp) && p->rate_dwn > 0))) {
+            if (((cm_full(p->tp) && p->rate_up > 0)
+                    || (!cm_full(p->tp) && p->rate_dwn > 0))) {
                 worthy[nworthy].p = p;
                 worthy[nworthy].i = i;
                 nworthy++;

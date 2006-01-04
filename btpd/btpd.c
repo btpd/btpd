@@ -52,7 +52,7 @@ btpd_shutdown(void)
     tp = BTPDQ_FIRST(&m_torrents);
     while (tp != NULL) {
         struct torrent *next = BTPDQ_NEXT(tp, entry);
-        torrent_unload(tp);
+        torrent_deactivate(tp);
         tp = next;
     }
     btpd_log(BTPD_L_BTPD, "Exiting.\n");
@@ -136,6 +136,30 @@ btpd_get_peer_id(void)
     return m_peer_id;
 }
 
+static int
+nodot(struct dirent *dp)
+{
+    return !(strcmp(".", dp->d_name) == 0 || strcmp("..", dp->d_name) == 0);
+}
+
+static void
+load_library(void)
+{
+    int ne;
+    struct dirent **entries;
+    if ((ne = scandir("library", &entries, nodot, NULL)) < 0)
+        btpd_err("Couldn't open the library.\n");
+
+    for (int i = 0; i < ne; i++) {
+        struct torrent *tp;
+        struct dirent *e = entries[i];
+        if (torrent_create(&tp, e->d_name) == 0)
+            btpd_add_torrent(tp);
+        free(e);
+    }
+    free(entries);
+}
+
 extern void ipc_init(void);
 
 void
@@ -148,8 +172,14 @@ btpd_init(void)
         m_peer_id[i] = rand_between(0, 255);
 
     net_init();
-    ipc_init();
+    //ipc_init();
     ul_init();
+
+    load_library();
+
+    struct torrent *tp;
+    BTPDQ_FOREACH(tp, &m_torrents, entry)
+        torrent_activate(tp);
 
     signal(SIGPIPE, SIG_IGN);
 

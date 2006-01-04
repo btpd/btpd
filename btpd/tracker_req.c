@@ -128,14 +128,9 @@ tracker_done(pid_t pid, void *arg)
     }
 
 out:
-    if (failed) {
-        if (req->tr_event == TR_STARTED) {
-            btpd_log(BTPD_L_BTPD,
-                "Start request failed for %s.\n", tp->relpath);
-            torrent_unload(tp);
-        } else
-            ;//tp->tracker_time = btpd_seconds + 10;
-    }
+    if (failed)
+        ;//tp->tracker_time = btpd_seconds + 10;
+
     munmap(req->res, REQ_SIZE);
     free(req);
 }
@@ -165,7 +160,7 @@ create_url(struct tracker_req *req, struct torrent *tp, char **url)
     const uint8_t *peer_id = btpd_get_peer_id();
     char qc;
     int i;
-    uint64_t left;
+    off_t left;
     const char *event;
 
     event = event2str(req->tr_event);
@@ -178,7 +173,7 @@ create_url(struct tracker_req *req, struct torrent *tp, char **url)
     for (i = 0; i < 20; i++)
         snprintf(e_id + i * 3, 4, "%%%.2x", peer_id[i]);
 
-    left = torrent_bytes_left(tp);
+    left = cm_bytes_left(tp);
 
     i = asprintf(url, "%s%cinfo_hash=%s"
                  "&peer_id=%s"

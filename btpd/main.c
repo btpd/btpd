@@ -57,6 +57,9 @@ setup_daemon(const char *dir)
     if (chdir(dir) != 0)
         err(1, "Couldn't change working directory to '%s'", dir);
 
+    if (mkdir("library", 0777) == -1 && errno != EEXIST)
+        err(1, "Couldn't create library");
+
     pidfd = open("pid", O_CREAT|O_WRONLY|O_NONBLOCK|O_EXLOCK, 0666);
     if (pidfd == -1)
         err(1, "Couldn't open 'pid'");
@@ -170,9 +173,9 @@ args_done:
     event_init();
 
     btpd_init();
-    torrent_load("test");
 
     event_dispatch();
+
     btpd_err("Unexpected exit from libevent.\n");
 
     return 1;

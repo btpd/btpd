@@ -47,9 +47,7 @@ piece_alloc(struct torrent *tp, uint32_t index)
     pc = btpd_calloc(1, mem);
     pc->tp = tp;
     pc->down_field = (uint8_t *)(pc + 1);
-    pc->have_field =
-        tp->block_field +
-        index * (size_t)ceil(tp->meta.piece_length / (double)(1 << 17));
+    pc->have_field = cm_get_block_field(tp, index);
 
     pc->index = index;
     pc->nblocks = nblocks;
@@ -60,6 +58,7 @@ piece_alloc(struct torrent *tp, uint32_t index)
     for (unsigned i = 0; i < nblocks; i++)
         if (has_bit(pc->have_field, i))
             pc->ngot++;
+    assert(pc->ngot < pc->nblocks);
 
     pc->blocks = (struct block *)(pc->down_field + field);
     for (unsigned i = 0; i < nblocks; i++) {
@@ -108,7 +107,7 @@ static int
 dl_should_enter_endgame(struct torrent *tp)
 {
     int should;
-    if (tp->have_npieces + tp->npcs_busy == tp->meta.npieces) {
+    if (cm_get_npieces(tp) + tp->npcs_busy == tp->meta.npieces) {
         should = 1;
         struct piece *pc;
         BTPDQ_FOREACH(pc, &tp->getlst, entry) {
@@ -196,78 +195,9 @@ dl_find_piece(struct torrent *tp, uint32_t index)
 }
 
 static int
-test_hash(struct torrent *tp, uint8_t *hash, unsigned long index)
-{
-    if (tp->meta.piece_hash != NULL)
-        return memcmp(hash, tp->meta.piece_hash[index], SHA_DIGEST_LENGTH);
-    else {
-        char piece_hash[SHA_DIGEST_LENGTH];
-        int fd;
-        int bufi;
-        int err;
-
-        err = vopen(&fd, O_RDONLY, "%s/torrent", tp->relpath);
-        if (err != 0)
-            btpd_err("test_hash: %s\n", strerror(err));
-
-        err = lseek(fd, tp->meta.pieces_off + index * SHA_DIGEST_LENGTH,
-            SEEK_SET);
-        if (err < 0)
-            btpd_err("test_hash: %s\n", strerror(errno));
-
-        bufi = 0;
-        while (bufi < SHA_DIGEST_LENGTH) {
-            ssize_t nread =
-                read(fd, piece_hash + bufi, SHA_DIGEST_LENGTH - bufi);
-            bufi += nread;
-        }
-        close(fd);
-
-        return memcmp(hash, piece_hash, SHA_DIGEST_LENGTH);
-    }
-}
-
-static int
-ro_fd_cb(const char *path, int *fd, void *arg)
-{
-    struct torrent *tp = arg;
-    return vopen(fd, O_RDONLY, "%s/content/%s", tp->relpath, path);
-}
-
-static void
-torrent_test_piece(struct piece *pc)
-{
-    struct torrent *tp = pc->tp;
-    int err;
-    uint8_t hash[20];
-    struct bt_stream_ro *bts;
-    off_t plen = torrent_piece_size(tp, pc->index);
-
-    if ((bts = bts_open_ro(&tp->meta, pc->index * tp->meta.piece_length,
-             ro_fd_cb, tp)) == NULL)
-        btpd_err("Out of memory.\n");
-
-    if ((err = bts_sha(bts, plen, hash)) != 0)
-        btpd_err("Ouch! %s\n", strerror(err));
-
-    bts_close_ro(bts);
-
-    if (test_hash(tp, hash, pc->index) == 0)
-        dl_on_ok_piece(pc);
-    else
-        dl_on_bad_piece(pc);
-}
-
-void
-dl_on_piece(struct piece *pc)
-{
-    torrent_test_piece(pc);
-}
-
-static int
 dl_piece_startable(struct peer *p, uint32_t index)
 {
-    return peer_has(p, index) && !has_bit(p->tp->piece_field, index)
+    return peer_has(p, index) && !cm_has_piece(p->tp, index)
         && !has_bit(p->tp->busy_field, index);
 }
 
@@ -319,10 +249,9 @@ dl_choose_rarest(struct peer *p, uint32_t *res)
 }
 
 /*
- * Called from either dl_piece_assign_requests or dl_new_piece,
- * when a pice becomes full. The wanted level of the peers
- * that has this piece will be decreased. This function is
- * the only one that may trigger end game.
+ * Called from dl_piece_assign_requests when a piece becomes full.
+ * The wanted level of the peers that has this piece will be decreased.
+ * This function is the only one that may trigger end game.
  */
 static void
 dl_on_piece_full(struct piece *pc)
@@ -349,15 +278,7 @@ struct piece *
 dl_new_piece(struct torrent *tp, uint32_t index)
 {
     btpd_log(BTPD_L_POL, "Started on piece %u.\n", index);
-    struct piece *pc = piece_alloc(tp, index);
-    if (pc->ngot == pc->nblocks) {
-        dl_on_piece_full(pc);
-        dl_on_piece(pc);
-        if (dl_should_enter_endgame(tp))
-            dl_enter_endgame(tp);
-        return NULL;
-    } else
-        return pc;
+    return piece_alloc(tp, index);
 }
 
 /*

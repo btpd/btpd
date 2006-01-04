@@ -23,7 +23,7 @@ struct piece {
 
     struct block *blocks;
 
-    uint8_t *have_field;
+    const uint8_t *have_field;
     uint8_t *down_field;
 
     BTPDQ_ENTRY(piece) entry;
@@ -31,25 +31,28 @@ struct piece {
 
 BTPDQ_HEAD(piece_tq, piece);
 
+enum torrent_state {
+    T_INACTIVE,
+    T_STARTING,
+    T_ACTIVE,
+    T_STOPPING
+};
+
 struct torrent {
     const char *relpath;
     struct metainfo meta;
 
+    enum torrent_state state;
+
+    struct content *cp;
+
     BTPDQ_ENTRY(torrent) entry;
     BTPDQ_ENTRY(torrent) net_entry;
 
-    void *imem;
-    size_t isiz;
-
     int net_active;
-
-    uint8_t *piece_field;
-    uint8_t *block_field;
 
     uint8_t *busy_field;
     uint32_t npcs_busy;
-
-    uint32_t have_npieces;
 
     unsigned *piece_count;
 
@@ -66,21 +69,21 @@ struct torrent {
 
 BTPDQ_HEAD(torrent_tq, torrent);
 
-off_t torrent_bytes_left(struct torrent *tp);
-
-char *torrent_get_bytes(struct torrent *tp, off_t start, size_t len);
-void torrent_put_bytes(struct torrent *tp, const char *buf,
-                       off_t start, size_t len);
-
-int torrent_load(const char *metafile);
-
-void torrent_unload(struct torrent *tp);
+int torrent_create(struct torrent **res, const char *path);
+void torrent_activate(struct torrent *tp);
+void torrent_deactivate(struct torrent *tp);
 
 int torrent_has_peer(struct torrent *tp, const uint8_t *id);
 
 off_t torrent_piece_size(struct torrent *tp, uint32_t index);
 uint32_t torrent_block_size(struct piece *pc, uint32_t index);
 
-int torrent_has_all(struct torrent *tp);
+enum cm_state {
+    CM_STARTED,
+    CM_STOPPED,
+    CM_ERROR
+};
+
+void torrent_cm_cb(struct torrent *tp, enum cm_state state);
 
 #endif

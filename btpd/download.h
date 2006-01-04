@@ -7,7 +7,6 @@ int piece_full(struct piece *pc);
 void piece_free(struct piece *pc);
 
 void dl_on_piece_unfull(struct piece *pc);
-void dl_on_piece(struct piece *pc);
 
 struct piece *dl_new_piece(struct torrent *tp, uint32_t index);
 struct piece *dl_find_piece(struct torrent *tp, uint32_t index);

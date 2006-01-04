@@ -3,11 +3,11 @@ btpd_SOURCES=\
 	main.c util.c\
 	btpd.c btpd.h\
 	opts.c opts.h\
-	cli_if.c\
 	net.c net.h\
 	net_buf.c net_buf.h\
 	queue.h \
 	peer.c peer.h\
+	content.c content.h\
 	download.c download_subr.c download.h\
 	torrent.c torrent.h\
 	tracker_req.c tracker_req.h\

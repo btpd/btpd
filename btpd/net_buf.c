@@ -121,9 +121,10 @@ nb_create_have(uint32_t index)
 struct net_buf *
 nb_create_multihave(struct torrent *tp)
 {
-    struct net_buf *out = nb_create_alloc(NB_MULTIHAVE, 9 * tp->have_npieces);
-    for (uint32_t i = 0, count = 0; count < tp->have_npieces; i++) {
-        if (has_bit(tp->piece_field, i)) {
+    uint32_t have_npieces = cm_get_npieces(tp);
+    struct net_buf *out = nb_create_alloc(NB_MULTIHAVE, 9 * have_npieces);
+    for (uint32_t i = 0, count = 0; count < have_npieces; i++) {
+        if (cm_has_piece(tp, i)) {
             net_write32(out->buf + count * 9, 5);
             out->buf[count * 9 + 4] = MSG_HAVE;
             net_write32(out->buf + count * 9 + 5, i);
@@ -183,7 +184,7 @@ nb_create_bitdata(struct torrent *tp)
 {
     uint32_t plen = ceil(tp->meta.npieces / 8.0);
     struct net_buf *out =
-        nb_create_set(NB_BITDATA, tp->piece_field, plen, kill_buf_no);
+        nb_create_set(NB_BITDATA, cm_get_piece_field(tp), plen, kill_buf_no);
     return out;
 }
 

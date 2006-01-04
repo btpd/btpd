@@ -336,8 +336,8 @@ peer_on_shake(struct peer *p)
     printid[i] = '\0';
     btpd_log(BTPD_L_MSG, "received shake(%s) from %p\n", printid, p);
     p->piece_field = btpd_calloc(1, (int)ceil(p->tp->meta.npieces / 8.0));
-    if (p->tp->have_npieces > 0) {
-        if (p->tp->have_npieces * 9 < 5 + ceil(p->tp->meta.npieces / 8.0))
+    if (cm_get_npieces(p->tp) > 0) {
+        if (cm_get_npieces(p->tp) * 9 < 5 + ceil(p->tp->meta.npieces / 8.0))
             peer_send(p, nb_create_multihave(p->tp));
         else {
             peer_send(p, nb_create_bitfield(p->tp));
@@ -467,15 +467,16 @@ peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
     btpd_log(BTPD_L_MSG, "received request(%u,%u,%u) from %p\n",
         index, begin, length, p);
     if ((p->flags & PF_NO_REQUESTS) == 0) {
-        off_t cbegin = index * p->tp->meta.piece_length + begin;
-        char * content = torrent_get_bytes(p->tp, cbegin, length);
-        peer_send(p, nb_create_piece(index, begin, length));
-        peer_send(p, nb_create_torrentdata(content, length));
-        p->npiece_msgs++;
-        if (p->npiece_msgs >= MAXPIECEMSGS) {
-            peer_send(p, nb_create_choke());
-            peer_send(p, nb_create_unchoke());
-            p->flags |= PF_NO_REQUESTS;
+        char *content;
+        if (cm_get_bytes(p->tp, index, begin, length, &content) == 0) {
+            peer_send(p, nb_create_piece(index, begin, length));
+            peer_send(p, nb_create_torrentdata(content, length));
+            p->npiece_msgs++;
+            if (p->npiece_msgs >= MAXPIECEMSGS) {
+                peer_send(p, nb_create_choke());
+                peer_send(p, nb_create_unchoke());
+                p->flags |= PF_NO_REQUESTS;
+            }
         }
     }
 }

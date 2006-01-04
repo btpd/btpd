@@ -208,7 +208,7 @@ net_dispatch_msg(struct peer *p, const char *buf)
             length = net_read32(buf + 8);
             if ((length > PIECE_BLOCKLEN
                     || index >= p->tp->meta.npieces
-                    || !has_bit(p->tp->piece_field, index)
+                    || cm_has_piece(p->tp, index)
                     || begin + length > torrent_piece_size(p->tp, index))) {
                 btpd_log(BTPD_L_MSG, "bad request: (%u, %u, %u) from %p\n",
                          index, begin, length, p);
