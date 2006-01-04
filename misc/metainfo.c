@@ -30,13 +30,6 @@
  *
  */
 
-#ifndef PRId64
-#define PRId64 "lld"
-#endif
-#ifndef PRIu32
-#define PRIu32 "u"
-#endif
-
 void
 print_metainfo(struct metainfo *tp)
 {
@@ -47,16 +40,16 @@ print_metainfo(struct metainfo *tp)
         printf("%.2x", tp->info_hash[i]);
     printf("\n");
     printf("Tracker URL: %s\n", tp->announce);
-    printf("Piece length: %" PRId64 "\n", (int64_t)tp->piece_length);
-    printf("Number of pieces: %" PRIu32 "\n", tp->npieces);
+    printf("Piece length: %jd\n", (intmax_t)tp->piece_length);
+    printf("Number of pieces: %u\n", tp->npieces);
     printf("Number of files: %u\n", tp->nfiles);
     printf("Advisory name: %s\n", tp->name);
     printf("Files:\n");
     for (i = 0; i < tp->nfiles; i++) {
-        printf("%s (%" PRId64 ")\n",
-            tp->files[i].path, (int64_t)tp->files[i].length);
+        printf("%s (%jd)\n",
+            tp->files[i].path, (intmax_t)tp->files[i].length);
     }
-    printf("Total length: %" PRId64 "\n\n", (int64_t)tp->total_length);
+    printf("Total length: %jd\n\n", (intmax_t)tp->total_length);
 }
 
 static int

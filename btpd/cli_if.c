@@ -13,10 +13,6 @@
 
 #include "btpd.h"
 
-#ifndef PRIu64
-#define PRIu64 "llu"
-#endif
-
 #define buf_swrite(iob, s) buf_write(iob, s, sizeof(s) - 1)
 
 static struct event m_cli_incoming;
@@ -44,7 +40,7 @@ cmd_stat(int argc, const char *args, FILE *fp)
         for (uint32_t i = 0; i < tp->meta.npieces; i++)
             if (tp->piece_count[i] > 0)
                 seen_npieces++;
-        errdie(buf_print(&iob, "d4:downi%" PRIu64 "e", tp->downloaded));
+        errdie(buf_print(&iob, "d4:downi%jue", (intmax_t)tp->downloaded));
         errdie(buf_swrite(&iob, "4:hash20:"));
         errdie(buf_write(&iob, tp->meta.info_hash, 20));
         errdie(buf_print(&iob, "12:have npiecesi%ue", tp->have_npieces));
@@ -53,7 +49,7 @@ cmd_stat(int argc, const char *args, FILE *fp)
         errdie(buf_print(&iob, "4:path%d:%s",
                          (int)strlen(tp->relpath), tp->relpath));
         errdie(buf_print(&iob, "12:seen npiecesi%ue", seen_npieces));
-        errdie(buf_print(&iob, "2:upi%" PRIu64 "ee", tp->uploaded));
+        errdie(buf_print(&iob, "2:upi%juee", (intmax_t)tp->uploaded));
     }
     errdie(buf_swrite(&iob, "ee"));
 

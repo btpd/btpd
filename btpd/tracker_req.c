@@ -17,10 +17,6 @@
 #include "btpd.h"
 #include "tracker_req.h"
 
-#ifndef PRIu64
-#define PRIu64 "llu"
-#endif
-
 #define REQ_SIZE (getpagesize() * 2)
 
 struct tracker_req {
@@ -175,18 +171,13 @@ create_url(struct tracker_req *req, struct torrent *tp, char **url)
 
     left = cm_bytes_left(tp);
 
-    i = asprintf(url, "%s%cinfo_hash=%s"
-                 "&peer_id=%s"
-                 "&port=%d"
-                 "&uploaded=%" PRIu64
-                 "&downloaded=%" PRIu64
-                 "&left=%" PRIu64
-                 "&compact=1"
-                 "%s%s",
-                 tp->meta.announce, qc, e_hash, e_id, net_port,
-                 tp->uploaded, tp->downloaded, left,
-                 req->tr_event == TR_EMPTY ? "" : "&event=",
-                 event);
+    i =
+        asprintf(url, "%s%cinfo_hash=%s&peer_id=%s&port=%d&uploaded=%ju"
+            "&downloaded=%ju&left=%ju&compact=1%s%s",
+            tp->meta.announce, qc, e_hash, e_id, net_port,
+            (intmax_t)tp->uploaded, (intmax_t)tp->downloaded, (intmax_t)left,
+            req->tr_event == TR_EMPTY ? "" : "&event=",
+            event);
 
     if (i < 0)
         return ENOMEM;
