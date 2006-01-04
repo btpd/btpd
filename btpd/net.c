@@ -517,9 +517,6 @@ compute_rates(void) {
     }
     m_rate_up += tot_up - compute_rate_sub(m_rate_up);
     m_rate_dwn += tot_dwn - compute_rate_sub(m_rate_dwn);
-    btpd_log(BTPD_L_BTPD, "rates: %7.2fkB/s, %7.2fkB/s.\n",
-        (double)m_rate_up / 20 / (1 << 10),
-        (double)m_rate_dwn / 20 / (1 << 10));
 }
 
 void
