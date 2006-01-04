@@ -62,12 +62,12 @@ choke_do(void)
         qsort(worthy, nworthy, sizeof(worthy[0]), rate_cmp);
 
         bzero(unchoked, sizeof(unchoked));
-        for (i = nworthy - 1; i >= 0 && found < m_max_downloaders - 1; i--) {
-            if ((worthy[i].p->flags & PF_P_WANT) != 0)
+        for (i = nworthy; i > 0 && found < m_max_downloaders - 1; i--) {
+            if ((worthy[i - 1].p->flags & PF_P_WANT) != 0)
                 found++;
-            if ((worthy[i].p->flags & PF_I_CHOKE) != 0)
+            if ((worthy[i - 1].p->flags & PF_I_CHOKE) != 0)
                 peer_unchoke(p);
-            unchoked[worthy[i].i] = 1;
+            unchoked[worthy[i - 1].i] = 1;
         }
 
         i = 0;
