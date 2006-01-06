@@ -41,6 +41,11 @@ struct {                                                                \
             (var);                                                      \
             (var) = BTPDQ_NEXT((var), field))
 
+#define BTPDQ_FOREACH_MUTABLE(var, head, field, nvar)                   \
+        for ((var) = BTPDQ_FIRST((head));                               \
+             (var) && ((nvar) = BTPDQ_NEXT((var), field), (var));       \
+             (var) = (nvar))
+
 #define BTPDQ_INIT(head) do {                                           \
         BTPDQ_FIRST((head)) = NULL;                                     \
         (head)->tqh_last = &BTPDQ_FIRST((head));                        \
