@@ -3,6 +3,7 @@ btpd_SOURCES=\
 	btpd.c btpd.h\
 	content.c content.h\
 	download.c download_subr.c download.h\
+	http.c http.h\
 	main.c\
 	net.c net.h\
 	net_buf.c net_buf.h\
