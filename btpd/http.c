@@ -189,7 +189,7 @@ http_td_actions(void)
     pthread_mutex_unlock(&m_httpq_lock);
 }
 
-static void *
+static void
 http_td(void *arg)
 {
     fd_set rset, wset, eset;
@@ -226,5 +226,5 @@ http_init(void)
     errdie((m_curlh = curl_multi_init()) == NULL);
     errdie(pthread_mutex_init(&m_httpq_lock, NULL));
     errdie(pthread_cond_init(&m_httpq_cond, NULL));
-    errdie(pthread_create(&ret, NULL, http_td, NULL));
+    errdie(pthread_create(&ret, NULL, (void *(*)(void *))http_td, NULL));
 }
