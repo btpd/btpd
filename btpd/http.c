@@ -126,15 +126,17 @@ http_td_cb(void *arg)
 static void
 http_td_actions(void)
 {
-    int nmsgs, has_posted;
+    int nmsgs;
     struct http *http, *next;
+    struct http_tq postq;
     CURLMsg *cmsg;
 
     pthread_mutex_lock(&m_httpq_lock);
     do {
-        has_posted = 0;
         while (BTPDQ_EMPTY(&m_httpq))
             pthread_cond_wait(&m_httpq_cond, &m_httpq_lock);
+
+        BTPDQ_INIT(&postq);
 
         BTPDQ_FOREACH_MUTABLE(http, &m_httpq, entry, next) {
             switch (http->state) {
@@ -146,13 +148,9 @@ http_td_actions(void)
                 curl_multi_remove_handle(m_curlh, http->curlh);
             case HS_NOADD:
                 BTPDQ_REMOVE(&m_httpq, http, entry);
+                BTPDQ_INSERT_TAIL(&postq, http, entry);
                 http->state = HS_CANCEL;
                 http->res.res = HRES_CANCEL;
-                if (!has_posted) {
-                    has_posted = 1;
-                    td_post_begin();
-                }
-                td_post(http_td_cb, http);
                 break;
             case HS_DONE:
                 abort();
@@ -168,6 +166,7 @@ http_td_actions(void)
             }
             assert(http != NULL);
             BTPDQ_REMOVE(&m_httpq, http, entry);
+            BTPDQ_INSERT_TAIL(&postq, http, entry);
             http->state = HS_DONE;
             if (cmsg->data.result == 0)
                 http->res.res = HRES_OK;
@@ -176,14 +175,16 @@ http_td_actions(void)
                 http->res.code = cmsg->data.result;
             }
             curl_multi_remove_handle(m_curlh, http->curlh);
-            if (!has_posted) {
-                td_post_begin();
-                has_posted = 1;
-            }
-            td_post(http_td_cb, http);
         }
-        if (has_posted)
+
+        if (!BTPDQ_EMPTY(&postq)) {
+            pthread_mutex_unlock(&m_httpq_lock);
+            td_post_begin();
+            BTPDQ_FOREACH(http, &postq, entry)
+                td_post(http_td_cb, http);
             td_post_end();
+            pthread_mutex_lock(&m_httpq_lock);
+        }
     } while (BTPDQ_EMPTY(&m_httpq));
     pthread_mutex_unlock(&m_httpq_lock);
 }
