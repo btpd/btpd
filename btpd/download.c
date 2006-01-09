@@ -117,7 +117,7 @@ dl_on_ok_piece(struct piece *pc)
 
     if (cm_full(tp)) {
         btpd_log(BTPD_L_BTPD, "Finished: %s.\n", tp->relpath);
-        tracker_req(tp, TR_COMPLETED);
+        tr_complete(tp);
         BTPDQ_FOREACH(p, &tp->peers, p_entry)
             assert(p->nwant == 0);
     }

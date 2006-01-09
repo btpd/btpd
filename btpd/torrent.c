@@ -108,10 +108,11 @@ void torrent_cm_cb(struct torrent *tp, enum cm_state state)
     switch (state) {
     case CM_STARTED:
         net_add_torrent(tp);
-        tracker_req(tp, TR_STARTED);
+        tr_start(tp);
+        break;
     case CM_STOPPED:
-        abort();
+        break;
     case CM_ERROR:
-        abort();
+        break;
     }
 }

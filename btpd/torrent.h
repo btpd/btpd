@@ -45,6 +45,7 @@ struct torrent {
     enum torrent_state state;
 
     struct content *cp;
+    struct tracker *tr;
 
     BTPDQ_ENTRY(torrent) entry;
     BTPDQ_ENTRY(torrent) net_entry;
