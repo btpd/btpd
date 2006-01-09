@@ -19,6 +19,7 @@
 #include "metainfo.h"
 #include "iobuf.h"
 #include "net_buf.h"
+#include "net_types.h"
 #include "net.h"
 #include "peer.h"
 #include "torrent.h"

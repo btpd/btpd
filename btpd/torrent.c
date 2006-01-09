@@ -19,21 +19,6 @@
 #include "tracker_req.h"
 #include "stream.h"
 
-int
-torrent_has_peer(struct torrent *tp, const uint8_t *id)
-{
-    int has = 0;
-    struct peer *p = BTPDQ_FIRST(&tp->peers);
-    while (p != NULL) {
-        if (bcmp(p->id, id, 20) == 0) {
-            has = 1;
-            break;
-        }
-        p = BTPDQ_NEXT(p, p_entry);
-    }
-    return has;
-}
-
 off_t
 torrent_piece_size(struct torrent *tp, uint32_t index)
 {
@@ -52,7 +37,7 @@ torrent_block_size(struct piece *pc, uint32_t index)
         return PIECE_BLOCKLEN;
     else {
         uint32_t allbutlast = PIECE_BLOCKLEN * (pc->nblocks - 1);
-        return torrent_piece_size(pc->tp, pc->index) - allbutlast;
+        return torrent_piece_size(pc->n->tp, pc->index) - allbutlast;
     }
 }
 

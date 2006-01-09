@@ -19,8 +19,8 @@ rate_cmp(const void *arg1, const void *arg2)
 {
     struct peer *p1 = (*(struct peer_sort **)arg1)->p;
     struct peer *p2 = (*(struct peer_sort **)arg2)->p;
-    unsigned long rate1 = cm_full(p1->tp) ? p1->rate_up : p1->rate_dwn;
-    unsigned long rate2 = cm_full(p2->tp) ? p2->rate_up : p2->rate_dwn;
+    unsigned long rate1 = cm_full(p1->n->tp) ? p1->rate_up : p1->rate_dwn;
+    unsigned long rate2 = cm_full(p2->n->tp) ? p2->rate_up : p2->rate_dwn;
     if (rate1 < rate2)
         return -1;
     else if (rate1 == rate2)
@@ -51,8 +51,8 @@ choke_do(void)
         int unchoked[m_npeers];
 
         BTPDQ_FOREACH(p, &m_peerq, ul_entry) {
-            if (((cm_full(p->tp) && p->rate_up > 0)
-                    || (!cm_full(p->tp) && p->rate_dwn > 0))) {
+            if (((cm_full(p->n->tp) && p->rate_up > 0)
+                    || (!cm_full(p->n->tp) && p->rate_dwn > 0))) {
                 worthy[nworthy].p = p;
                 worthy[nworthy].i = i;
                 nworthy++;
@@ -143,14 +143,12 @@ ul_on_lost_peer(struct peer *p)
 }
 
 void
-ul_on_lost_torrent(struct torrent *tp)
+ul_on_lost_torrent(struct net *n)
 {
-    struct peer *p = BTPDQ_FIRST(&m_peerq);
-    while (p != NULL) {
-        struct peer *next = BTPDQ_NEXT(p, p_entry);
+    struct peer *p;
+    BTPDQ_FOREACH(p, &n->peers, p_entry) {
         BTPDQ_REMOVE(&m_peerq, p, ul_entry);
         m_npeers--;
-        p = next;
     }
     choke_do();
 }

@@ -61,7 +61,7 @@ maybe_connect_to(struct torrent *tp, const char *pinfo)
     if (bcmp(btpd_get_peer_id(), pid, 20) == 0)
         return;
 
-    if (torrent_has_peer(tp, pid))
+    if (net_torrent_has_peer(tp->net, pid))
         return;
 
     if (benc_dget_strz(pinfo, "ip", &ip, NULL) != 0)
@@ -70,7 +70,7 @@ maybe_connect_to(struct torrent *tp, const char *pinfo)
     if (benc_dget_int64(pinfo, "port", &port) != 0)
         goto out;
 
-    peer_create_out(tp, pid, ip, port);
+    peer_create_out(tp->net, pid, ip, port);
 
 out:
     if (ip != NULL)
@@ -118,7 +118,7 @@ parse_reply(struct torrent *tp, const char *content, size_t size)
         if (error == 0 && length % 6 == 0) {
             size_t i;
             for (i = 0; i < length && net_npeers < net_max_peers; i += 6)
-                peer_create_out_compact(tp, peers + i);
+                peer_create_out_compact(tp->net, peers + i);
         }
     }
 
@@ -218,7 +218,7 @@ tr_send(struct torrent *tp, enum tr_event event)
         "%s%cinfo_hash=%s&peer_id=%s&port=%d&uploaded=%ju"
         "&downloaded=%ju&left=%ju&compact=1%s%s",
         tp->meta.announce, qc, e_hash, e_id, net_port,
-        (intmax_t)tp->uploaded, (intmax_t)tp->downloaded,
+        (intmax_t)tp->net->uploaded, (intmax_t)tp->net->downloaded,
         (intmax_t)cm_bytes_left(tp),
         event == TR_EV_EMPTY ? "" : "&event=", m_events[event]);
 }

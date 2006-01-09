@@ -15,69 +15,6 @@
 #define MAXPIECEMSGS 128
 #define MAXPIPEDREQUESTS 10
 
-struct block_request {
-    struct peer *p;
-    struct block *blk;
-    BTPDQ_ENTRY(block_request) p_entry;
-    BTPDQ_ENTRY(block_request) blk_entry;
-};
-
-BTPDQ_HEAD(block_request_tq, block_request);
-
-enum input_state {
-    SHAKE_PSTR,
-    SHAKE_INFO,
-    SHAKE_ID,
-    BTP_MSGSIZE,
-    BTP_MSGHEAD,
-    BTP_PIECEMETA,
-    BTP_MSGBODY
-};
-
-struct peer {
-    int sd;
-    uint16_t flags;
-    uint8_t *piece_field;
-    uint32_t npieces;
-    uint32_t nwant;
-
-    uint8_t id[20];
-
-    struct torrent *tp;
-
-    struct block_request_tq my_reqs;
-
-    unsigned nreqs_out;
-    unsigned npiece_msgs;
-
-    size_t outq_off;
-    struct nb_tq outq;
-
-    struct event in_ev;
-    struct event out_ev;
-
-    unsigned long rate_up, rate_dwn;
-    unsigned long count_up, count_dwn;
-
-    struct {
-        uint32_t msg_len;
-        uint8_t msg_num;
-        uint32_t pc_index;
-        uint32_t pc_begin;
-        enum input_state state;
-        size_t st_bytes;
-        char *buf;
-        size_t off;
-    } in;
-
-    BTPDQ_ENTRY(peer) p_entry;
-    BTPDQ_ENTRY(peer) ul_entry;
-    BTPDQ_ENTRY(peer) rq_entry;
-    BTPDQ_ENTRY(peer) wq_entry;
-};
-
-BTPDQ_HEAD(peer_tq, peer);
-
 void peer_set_in_state(struct peer *p, enum input_state state, size_t size);
 
 void peer_send(struct peer *p, struct net_buf *nb);
@@ -95,9 +32,9 @@ void peer_cancel(struct peer *p, struct block_request *req,
 int peer_requested(struct peer *p, struct block *blk);
 
 void peer_create_in(int sd);
-void peer_create_out(struct torrent *tp, const uint8_t *id,
+void peer_create_out(struct net *n, const uint8_t *id,
     const char *ip, int port);
-void peer_create_out_compact(struct torrent *tp, const char *compact);
+void peer_create_out_compact(struct net *n, const char *compact);
 void peer_kill(struct peer *p);
 
 void peer_on_no_reqs(struct peer *p);

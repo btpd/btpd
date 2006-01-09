@@ -104,8 +104,8 @@ static
 void test_cb(int fd, short type, void *arg)
 {
     struct test *t = arg;
-    set_bit(t->pc->tp->cm->piece_field, t->pc->index);
-    t->pc->tp->cm->npieces++;
+    set_bit(t->pc->n->tp->cm->piece_field, t->pc->index);
+    t->pc->n->tp->cm->npieces++;
     dl_on_ok_piece(t->pc);
     free(t);
 }

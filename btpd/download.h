@@ -8,8 +8,8 @@ void piece_free(struct piece *pc);
 
 void dl_on_piece_unfull(struct piece *pc);
 
-struct piece *dl_new_piece(struct torrent *tp, uint32_t index);
-struct piece *dl_find_piece(struct torrent *tp, uint32_t index);
+struct piece *dl_new_piece(struct net *n, uint32_t index);
+struct piece *dl_find_piece(struct net *n, uint32_t index);
 unsigned dl_piece_assign_requests(struct piece *pc, struct peer *p);
 unsigned  dl_assign_requests(struct peer *p);
 void dl_assign_requests_eg(struct peer *p);
@@ -18,9 +18,6 @@ void dl_unassign_requests_eg(struct peer *p);
 void dl_piece_reorder_eg(struct piece *pc);
 
 // download.c
-
-void dl_start(struct torrent *tp);
-void dl_stop(struct torrent *tp);
 
 void dl_on_new_peer(struct peer *p);
 void dl_on_lost_peer(struct peer *p);

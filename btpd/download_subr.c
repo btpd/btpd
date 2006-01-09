@@ -30,14 +30,14 @@
 #include "stream.h"
 
 static struct piece *
-piece_alloc(struct torrent *tp, uint32_t index)
+piece_alloc(struct net *n, uint32_t index)
 {
-    assert(!has_bit(tp->busy_field, index)
-        && tp->npcs_busy < tp->meta.npieces);
+    assert(!has_bit(n->busy_field, index)
+        && n->npcs_busy < n->tp->meta.npieces);
     struct piece *pc;
     size_t mem, field, blocks;
     unsigned nblocks;
-    off_t piece_length = torrent_piece_size(tp, index);
+    off_t piece_length = torrent_piece_size(n->tp, index);
 
     nblocks = (unsigned)ceil((double)piece_length / PIECE_BLOCKLEN);
     blocks = sizeof(pc->blocks[0]) * nblocks;
@@ -45,9 +45,9 @@ piece_alloc(struct torrent *tp, uint32_t index)
     mem = sizeof(*pc) + field + blocks;
 
     pc = btpd_calloc(1, mem);
-    pc->tp = tp;
+    pc->n = n;
     pc->down_field = (uint8_t *)(pc + 1);
-    pc->have_field = cm_get_block_field(tp, index);
+    pc->have_field = cm_get_block_field(n->tp, index);
 
     pc->index = index;
     pc->nblocks = nblocks;
@@ -71,20 +71,20 @@ piece_alloc(struct torrent *tp, uint32_t index)
         nb_hold(blk->msg);
     }
 
-    tp->npcs_busy++;
-    set_bit(tp->busy_field, index);
-    BTPDQ_INSERT_HEAD(&tp->getlst, pc, entry);
+    n->npcs_busy++;
+    set_bit(n->busy_field, index);
+    BTPDQ_INSERT_HEAD(&n->getlst, pc, entry);
     return pc;
 }
 
 void
 piece_free(struct piece *pc)
 {
-    struct torrent *tp = pc->tp;
-    assert(tp->npcs_busy > 0);
-    tp->npcs_busy--;
-    clear_bit(tp->busy_field, pc->index);
-    BTPDQ_REMOVE(&pc->tp->getlst, pc, entry);
+    struct net *n = pc->n;
+    assert(n->npcs_busy > 0);
+    n->npcs_busy--;
+    clear_bit(n->busy_field, pc->index);
+    BTPDQ_REMOVE(&pc->n->getlst, pc, entry);
     for (unsigned i = 0; i < pc->nblocks; i++) {
         struct block_request *req = BTPDQ_FIRST(&pc->blocks[i].reqs);
         while (req != NULL) {
@@ -104,13 +104,13 @@ piece_full(struct piece *pc)
 }
 
 static int
-dl_should_enter_endgame(struct torrent *tp)
+dl_should_enter_endgame(struct net *n)
 {
     int should;
-    if (cm_get_npieces(tp) + tp->npcs_busy == tp->meta.npieces) {
+    if (cm_get_npieces(n->tp) + n->npcs_busy == n->tp->meta.npieces) {
         should = 1;
         struct piece *pc;
-        BTPDQ_FOREACH(pc, &tp->getlst, entry) {
+        BTPDQ_FOREACH(pc, &n->getlst, entry) {
             if (!piece_full(pc)) {
                 should = 0;
                 break;
@@ -124,7 +124,7 @@ dl_should_enter_endgame(struct torrent *tp)
 static void
 dl_piece_insert_eg(struct piece *pc)
 {
-    struct piece_tq *getlst = &pc->tp->getlst;
+    struct piece_tq *getlst = &pc->n->getlst;
     if (pc->nblocks == pc->ngot)
         BTPDQ_INSERT_TAIL(getlst, pc, entry);
     else {
@@ -145,37 +145,37 @@ dl_piece_insert_eg(struct piece *pc)
 void
 dl_piece_reorder_eg(struct piece *pc)
 {
-    BTPDQ_REMOVE(&pc->tp->getlst, pc, entry);
+    BTPDQ_REMOVE(&pc->n->getlst, pc, entry);
     dl_piece_insert_eg(pc);
 }
 
 static void
-dl_enter_endgame(struct torrent *tp)
+dl_enter_endgame(struct net *n)
 {
     struct peer *p;
     struct piece *pc;
-    struct piece *pcs[tp->npcs_busy];
+    struct piece *pcs[n->npcs_busy];
     unsigned pi;
 
     btpd_log(BTPD_L_POL, "Entering end game\n");
-    tp->endgame = 1;
+    n->endgame = 1;
 
     pi = 0;
-    BTPDQ_FOREACH(pc, &tp->getlst, entry) {
+    BTPDQ_FOREACH(pc, &n->getlst, entry) {
         for (unsigned i = 0; i < pc->nblocks; i++)
             clear_bit(pc->down_field, i);
         pc->nbusy = 0;
         pcs[pi] = pc;
         pi++;
     }
-    BTPDQ_INIT(&tp->getlst);
+    BTPDQ_INIT(&n->getlst);
     while (pi > 0) {
         pi--;
         dl_piece_insert_eg(pcs[pi]);
     }
-    BTPDQ_FOREACH(p, &tp->peers, p_entry) {
+    BTPDQ_FOREACH(p, &n->peers, p_entry) {
         assert(p->nwant == 0);
-        BTPDQ_FOREACH(pc, &tp->getlst, entry) {
+        BTPDQ_FOREACH(pc, &n->getlst, entry) {
             if (peer_has(p, pc->index))
                 peer_want(p, pc->index);
         }
@@ -185,10 +185,10 @@ dl_enter_endgame(struct torrent *tp)
 }
 
 struct piece *
-dl_find_piece(struct torrent *tp, uint32_t index)
+dl_find_piece(struct net *n, uint32_t index)
 {
     struct piece *pc;
-    BTPDQ_FOREACH(pc, &tp->getlst, entry)
+    BTPDQ_FOREACH(pc, &n->getlst, entry)
         if (pc->index == index)
             break;
     return pc;
@@ -197,8 +197,8 @@ dl_find_piece(struct torrent *tp, uint32_t index)
 static int
 dl_piece_startable(struct peer *p, uint32_t index)
 {
-    return peer_has(p, index) && !cm_has_piece(p->tp, index)
-        && !has_bit(p->tp->busy_field, index);
+    return peer_has(p, index) && !cm_has_piece(p->n->tp, index)
+        && !has_bit(p->n->busy_field, index);
 }
 
 /*
@@ -212,23 +212,23 @@ static int
 dl_choose_rarest(struct peer *p, uint32_t *res)
 {
     uint32_t i;
-    struct torrent *tp = p->tp;
+    struct net *n = p->n;
 
-    assert(tp->endgame == 0);
+    assert(n->endgame == 0);
 
-    for (i = 0; i < tp->meta.npieces && !dl_piece_startable(p, i); i++)
+    for (i = 0; i < n->tp->meta.npieces && !dl_piece_startable(p, i); i++)
         ;
 
-    if (i == tp->meta.npieces)
+    if (i == n->tp->meta.npieces)
         return ENOENT;
 
     uint32_t min_i = i;
     uint32_t min_c = 1;
-    for(i++; i < tp->meta.npieces; i++) {
+    for(i++; i < n->tp->meta.npieces; i++) {
         if (dl_piece_startable(p, i)) {
-            if (tp->piece_count[i] == tp->piece_count[min_i])
+            if (n->piece_count[i] == n->piece_count[min_i])
                 min_c++;
-            else if (tp->piece_count[i] < tp->piece_count[min_i]) {
+            else if (n->piece_count[i] < n->piece_count[min_i]) {
                 min_i = i;
                 min_c = 1;
             }
@@ -238,7 +238,7 @@ dl_choose_rarest(struct peer *p, uint32_t *res)
         min_c = rand_between(1, min_c);
         for (i = min_i; min_c > 0; i++) {
             if (dl_piece_startable(p, i)
-                && tp->piece_count[i] == tp->piece_count[min_i]) {
+                && n->piece_count[i] == n->piece_count[min_i]) {
                 min_c--;
                 min_i = i;
             }
@@ -257,12 +257,12 @@ static void
 dl_on_piece_full(struct piece *pc)
 {
     struct peer *p;
-    BTPDQ_FOREACH(p, &pc->tp->peers, p_entry) {
+    BTPDQ_FOREACH(p, &pc->n->peers, p_entry) {
         if (peer_has(p, pc->index))
             peer_unwant(p, pc->index);
     }
-    if (dl_should_enter_endgame(pc->tp))
-        dl_enter_endgame(pc->tp);
+    if (dl_should_enter_endgame(pc->n))
+        dl_enter_endgame(pc->n);
 }
 
 /*
@@ -275,10 +275,10 @@ dl_on_piece_full(struct piece *pc)
  * Return the piece or NULL.
  */
 struct piece *
-dl_new_piece(struct torrent *tp, uint32_t index)
+dl_new_piece(struct net *n, uint32_t index)
 {
     btpd_log(BTPD_L_POL, "Started on piece %u.\n", index);
-    return piece_alloc(tp, index);
+    return piece_alloc(n, index);
 }
 
 /*
@@ -291,13 +291,13 @@ dl_new_piece(struct torrent *tp, uint32_t index)
 void
 dl_on_piece_unfull(struct piece *pc)
 {
-    struct torrent *tp = pc->tp;
+    struct net *n = pc->n;
     struct peer *p;
-    assert(!piece_full(pc) && tp->endgame == 0);
-    BTPDQ_FOREACH(p, &tp->peers, p_entry)
+    assert(!piece_full(pc) && n->endgame == 0);
+    BTPDQ_FOREACH(p, &n->peers, p_entry)
         if (peer_has(p, pc->index))
             peer_want(p, pc->index);
-    p = BTPDQ_FIRST(&tp->peers);
+    p = BTPDQ_FIRST(&n->peers);
     while (p != NULL && !piece_full(pc)) {
         if (peer_leech_ok(p) && !peer_laden(p))
             dl_piece_assign_requests(pc, p); // Cannot provoke end game here.
@@ -360,25 +360,25 @@ dl_piece_assign_requests(struct piece *pc, struct peer *p)
 unsigned
 dl_assign_requests(struct peer *p)
 {
-    assert(!p->tp->endgame && !peer_laden(p));
+    assert(!p->n->endgame && !peer_laden(p));
     struct piece *pc;
-    struct torrent *tp = p->tp;
+    struct net *n = p->n;
     unsigned count = 0;
-    BTPDQ_FOREACH(pc, &tp->getlst, entry) {
+    BTPDQ_FOREACH(pc, &n->getlst, entry) {
         if (piece_full(pc) || !peer_has(p, pc->index))
             continue;
         count += dl_piece_assign_requests(pc, p);
-        if (tp->endgame)
+        if (n->endgame)
             break;
         if (!piece_full(pc))
             assert(peer_laden(p));
         if (peer_laden(p))
             break;
     }
-    while (!peer_laden(p) && !tp->endgame) {
+    while (!peer_laden(p) && !n->endgame) {
         uint32_t index;
         if (dl_choose_rarest(p, &index) == 0) {
-            pc = dl_new_piece(tp, index);
+            pc = dl_new_piece(n, index);
             if (pc != NULL)
                 count += dl_piece_assign_requests(pc, p);
         } else
@@ -445,16 +445,16 @@ void
 dl_assign_requests_eg(struct peer *p)
 {
     assert(!peer_laden(p));
-    struct torrent *tp = p->tp;
+    struct net *n = p->n;
     struct piece_tq tmp;
     BTPDQ_INIT(&tmp);
 
-    struct piece *pc = BTPDQ_FIRST(&tp->getlst);
+    struct piece *pc = BTPDQ_FIRST(&n->getlst);
     while (!peer_laden(p) && pc != NULL) {
         struct piece *next = BTPDQ_NEXT(pc, entry);
         if (peer_has(p, pc->index) && pc->nblocks != pc->ngot) {
             dl_piece_assign_requests_eg(pc, p);
-            BTPDQ_REMOVE(&tp->getlst, pc, entry);
+            BTPDQ_REMOVE(&n->getlst, pc, entry);
             BTPDQ_INSERT_HEAD(&tmp, pc, entry);
         }
         pc = next;
@@ -480,7 +480,7 @@ dl_unassign_requests_eg(struct peer *p)
         req = BTPDQ_FIRST(&p->my_reqs);
 
         pc = req->blk->pc;
-        BTPDQ_REMOVE(&pc->tp->getlst, pc, entry);
+        BTPDQ_REMOVE(&pc->n->getlst, pc, entry);
         BTPDQ_INSERT_HEAD(&tmp, pc, entry);
 
         while (req != NULL) {

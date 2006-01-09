@@ -23,6 +23,8 @@ void net_init(void);
 void net_add_torrent(struct torrent *tp);
 void net_del_torrent(struct torrent *tp);
 
+int net_torrent_has_peer(struct net *n, const uint8_t *id);
+
 void net_read_cb(int sd, short type, void *arg);
 void net_write_cb(int sd, short type, void *arg);
 

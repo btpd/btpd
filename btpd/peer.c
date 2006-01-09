@@ -17,12 +17,12 @@ peer_kill(struct peer *p)
     btpd_log(BTPD_L_CONN, "killed peer %p\n", p);
 
     if (p->flags & PF_ATTACHED) {
-        if (p->tp->net_active) {
+        if (p->n->active) {
             ul_on_lost_peer(p);
             dl_on_lost_peer(p);
         }
-        BTPDQ_REMOVE(&p->tp->peers, p, p_entry);
-        p->tp->npeers--;
+        BTPDQ_REMOVE(&p->n->peers, p, p_entry);
+        p->n->npeers--;
     } else
         BTPDQ_REMOVE(&net_unattached, p, p_entry);
     if (p->flags & PF_ON_READQ)
@@ -284,7 +284,7 @@ peer_create_in(int sd)
 }
 
 void
-peer_create_out(struct torrent *tp, const uint8_t *id,
+peer_create_out(struct net *n, const uint8_t *id,
     const char *ip, int port)
 {
     int sd;
@@ -294,12 +294,12 @@ peer_create_out(struct torrent *tp, const uint8_t *id,
         return;
 
     p = peer_create_common(sd);
-    p->tp = tp;
-    peer_send(p, nb_create_shake(p->tp));
+    p->n = n;
+    peer_send(p, nb_create_shake(n->tp));
 }
 
 void
-peer_create_out_compact(struct torrent *tp, const char *compact)
+peer_create_out_compact(struct net *n, const char *compact)
 {
     int sd;
     struct peer *p;
@@ -313,8 +313,8 @@ peer_create_out_compact(struct torrent *tp, const char *compact)
         return;
 
     p = peer_create_common(sd);
-    p->tp = tp;
-    peer_send(p, nb_create_shake(p->tp));
+    p->n = n;
+    peer_send(p, nb_create_shake(n->tp));
 }
 
 void
@@ -342,20 +342,21 @@ peer_on_shake(struct peer *p)
         printid[i] = p->id[i];
     printid[i] = '\0';
     btpd_log(BTPD_L_MSG, "received shake(%s) from %p\n", printid, p);
-    p->piece_field = btpd_calloc(1, (int)ceil(p->tp->meta.npieces / 8.0));
-    if (cm_get_npieces(p->tp) > 0) {
-        if (cm_get_npieces(p->tp) * 9 < 5 + ceil(p->tp->meta.npieces / 8.0))
-            peer_send(p, nb_create_multihave(p->tp));
+    p->piece_field = btpd_calloc(1, (int)ceil(p->n->tp->meta.npieces / 8.0));
+    if (cm_get_npieces(p->n->tp) > 0) {
+        if ((cm_get_npieces(p->n->tp) * 9 < 5 +
+                ceil(p->n->tp->meta.npieces / 8.0)))
+            peer_send(p, nb_create_multihave(p->n->tp));
         else {
-            peer_send(p, nb_create_bitfield(p->tp));
-            peer_send(p, nb_create_bitdata(p->tp));
+            peer_send(p, nb_create_bitfield(p->n->tp));
+            peer_send(p, nb_create_bitdata(p->n->tp));
         }
     }
 
     BTPDQ_REMOVE(&net_unattached, p, p_entry);
-    BTPDQ_INSERT_HEAD(&p->tp->peers, p, p_entry);
+    BTPDQ_INSERT_HEAD(&p->n->peers, p, p_entry);
     p->flags |= PF_ATTACHED;
-    p->tp->npeers++;
+    p->n->npeers++;
 
     ul_on_new_peer(p);
     dl_on_new_peer(p);
@@ -434,8 +435,8 @@ peer_on_bitfield(struct peer *p, const uint8_t *field)
 {
     btpd_log(BTPD_L_MSG, "received bitfield from %p\n", p);
     assert(p->npieces == 0);
-    bcopy(field, p->piece_field, (size_t)ceil(p->tp->meta.npieces / 8.0));
-    for (uint32_t i = 0; i < p->tp->meta.npieces; i++) {
+    bcopy(field, p->piece_field, (size_t)ceil(p->n->tp->meta.npieces / 8.0));
+    for (uint32_t i = 0; i < p->n->tp->meta.npieces; i++) {
         if (has_bit(p->piece_field, i)) {
             p->npieces++;
             dl_on_piece_ann(p, i);
@@ -475,7 +476,7 @@ peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
         index, begin, length, p);
     if ((p->flags & PF_NO_REQUESTS) == 0) {
         char *content;
-        if (cm_get_bytes(p->tp, index, begin, length, &content) == 0) {
+        if (cm_get_bytes(p->n->tp, index, begin, length, &content) == 0) {
             peer_send(p, nb_create_piece(index, begin, length));
             peer_send(p, nb_create_torrentdata(content, length));
             p->npiece_msgs++;

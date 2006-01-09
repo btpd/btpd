@@ -18,8 +18,6 @@
 
 #include "btpd.h"
 
-#define min(x, y) ((x) <= (y) ? (x) : (y))
-
 static struct event m_bw_timer;
 static unsigned long m_bw_bytes_in;
 static unsigned long m_bw_bytes_out;
@@ -30,7 +28,7 @@ static unsigned long m_rate_dwn;
 static struct event m_net_incoming;
 
 static unsigned m_ntorrents;
-static struct torrent_tq m_torrents = BTPDQ_HEAD_INITIALIZER(m_torrents);
+static struct net_tq m_torrents = BTPDQ_HEAD_INITIALIZER(m_torrents);
 
 unsigned net_npeers;
 
@@ -38,40 +36,76 @@ struct peer_tq net_bw_readq = BTPDQ_HEAD_INITIALIZER(net_bw_readq);
 struct peer_tq net_bw_writeq = BTPDQ_HEAD_INITIALIZER(net_bw_writeq);
 struct peer_tq net_unattached = BTPDQ_HEAD_INITIALIZER(net_unattached);
 
+int
+net_torrent_has_peer(struct net *n, const uint8_t *id)
+{
+    int has = 0;
+    struct peer *p = BTPDQ_FIRST(&n->peers);
+    while (p != NULL) {
+        if (bcmp(p->id, id, 20) == 0) {
+            has = 1;
+            break;
+        }
+        p = BTPDQ_NEXT(p, p_entry);
+    }
+    return has;
+}
+
 void
 net_add_torrent(struct torrent *tp)
 {
-    tp->net_active = 1;
-    BTPDQ_INSERT_HEAD(&m_torrents, tp, net_entry);
+    size_t field_size = ceil(tp->meta.npieces / 8.0);
+    size_t mem = sizeof(*(tp->net)) + field_size +
+        tp->meta.npieces * sizeof(*(tp->net->piece_count));
+
+    struct net *n = btpd_calloc(1, mem);
+    n->tp = tp;
+    tp->net = n;
+
+    n->active = 1;
+    BTPDQ_INIT(&n->getlst);
+
+    n->busy_field = (uint8_t *)(n + 1);
+    n->piece_count = (unsigned *)(n->busy_field + field_size);
+
+    BTPDQ_INSERT_HEAD(&m_torrents, n, entry);
     m_ntorrents++;
-    dl_start(tp);
 }
 
 void
 net_del_torrent(struct torrent *tp)
 {
-    tp->net_active = 0;
+    struct net *n = tp->net;
+    tp->net = NULL;
+
     assert(m_ntorrents > 0);
     m_ntorrents--;
-    BTPDQ_REMOVE(&m_torrents, tp, net_entry);
+    BTPDQ_REMOVE(&m_torrents, n, entry);
 
-    ul_on_lost_torrent(tp);
-    dl_stop(tp);
+    n->active = 0;
+
+    ul_on_lost_torrent(n);
+
+    struct piece *pc;
+    while ((pc = BTPDQ_FIRST(&n->getlst)) != NULL)
+        piece_free(pc);
 
     struct peer *p = BTPDQ_FIRST(&net_unattached);
     while (p != NULL) {
         struct peer *next = BTPDQ_NEXT(p, p_entry);
-        if (p->tp == tp)
+        if (p->n == n)
             peer_kill(p);
         p = next;
     }
 
-    p = BTPDQ_FIRST(&tp->peers);
+    p = BTPDQ_FIRST(&n->peers);
     while (p != NULL) {
         struct peer *next = BTPDQ_NEXT(p, p_entry);
         peer_kill(p);
         p = next;
     }
+
+    free(n);
 }
 
 void
@@ -142,7 +176,7 @@ net_write(struct peer *p, unsigned long wmax)
         if (bcount >= bufdelta) {
             peer_sent(p, nl->nb);
             if (nl->nb->type == NB_TORRENTDATA) {
-                p->tp->uploaded += bufdelta;
+                p->n->uploaded += bufdelta;
                 p->count_up += bufdelta;
             }
             bcount -= bufdelta;
@@ -153,7 +187,7 @@ net_write(struct peer *p, unsigned long wmax)
             nl = BTPDQ_FIRST(&p->outq);
         } else {
             if (nl->nb->type == NB_TORRENTDATA) {
-                p->tp->uploaded += bcount;
+                p->n->uploaded += bcount;
                 p->count_up += bcount;
             }
             p->outq_off +=  bcount;
@@ -200,9 +234,9 @@ net_dispatch_msg(struct peer *p, const char *buf)
             begin = net_read32(buf + 4);
             length = net_read32(buf + 8);
             if ((length > PIECE_BLOCKLEN
-                    || index >= p->tp->meta.npieces
-                    || cm_has_piece(p->tp, index)
-                    || begin + length > torrent_piece_size(p->tp, index))) {
+                    || index >= p->n->tp->meta.npieces
+                    || cm_has_piece(p->n->tp, index)
+                    || begin + length > torrent_piece_size(p->n->tp, index))) {
                 btpd_log(BTPD_L_MSG, "bad request: (%u, %u, %u) from %p\n",
                          index, begin, length, p);
                 res = 1;
@@ -240,7 +274,7 @@ net_mh_ok(struct peer *p)
     case MSG_HAVE:
         return mlen == 5;
     case MSG_BITFIELD:
-        return mlen == (uint32_t)ceil(p->tp->meta.npieces / 8.0) + 1;
+        return mlen == (uint32_t)ceil(p->n->tp->meta.npieces / 8.0) + 1;
     case MSG_REQUEST:
     case MSG_CANCEL:
         return mlen == 13;
@@ -255,7 +289,7 @@ static void
 net_progress(struct peer *p, size_t length)
 {
     if (p->in.state == BTP_MSGBODY && p->in.msg_num == MSG_PIECE) {
-        p->tp->downloaded += length;
+        p->n->downloaded += length;
         p->count_dwn += length;
     }
 }
@@ -271,20 +305,20 @@ net_state(struct peer *p, const char *buf)
         break;
     case SHAKE_INFO:
         if (p->flags & PF_INCOMING) {
-            struct torrent *tp;
-            BTPDQ_FOREACH(tp, &m_torrents, net_entry)
-                if (bcmp(buf, tp->meta.info_hash, 20) == 0)
+            struct net *n;
+            BTPDQ_FOREACH(n, &m_torrents, entry)
+                if (bcmp(buf, n->tp->meta.info_hash, 20) == 0)
                     break;
-            if (tp == NULL)
+            if (n == NULL)
                 goto bad;
-            p->tp = tp;
-            peer_send(p, nb_create_shake(p->tp));
-        } else if (bcmp(buf, p->tp->meta.info_hash, 20) != 0)
+            p->n = n;
+            peer_send(p, nb_create_shake(p->n->tp));
+        } else if (bcmp(buf, p->n->tp->meta.info_hash, 20) != 0)
             goto bad;
         peer_set_in_state(p, SHAKE_ID, 20);
         break;
     case SHAKE_ID:
-        if ((torrent_has_peer(p->tp, buf)
+        if ((net_torrent_has_peer(p->n, buf)
              || bcmp(buf, btpd_get_peer_id(), 20) == 0))
             goto bad;
         bcopy(buf, p->id, 20);
@@ -487,11 +521,11 @@ compute_rate_sub(unsigned long rate)
 static void
 compute_rates(void) {
     unsigned long tot_up = 0, tot_dwn = 0;
-    struct torrent *tp;
-    BTPDQ_FOREACH(tp, &m_torrents, net_entry) {
+    struct net *n;
+    BTPDQ_FOREACH(n, &m_torrents, entry) {
         unsigned long tp_up = 0, tp_dwn = 0;
         struct peer *p;
-        BTPDQ_FOREACH(p, &tp->peers, p_entry) {
+        BTPDQ_FOREACH(p, &n->peers, p_entry) {
             if (p->count_up > 0 || peer_active_up(p)) {
                 tp_up += p->count_up;
                 p->rate_up += p->count_up - compute_rate_sub(p->rate_up);
@@ -503,8 +537,8 @@ compute_rates(void) {
                 p->count_dwn = 0;
             }
         }
-        tp->rate_up += tp_up - compute_rate_sub(tp->rate_up);
-        tp->rate_dwn += tp_dwn - compute_rate_sub(tp->rate_dwn);
+        n->rate_up += tp_up - compute_rate_sub(n->rate_up);
+        n->rate_dwn += tp_dwn - compute_rate_sub(n->rate_dwn);
         tot_up += tp_up;
         tot_dwn += tp_dwn;
     }
