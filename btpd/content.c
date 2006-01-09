@@ -33,14 +33,14 @@ cm_start(struct torrent *tp)
         + ceil(tp->meta.npieces / 8.0)
         + tp->meta.npieces * ceil(tp->meta.piece_length / (double)(1 << 17));
 
-    tp->cp = btpd_calloc(mem, 1);
-    tp->cp->piece_map = (uint32_t *)(tp->cp + 1);
-    tp->cp->piece_field = (uint8_t *)(tp->cp->piece_map + tp->meta.npieces);
-    tp->cp->block_field = tp->cp->piece_field
+    tp->cm = btpd_calloc(mem, 1);
+    tp->cm->piece_map = (uint32_t *)(tp->cm + 1);
+    tp->cm->piece_field = (uint8_t *)(tp->cm->piece_map + tp->meta.npieces);
+    tp->cm->block_field = tp->cm->piece_field
         + (size_t)ceil(tp->meta.npieces / 8.0);
 
-    evtimer_set(&tp->cp->done, done_cb, tp);
-    evtimer_add(&tp->cp->done, (& (struct timeval) { 0, 0 }));
+    evtimer_set(&tp->cm->done, done_cb, tp);
+    evtimer_add(&tp->cm->done, (& (struct timeval) { 0, 0 }));
 
     return 0;
 }
@@ -48,42 +48,42 @@ cm_start(struct torrent *tp)
 void
 cm_stop(struct torrent *tp)
 {
-    evtimer_add(&tp->cp->done, (& (struct timeval) { 0, 0 }));
+    evtimer_add(&tp->cm->done, (& (struct timeval) { 0, 0 }));
 }
 
 int
 cm_full(struct torrent *tp)
 {
-    return tp->cp->npieces == tp->meta.npieces;
+    return tp->cm->npieces == tp->meta.npieces;
 }
 
 uint8_t *
 cm_get_piece_field(struct torrent *tp)
 {
-    return tp->cp->piece_field;
+    return tp->cm->piece_field;
 }
 
 uint8_t *
 cm_get_block_field(struct torrent *tp, uint32_t piece)
 {
-    return tp->cp->block_field +
+    return tp->cm->block_field +
         piece * (size_t)ceil(tp->meta.piece_length / (double)(1 << 17));
 }
 
 int
 cm_has_piece(struct torrent *tp, uint32_t piece)
 {
-    return has_bit(tp->cp->piece_field, piece);
+    return has_bit(tp->cm->piece_field, piece);
 }
 
 int
 cm_put_block(struct torrent *tp, uint32_t piece, uint32_t block,
     const char *data)
 {
-    set_bit(tp->cp->block_field +
+    set_bit(tp->cm->block_field +
         piece * (size_t)ceil(tp->meta.piece_length / (double)(1 << 17)),
         block);
-    tp->cp->nblocks++;
+    tp->cm->nblocks++;
     return 0;
 }
 
@@ -104,8 +104,8 @@ static
 void test_cb(int fd, short type, void *arg)
 {
     struct test *t = arg;
-    set_bit(t->pc->tp->cp->piece_field, t->pc->index);
-    t->pc->tp->cp->npieces++;
+    set_bit(t->pc->tp->cm->piece_field, t->pc->index);
+    t->pc->tp->cm->npieces++;
     dl_on_ok_piece(t->pc);
     free(t);
 }
@@ -122,7 +122,7 @@ cm_test_piece(struct piece *pc)
 uint32_t
 cm_get_npieces(struct torrent *tp)
 {
-    return tp->cp->npieces;
+    return tp->cm->npieces;
 }
 
 off_t
