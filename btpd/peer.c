@@ -42,12 +42,19 @@ peer_kill(struct peer *p)
         nl = next;
     }
 
-    if (p->net.buf != NULL)
-        free(p->net.buf);
+    if (p->in.buf != NULL)
+        free(p->in.buf);
     if (p->piece_field != NULL)
         free(p->piece_field);
     free(p);
     net_npeers--;
+}
+
+void
+peer_set_in_state(struct peer *p, enum input_state state, size_t size)
+{
+    p->in.state = state;
+    p->in.st_bytes = size;
 }
 
 void
@@ -258,7 +265,7 @@ peer_create_common(int sd)
     BTPDQ_INIT(&p->my_reqs);
     BTPDQ_INIT(&p->outq);
 
-    net_set_state(p, SHAKE_PSTR, 28);
+    peer_set_in_state(p, SHAKE_PSTR, 28);
 
     event_set(&p->out_ev, p->sd, EV_WRITE, net_write_cb, p);
     event_set(&p->in_ev, p->sd, EV_READ, net_read_cb, p);

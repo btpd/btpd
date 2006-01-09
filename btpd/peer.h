@@ -24,6 +24,16 @@ struct block_request {
 
 BTPDQ_HEAD(block_request_tq, block_request);
 
+enum input_state {
+    SHAKE_PSTR,
+    SHAKE_INFO,
+    SHAKE_ID,
+    BTP_MSGSIZE,
+    BTP_MSGHEAD,
+    BTP_PIECEMETA,
+    BTP_MSGBODY
+};
+
 struct peer {
     int sd;
     uint16_t flags;
@@ -54,11 +64,11 @@ struct peer {
         uint8_t msg_num;
         uint32_t pc_index;
         uint32_t pc_begin;
-        enum net_state state;
+        enum input_state state;
         size_t st_bytes;
         char *buf;
         size_t off;
-    } net;
+    } in;
 
     BTPDQ_ENTRY(peer) p_entry;
     BTPDQ_ENTRY(peer) ul_entry;
@@ -67,6 +77,8 @@ struct peer {
 };
 
 BTPDQ_HEAD(peer_tq, peer);
+
+void peer_set_in_state(struct peer *p, enum input_state state, size_t size);
 
 void peer_send(struct peer *p, struct net_buf *nb);
 int peer_unsend(struct peer *p, struct nb_link *nl);

@@ -18,18 +18,6 @@ extern struct peer_tq net_bw_readq;
 extern struct peer_tq net_bw_writeq;
 extern unsigned net_npeers;
 
-enum net_state {
-    SHAKE_PSTR,
-    SHAKE_INFO,
-    SHAKE_ID,
-    BTP_MSGSIZE,
-    BTP_MSGHEAD,
-    BTP_PIECEMETA,
-    BTP_MSGBODY
-};
-
-void net_set_state(struct peer *p, enum net_state state, size_t size);
-
 void net_init(void);
 
 void net_add_torrent(struct torrent *tp);
