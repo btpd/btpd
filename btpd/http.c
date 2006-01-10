@@ -94,7 +94,7 @@ http_cancel(struct http *http)
     pthread_mutex_lock(&m_httpq_lock);
     if (http->state == HS_ADD)
         http->state = HS_NOADD;
-    else if (http->state == HS_ACTIVE)
+    else
         http->state = HS_CANCEL;
     pthread_mutex_unlock(&m_httpq_lock);
 }
@@ -115,7 +115,8 @@ http_td_cb(void *arg)
         btpd_log(BTPD_L_ERROR, "Http error for url '%s' (%s).\n", h->url,
             curl_easy_strerror(h->res.code));
     }
-    h->cb(h, &h->res, h->cb_arg);
+    if (h->state != HS_CANCEL)
+        h->cb(h, &h->res, h->cb_arg);
     curl_easy_cleanup(h->curlh);
     if (h->res.content != NULL)
         free(h->res.content);

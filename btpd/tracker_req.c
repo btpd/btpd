@@ -25,16 +25,8 @@ enum timer_type {
     TIMER_RETRY
 };
 
-enum http_type {
-    HTTP_NONE,
-    HTTP_NORMAL,
-    HTTP_RETRY,
-    HTTP_NEW
-};
-
 struct tracker {
     enum timer_type ttype;
-    enum http_type htype;
     enum tr_event event;
     int interval;
     unsigned nerrors;
@@ -135,26 +127,14 @@ http_cb(struct http *req, struct http_res *res, void *arg)
 {
     struct torrent *tp = arg;
     struct tracker *tr = tp->tr;
-    switch (tr->htype) {
-    case HTTP_NORMAL:
-        if ((http_succeeded(res) &&
-                parse_reply(tp, res->content, res->length) == 0)) {
-            tr->htype = HTTP_NONE;
-            tr->ttype = TIMER_INTERVAL;
-            event_add(&tr->timer, (& (struct timeval) { tr->interval, 0 }));
-            break;
-        }
-    case HTTP_RETRY:
-        tr->htype = HTTP_NONE;
+    assert(tr->ttype == TIMER_TIMEOUT);
+    if ((http_succeeded(res) &&
+            parse_reply(tp, res->content, res->length) == 0)) {
+        tr->ttype = TIMER_INTERVAL;
+        event_add(&tr->timer, (& (struct timeval) { tr->interval, 0 }));
+    } else {
         tr->ttype = TIMER_RETRY;
         event_add(&tr->timer, RETRY_WAIT);
-        break;
-    case HTTP_NEW:
-        tr->htype = HTTP_NONE;
-        tr_send(tp, tr->event);
-        break;
-    default:
-        abort();
     }
 }
 
@@ -165,15 +145,11 @@ timer_cb(int fd, short type, void *arg)
     struct tracker *tr = tp->tr;
     switch (tr->ttype) {
     case TIMER_TIMEOUT:
-        http_cancel(tr->req);
-        tr->htype = HTTP_RETRY;
-        tr->ttype = TIMER_NONE;
+    case TIMER_RETRY:
+        tr_send(tp, tp->tr->event);
         break;
     case TIMER_INTERVAL:
         tr_send(tp, TR_EV_EMPTY);
-        break;
-    case TIMER_RETRY:
-        tr_send(tp, tr->event);
         break;
     default:
         abort();
@@ -188,22 +164,8 @@ tr_send(struct torrent *tp, enum tr_event event)
 
     struct tracker *tr = tp->tr;
     tr->event = event;
-    switch (tr->htype) {
-    case HTTP_NORMAL:
-        tr->htype = HTTP_NEW;
-        tr->ttype = TIMER_NONE;
-        event_del(&tr->timer);
+    if (tr->ttype == TIMER_TIMEOUT)
         http_cancel(tr->req);
-        return;
-    case HTTP_RETRY:
-        tr->htype = HTTP_NEW;
-        return;
-    case HTTP_NEW:
-        return;
-    default:
-        tr->htype = HTTP_NORMAL;
-    }
-
     tr->ttype = TIMER_TIMEOUT;
     event_add(&tr->timer, REQ_TIMEOUT);
 
