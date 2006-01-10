@@ -50,8 +50,6 @@ void *btpd_calloc(size_t nmemb, size_t size);
 
 void btpd_shutdown(void);
 
-void btpd_add_child(pid_t pid, void (*cb)(pid_t, void *), void *arg);
-
 struct torrent * btpd_get_torrent(const uint8_t *hash);
 const struct torrent_tq *btpd_get_torrents(void);
 void btpd_add_torrent(struct torrent *tp);
