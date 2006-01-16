@@ -17,12 +17,12 @@ peer_kill(struct peer *p)
     btpd_log(BTPD_L_CONN, "killed peer %p\n", p);
 
     if (p->flags & PF_ATTACHED) {
+        BTPDQ_REMOVE(&p->n->peers, p, p_entry);
+        p->n->npeers--;
         if (p->n->active) {
             ul_on_lost_peer(p);
             dl_on_lost_peer(p);
         }
-        BTPDQ_REMOVE(&p->n->peers, p, p_entry);
-        p->n->npeers--;
     } else
         BTPDQ_REMOVE(&net_unattached, p, p_entry);
     if (p->flags & PF_ON_READQ)
@@ -475,7 +475,7 @@ peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
     btpd_log(BTPD_L_MSG, "received request(%u,%u,%u) from %p\n",
         index, begin, length, p);
     if ((p->flags & PF_NO_REQUESTS) == 0) {
-        char *content;
+        uint8_t *content;
         if (cm_get_bytes(p->n->tp, index, begin, length, &content) == 0) {
             peer_send(p, nb_create_piece(index, begin, length));
             peer_send(p, nb_create_torrentdata(content, length));
