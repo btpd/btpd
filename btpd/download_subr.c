@@ -278,6 +278,7 @@ struct piece *
 dl_new_piece(struct net *n, uint32_t index)
 {
     btpd_log(BTPD_L_POL, "Started on piece %u.\n", index);
+    cm_prealloc(n->tp, index);
     return piece_alloc(n, index);
 }
 

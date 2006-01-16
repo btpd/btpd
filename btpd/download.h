@@ -28,9 +28,9 @@ void dl_on_download(struct peer *p);
 void dl_on_undownload(struct peer *p);
 void dl_on_piece_ann(struct peer *p, uint32_t index);
 void dl_on_block(struct peer *p, struct block_request *req,
-    uint32_t index, uint32_t begin, uint32_t length, const char *data);
+    uint32_t index, uint32_t begin, uint32_t length, const uint8_t *data);
 
-void dl_on_ok_piece(struct piece *pc);
-void dl_on_bad_piece(struct piece *pc);
+void dl_on_ok_piece(struct net *n, uint32_t piece);
+void dl_on_bad_piece(struct net *n, uint32_t piece);
 
 #endif

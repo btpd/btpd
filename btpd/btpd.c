@@ -218,6 +218,7 @@ btpd_init(void)
     net_init();
     //ipc_init();
     ul_init();
+    cm_init();
 
     load_library();
 

@@ -77,10 +77,10 @@ dl_on_choke(struct peer *p)
  * Called when a piece has been tested positively.
  */
 void
-dl_on_ok_piece(struct piece *pc)
+dl_on_ok_piece(struct net *n, uint32_t piece)
 {
     struct peer *p;
-    struct net *n = pc->n;
+    struct piece *pc = dl_find_piece(n, piece);
 
     btpd_log(BTPD_L_POL, "Got piece: %u.\n", pc->index);
 
@@ -108,9 +108,9 @@ dl_on_ok_piece(struct piece *pc)
  * Called when a piece has been tested negatively.
  */
 void
-dl_on_bad_piece(struct piece *pc)
+dl_on_bad_piece(struct net *n, uint32_t piece)
 {
-    struct net *n = pc->n;
+    struct piece *pc = dl_find_piece(n, piece);
 
     btpd_log(BTPD_L_ERROR, "Bad hash for piece %u of %s.\n",
         pc->index, n->tp->relpath);
@@ -151,13 +151,13 @@ dl_on_lost_peer(struct peer *p)
 
 void
 dl_on_block(struct peer *p, struct block_request *req,
-    uint32_t index, uint32_t begin, uint32_t length, const char *data)
+    uint32_t index, uint32_t begin, uint32_t length, const uint8_t *data)
 {
     struct net *n = p->n;
     struct block *blk = req->blk;
     struct piece *pc = blk->pc;
 
-    cm_put_block(p->n->tp, index, begin / PIECE_BLOCKLEN, data);
+    cm_put_bytes(p->n->tp, index, begin, data, length);
     pc->ngot++;
 
     if (n->endgame) {
@@ -181,7 +181,7 @@ dl_on_block(struct peer *p, struct block_request *req,
         }
         BTPDQ_INIT(&blk->reqs);
         if (pc->ngot == pc->nblocks)
-            cm_test_piece(pc);
+            cm_test_piece(pc->n->tp, pc->index);
     } else {
         BTPDQ_REMOVE(&blk->reqs, req, blk_entry);
         free(req);
@@ -190,7 +190,7 @@ dl_on_block(struct peer *p, struct block_request *req,
         clear_bit(pc->down_field, begin / PIECE_BLOCKLEN);
         pc->nbusy--;
         if (pc->ngot == pc->nblocks)
-            cm_test_piece(pc);
+            cm_test_piece(pc->n->tp, pc->index);
         if (peer_leech_ok(p) && !peer_laden(p))
             dl_assign_requests(p);
     }
