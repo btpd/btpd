@@ -369,8 +369,6 @@ peer_on_choke(struct peer *p)
     if ((p->flags & PF_P_CHOKE) != 0)
         return;
     else {
-        if (p->nreqs_out > 0)
-            peer_on_no_reqs(p);
         p->flags |= PF_P_CHOKE;
         dl_on_choke(p);
         struct nb_link *nl = BTPDQ_FIRST(&p->outq);

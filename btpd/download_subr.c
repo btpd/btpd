@@ -415,6 +415,9 @@ dl_unassign_requests(struct peer *p)
             req = next;
         }
 
+        if (p->nreqs_out == 0)
+            peer_on_no_reqs(p);
+
         if (was_full && !piece_full(pc))
             dl_on_piece_unfull(pc);
     }
@@ -497,6 +500,7 @@ dl_unassign_requests_eg(struct peer *p)
         }
     }
     assert(BTPDQ_EMPTY(&p->my_reqs));
+    peer_on_no_reqs(p);
 
     pc = BTPDQ_FIRST(&tmp);
     while (pc != NULL) {
