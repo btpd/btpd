@@ -550,3 +550,9 @@ peer_active_up(struct peer *p)
     return (p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT
         || p->npiece_msgs > 0;
 }
+
+int
+peer_full(struct peer *p)
+{
+    return p->npieces == p->n->tp->meta.npieces;
+}
