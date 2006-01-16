@@ -11,61 +11,77 @@
 #include "subr.h"
 #include "stream.h"
 
-struct bt_stream_ro *
-bts_open_ro(struct metainfo *meta, off_t off, F_fdcb fd_cb, void *fd_arg)
+int
+bts_open(struct bt_stream **res, struct metainfo *meta, fdcb_t fd_cb,
+    void *fd_arg)
 {
-    struct bt_stream_ro *bts = malloc(sizeof(*bts));
+    struct bt_stream *bts = calloc(1, sizeof(*bts));
     if (bts == NULL)
-        return NULL;
+        return ENOMEM;
 
     bts->meta = meta;
     bts->fd_cb = fd_cb;
     bts->fd_arg = fd_arg;
-    bts->t_off = 0;
-    bts->f_off = 0;
-    bts->index = 0;
     bts->fd = -1;
-    bts_seek_ro(bts, off);
-    return bts;
-}
 
-void
-bts_seek_ro(struct bt_stream_ro *bts, off_t off)
-{
-    struct fileinfo *files = bts->meta->files;
-
-    assert(off >= 0 && off <= bts->meta->total_length);
-
-    if (bts->fd != -1) {
-        close(bts->fd);
-        bts->fd = -1;
-    }
-
-    bts->t_off = off;
-    bts->index = 0;
-
-    while (off >= files[bts->index].length) {
-        off -= files[bts->index].length;
-        bts->index++;
-    }
-
-    bts->f_off = off;
+    *res = bts;
+    return 0;
 }
 
 int
-bts_read_ro(struct bt_stream_ro *bts, char *buf, size_t len)
+bts_close(struct bt_stream *bts)
+{
+    int err = 0;
+    if (bts->fd != -1 && close(bts->fd) == -1)
+        err = errno;
+    free(bts);
+    return err;
+}
+
+int
+bts_seek(struct bt_stream *bts, off_t off)
+{
+    if (bts->t_off == off)
+        return 0;
+
+    bts->t_off = off;
+
+    struct fileinfo *files = bts->meta->files;
+    unsigned i;
+    for (i = 0; off >= files[i].length; i++)
+        off -= files[i].length;
+
+    if (i != bts->index) {
+        if (bts->fd != -1) {
+            if (close(bts->fd) == -1)
+                return errno;
+            bts->fd = -1;
+        }
+    } else if (bts->fd != -1)
+        lseek(bts->fd, off, SEEK_SET);
+    
+    bts->index = i;
+    bts->f_off = off;
+
+    return 0;
+}
+
+int
+bts_get(struct bt_stream *bts, off_t off, uint8_t *buf, size_t len)
 {
     struct fileinfo *files = bts->meta->files;
     size_t boff, wantread;
     ssize_t didread;
+    int err;
 
-    assert(bts->t_off + len <= bts->meta->total_length);
+    assert(off + len <= bts->meta->total_length);
+    if ((err = bts_seek(bts, off)) != 0)
+        return err;
 
     boff = 0;
     while (boff < len) {
         if (bts->fd == -1) {
-            int err =
-                bts->fd_cb(files[bts->index].path, &bts->fd, bts->fd_arg);
+            err = bts->fd_cb(files[bts->index].path, &bts->fd, bts->fd_arg);
             if (err != 0)
                 return err;
             if (bts->f_off != 0)
@@ -92,104 +108,22 @@ bts_read_ro(struct bt_stream_ro *bts, char *buf, size_t len)
     return 0;
 }
 
-void
-bts_close_ro(struct bt_stream_ro *bts)
-{
-    if (bts->fd != -1)
-        close(bts->fd);
-    free(bts);
-}
-
-#define SHAFILEBUF (1 << 15)
-
 int
-bts_sha(struct bt_stream_ro *bts, off_t length, uint8_t *hash)
-{
-    SHA_CTX ctx;
-    char buf[SHAFILEBUF];
-    size_t wantread;
-    int err = 0;
-
-    SHA1_Init(&ctx);
-    while (length > 0) {
-        wantread = min(length, SHAFILEBUF);
-        if ((err = bts_read_ro(bts, buf, wantread)) != 0)
-            break;
-        length -= wantread;
-        SHA1_Update(&ctx, buf, wantread);
-    }
-    SHA1_Final(hash, &ctx);
-    return err;
-}
-
-int
-bts_hashes(struct metainfo *meta,
-    F_fdcb fd_cb,
-    void (*cb)(uint32_t, uint8_t *, void *),
-    void *arg)
-{
-    int err = 0;
-    uint8_t hash[SHA_DIGEST_LENGTH];
-    uint32_t piece;
-    struct bt_stream_ro *bts;
-    off_t plen = meta->piece_length;
-    off_t llen = meta->total_length % plen;
-
-    if ((bts = bts_open_ro(meta, 0, fd_cb, arg)) == NULL)
-        return ENOMEM;
-
-    for (piece = 0; piece < meta->npieces; piece++) {
-        if (piece < meta->npieces - 1)
-            err = bts_sha(bts, plen, hash);
-        else
-            err = bts_sha(bts, llen, hash);
-
-        if (err == 0)
-            cb(piece, hash, arg);
-        else if (err == ENOENT) {
-            cb(piece, NULL, arg);
-            if (piece < meta->npieces - 1)
-                bts_seek_ro(bts, (piece + 1) * plen);
-            err = 0;
-        } else
-            break;
-    }
-    bts_close_ro(bts);
-    return err;
-}
-
-struct bt_stream_wo *
-bts_open_wo(struct metainfo *meta, off_t off, F_fdcb fd_cb, void *fd_arg)
-{
-    struct bt_stream_wo *bts = malloc(sizeof(*bts));
-    if (bts == NULL)
-        return NULL;
-
-    bts->meta = meta;
-    bts->fd_cb = fd_cb;
-    bts->fd_arg = fd_arg;
-    bts->t_off = 0;
-    bts->f_off = 0;
-    bts->index = 0;
-    bts->fd = -1;
-    bts_seek_ro((struct bt_stream_ro *)bts, off);
-    return bts;
-}
-
-int
-bts_write_wo(struct bt_stream_wo *bts, const char *buf, size_t len)
+bts_put(struct bt_stream *bts, off_t off, const uint8_t *buf, size_t len)
 {
     struct fileinfo *files = bts->meta->files;
     size_t boff, wantwrite;
     ssize_t didwrite;
+    int err;
 
-    assert(bts->t_off + len <= bts->meta->total_length);
+    assert(off + len <= bts->meta->total_length);
+    if ((err = bts_seek(bts, off)) != 0)
+        return err;
 
     boff = 0;
     while (boff < len) {
         if (bts->fd == -1) {
-            int err =
-                bts->fd_cb(files[bts->index].path, &bts->fd, bts->fd_arg);
+            err = bts->fd_cb(files[bts->index].path, &bts->fd, bts->fd_arg);
             if (err != 0)
                 return err;
             if (bts->f_off != 0)
@@ -220,17 +154,57 @@ bts_write_wo(struct bt_stream_wo *bts, const char *buf, size_t len)
     return 0;
 }
 
+#define SHAFILEBUF (1 << 15)
+
 int
-bts_close_wo(struct bt_stream_wo *bts)
+bts_sha(struct bt_stream *bts, off_t start, off_t length, uint8_t *hash)
+{
+    SHA_CTX ctx;
+    char buf[SHAFILEBUF];
+    size_t wantread;
+    int err = 0;
+
+    SHA1_Init(&ctx);
+    while (length > 0) {
+        wantread = min(length, SHAFILEBUF);
+        if ((err = bts_get(bts, start, buf, wantread)) != 0)
+            break;
+        length -= wantread;
+        start += wantread;
+        SHA1_Update(&ctx, buf, wantread);
+    }
+    SHA1_Final(hash, &ctx);
+    return err;
+}
+
+int
+bts_hashes(struct metainfo *meta, fdcb_t fd_cb, hashcb_t cb, void *arg)
 {
     int err = 0;
-    if (bts->fd != -1) {
-        if (fsync(bts->fd) == -1) {
-            err = errno;
-            close(bts->fd);
-        } else if (close(bts->fd) == -1)
-            err = errno;
+    uint8_t hash[SHA_DIGEST_LENGTH];
+    uint32_t piece;
+    struct bt_stream *bts;
+    off_t plen = meta->piece_length;
+    off_t llen = meta->total_length % plen;
+
+    if ((err = bts_open(&bts, meta, fd_cb, arg)) != 0)
+        return err;
+
+    for (piece = 0; piece < meta->npieces; piece++) {
+        off_t start = piece * plen;
+        if (piece < meta->npieces - 1)
+            err = bts_sha(bts, start, plen, hash);
+        else
+            err = bts_sha(bts, start, llen, hash);
+
+        if (err == 0)
+            cb(piece, hash, arg);
+        else if (err == ENOENT) {
+            cb(piece, NULL, arg);
+            err = 0;
+        } else
+            break;
     }
-    free(bts);
+    bts_close(bts);
     return err;
 }

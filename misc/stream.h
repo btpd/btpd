@@ -1,36 +1,27 @@
 #ifndef BTPD_STREAM_H
 #define BTPD_STREAM_H
 
-typedef int (*F_fdcb)(const char *, int *, void *);
+typedef int (*fdcb_t)(const char *, int *, void *);
+typedef void (*hashcb_t)(uint32_t, uint8_t *, void *);
 
-#define def_stream(name) \
-struct name {\
-    struct metainfo *meta;\
-    F_fdcb fd_cb;\
-    void *fd_arg;\
-    unsigned index;\
-    off_t t_off;\
-    off_t f_off;\
-    int fd;\
-}
+struct bt_stream {
+    struct metainfo *meta;
+    fdcb_t fd_cb;
+    void *fd_arg;
+    unsigned index;
+    off_t t_off;
+    off_t f_off;
+    int fd;
+};
 
-def_stream(bt_stream_ro);
+int bts_open(struct bt_stream **res, struct metainfo *meta, fdcb_t fd_cb,
+    void *fd_arg);
+int bts_get(struct bt_stream *bts, off_t off, uint8_t *buf, size_t len);
+int bts_put(struct bt_stream *bts, off_t off, const uint8_t *buf, size_t len);
+int bts_close(struct bt_stream *bts);
 
-struct bt_stream_ro *
-bts_open_ro(struct metainfo *meta, off_t off, F_fdcb fd_cb, void *fd_arg);
-int bts_read_ro(struct bt_stream_ro *bts, char *buf, size_t len);
-void bts_seek_ro(struct bt_stream_ro *bts, off_t nbytes);
-void bts_close_ro(struct bt_stream_ro *bts);
-
-def_stream(bt_stream_wo);
-
-struct bt_stream_wo *
-bts_open_wo(struct metainfo *meta, off_t off, F_fdcb fd_cb, void *fd_arg);
-int bts_write_wo(struct bt_stream_wo *bts, const char *buf, size_t len);
-int bts_close_wo(struct bt_stream_wo *bts);
-
-int bts_sha(struct bt_stream_ro *bts, off_t length, uint8_t *hash);
-int bts_hashes(struct metainfo *, F_fdcb fd_cb,
-               void (*cb)(uint32_t, uint8_t *, void *), void *arg);
+int bts_sha(struct bt_stream *bts, off_t start, off_t length, uint8_t *hash);
+int bts_hashes(struct metainfo *meta, fdcb_t fd_cb, hashcb_t hash_cb,
+    void *arg);
 
 #endif
