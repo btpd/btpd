@@ -17,8 +17,8 @@ struct peer_sort {
 static int
 rate_cmp(const void *arg1, const void *arg2)
 {
-    struct peer *p1 = (*(struct peer_sort **)arg1)->p;
-    struct peer *p2 = (*(struct peer_sort **)arg2)->p;
+    struct peer *p1 = ((struct peer_sort *)arg1)->p;
+    struct peer *p2 = ((struct peer_sort *)arg2)->p;
     unsigned long rate1 = cm_full(p1->n->tp) ? p1->rate_up : p1->rate_dwn;
     unsigned long rate2 = cm_full(p2->n->tp) ? p2->rate_up : p2->rate_dwn;
     if (rate1 < rate2)
@@ -44,14 +44,15 @@ choke_do(void)
                 peer_choke(p);
     } else if (m_npeers > 0) {
         struct peer_sort worthy[m_npeers];
-        unsigned nworthy = 0;
-        unsigned i = 0;
-        unsigned found = 0;
+        int nworthy = 0;
+        int i = 0;
+        int found = 0;
         struct peer *p;
         int unchoked[m_npeers];
 
         BTPDQ_FOREACH(p, &m_peerq, ul_entry) {
-            if (((cm_full(p->n->tp) && p->rate_up > 0)
+            if (!peer_full(p) &&
+                ((cm_full(p->n->tp) && p->rate_up > 0)
                     || (!cm_full(p->n->tp) && p->rate_dwn > 0))) {
                 worthy[nworthy].p = p;
                 worthy[nworthy].i = i;
@@ -62,18 +63,18 @@ choke_do(void)
         qsort(worthy, nworthy, sizeof(worthy[0]), rate_cmp);
 
         bzero(unchoked, sizeof(unchoked));
-        for (i = nworthy; i > 0 && found < m_max_downloaders - 1; i--) {
-            if ((worthy[i - 1].p->flags & PF_P_WANT) != 0)
+        for (i = nworthy - 1; i >= 0 && found < m_max_downloaders - 1; i--) {
+            if ((worthy[i].p->flags & PF_P_WANT) != 0)
                 found++;
-            if ((worthy[i - 1].p->flags & PF_I_CHOKE) != 0)
-                peer_unchoke(p);
-            unchoked[worthy[i - 1].i] = 1;
+            if ((worthy[i].p->flags & PF_I_CHOKE) != 0)
+                peer_unchoke(worthy[i].p);
+            unchoked[worthy[i].i] = 1;
         }
 
         i = 0;
         BTPDQ_FOREACH(p, &m_peerq, ul_entry) {
             if (!unchoked[i]) {
-                if (found < m_max_downloaders) {
+                if (found < m_max_downloaders && !peer_full(p)) {
                     if (p->flags & PF_P_WANT)
                         found++;
                     if (p->flags & PF_I_CHOKE)
@@ -91,7 +92,7 @@ choke_do(void)
 static void
 shuffle_optimists(void)
 {
-    for (unsigned i = 0; i < m_npeers; i++) {
+    for (int i = 0; i < m_npeers; i++) {
         struct peer *p = BTPDQ_FIRST(&m_peerq);
         if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == (PF_P_WANT|PF_I_CHOKE)) {
             break;
