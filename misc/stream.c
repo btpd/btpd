@@ -59,7 +59,7 @@ bts_seek(struct bt_stream *bts, off_t off)
         }
     } else if (bts->fd != -1)
         lseek(bts->fd, off, SEEK_SET);
-    
+
     bts->index = i;
     bts->f_off = off;
 

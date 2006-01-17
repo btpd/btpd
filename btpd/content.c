@@ -154,21 +154,21 @@ static int
 test_hash(struct torrent *tp, uint8_t *hash, uint32_t index)
 {
     if (tp->meta.piece_hash != NULL)
-	return bcmp(hash, tp->meta.piece_hash[index], SHA_DIGEST_LENGTH);
+        return bcmp(hash, tp->meta.piece_hash[index], SHA_DIGEST_LENGTH);
     else {
-	char piece_hash[SHA_DIGEST_LENGTH];
-	int fd;
-	int err;
+        char piece_hash[SHA_DIGEST_LENGTH];
+        int fd;
+        int err;
 
-	err = vopen(&fd, O_RDONLY, "library/%s/torrent", tp->relpath);
-	if (err != 0)
-	    btpd_err("test_hash: %s\n", strerror(err));
+        err = vopen(&fd, O_RDONLY, "library/%s/torrent", tp->relpath);
+        if (err != 0)
+            btpd_err("test_hash: %s\n", strerror(err));
 
-	lseek(fd, tp->meta.pieces_off + index * SHA_DIGEST_LENGTH, SEEK_SET);
+        lseek(fd, tp->meta.pieces_off + index * SHA_DIGEST_LENGTH, SEEK_SET);
         read(fd, piece_hash, SHA_DIGEST_LENGTH);
-	close(fd);
+        close(fd);
 
-	return bcmp(hash, piece_hash, SHA_DIGEST_LENGTH);
+        return bcmp(hash, piece_hash, SHA_DIGEST_LENGTH);
     }
 }
 
