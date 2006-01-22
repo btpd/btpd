@@ -74,18 +74,13 @@ mkdirs(char *path)
 }
 
 int
-vopen(int *res, int flags, const char *fmt, ...)
+vaopen(int *res, int flags, const char *fmt, va_list ap)
 {
     int fd, didmkdirs;
     char path[PATH_MAX + 1];
-    va_list ap;
 
-    va_start(ap, fmt);
-    if (vsnprintf(path, PATH_MAX, fmt, ap) >= PATH_MAX) {
-        va_end(ap);
+    if (vsnprintf(path, PATH_MAX, fmt, ap) >= PATH_MAX)
         return ENAMETOOLONG;
-    }
-    va_end(ap);
 
     didmkdirs = 0;
 again:
@@ -103,6 +98,49 @@ again:
         return 0;
     } else
         return errno;
+}
+
+int
+vopen(int *res, int flags, const char *fmt, ...)
+{
+    int err;
+    va_list ap;
+    va_start(ap, fmt);
+    err = vaopen(res, flags, fmt, ap);
+    va_end(ap);
+    return err;
+}
+
+int
+vfsync(const char *fmt, ...)
+{
+    int err, fd;
+    va_list ap;
+    va_start(ap, fmt);
+    err = vaopen(&fd, O_RDONLY, fmt, ap);
+    va_end(ap);
+    if (err != 0)
+        return err;
+    if (fsync(fd) < 0)
+        err = errno;
+    close(fd);
+    return err;
+}
+
+int
+vfopen(FILE **ret, const char *mode, const char *fmt, ...)
+{
+    int err = 0;
+    char path[PATH_MAX + 1];
+    va_list ap;
+    va_start(ap, fmt);
+    if (vsnprintf(path, PATH_MAX, fmt, ap) >= PATH_MAX)
+        err = ENAMETOOLONG;
+    va_end(ap);
+    if (err == 0)
+        if ((*ret = fopen(path, mode)) == NULL)
+            err = errno;
+    return err;
 }
 
 int
