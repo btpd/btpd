@@ -11,3 +11,4 @@ unsigned net_max_peers;
 unsigned net_bw_limit_in;
 unsigned net_bw_limit_out;
 int net_port = 6881;
+off_t cm_alloc_size = 1;

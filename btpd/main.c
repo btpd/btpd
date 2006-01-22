@@ -81,13 +81,9 @@ setup_daemon(const char *dir)
 static void
 usage(void)
 {
-    printf("Usage: btpd [options]\n"
+    printf("Usage: btpd [options] [dir]\n"
         "\n"
         "Options:\n"
-        "\n"
-        "--bw-hz n\n"
-        "\tRun the bandwidth limiter at n hz.\n"
-        "\tDefault is 8 hz.\n"
         "\n"
         "--bw-in n\n"
         "\tLimit incoming BitTorrent traffic to n kB/s.\n"
@@ -101,15 +97,13 @@ usage(void)
         "\tKeep the btpd process in the foregorund and log to std{out,err}.\n"
         "\tThis option is intended for debugging purposes.\n"
         "\n"
-        "--ipc key\n"
-        "\tThe same key must be used by the cli to talk to this\n"
-        "\tbtpd instance. You shouldn't need to use this option.\n"
-        "\n"
-        "--logfile file\n"
-        "\tLog to the given file. By default btpd logs to ./btpd.log.\n"
-        "\n"
         "-p n, --port n\n"
         "\tListen at port n. Default is 6881.\n"
+        "\n"
+        "--prealloc n\n"
+        "\tPreallocate disk space in chunks n kB. Default is 1.\n"
+        "\tNote that n will be rounded up to the closest multiple of the\n"
+        "\ttorrent piece size. If n is zero no preallocation will be done.\n"
         "\n"
         "--help\n"
         "\tShow this help.\n"
@@ -123,6 +117,7 @@ static struct option longopts[] = {
     { "port",   required_argument,      NULL,           'p' },
     { "bw-in",  required_argument,      &longval,       1 },
     { "bw-out", required_argument,      &longval,       2 },
+    { "prealloc", required_argument,    &longval,       3 },
     { "help",   no_argument,            &longval,       5 },
     { NULL,     0,                      NULL,           0 }
 };
@@ -152,6 +147,9 @@ main(int argc, char **argv)
             case 2:
                 net_bw_limit_out = atoi(optarg) * 1024;
                 break;
+            case 3:
+                cm_alloc_size = atoi(optarg) * 1024;
+                break;
             default:
                 usage();
             }
@@ -165,8 +163,10 @@ args_done:
     argc -= optind;
     argv += optind;
 
-    if (argc != 0)
+    if (argc > 1)
         usage();
+    if (argc > 0)
+        dir = argv[0];
 
     setup_daemon(dir);
 
