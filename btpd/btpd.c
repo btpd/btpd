@@ -115,7 +115,7 @@ load_library(void)
     for (int i = 0; i < ne; i++) {
         struct torrent *tp;
         struct dirent *e = entries[i];
-        if (torrent_create(&tp, e->d_name) == 0)
+        if (torrent_load(&tp, e->d_name) == 0)
             btpd_add_torrent(tp);
         free(e);
     }

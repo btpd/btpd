@@ -25,19 +25,16 @@ struct torrent {
 
 BTPDQ_HEAD(torrent_tq, torrent);
 
-int torrent_create(struct torrent **res, const char *path);
+int torrent_load(struct torrent **res, const char *path);
 void torrent_activate(struct torrent *tp);
 void torrent_deactivate(struct torrent *tp);
 
-off_t torrent_piece_size(struct torrent *tp, uint32_t index);
-uint32_t torrent_block_size(struct piece *pc, uint32_t index);
+off_t torrent_piece_size(struct torrent *tp, uint32_t piece);
+uint32_t torrent_piece_blocks(struct torrent *tp, uint32_t piece);
+uint32_t torrent_block_size(struct torrent *tp, uint32_t piece,
+    uint32_t nblocks, uint32_t block);
 
-enum cm_state {
-    CM_STARTED,
-    CM_STOPPED,
-    CM_ERROR
-};
-
-void torrent_cm_cb(struct torrent *tp, enum cm_state state);
+void torrent_on_cm_stopped(struct torrent *tp);
+void torrent_on_cm_started(struct torrent *tp);
 
 #endif

@@ -31,13 +31,20 @@ torrent_piece_size(struct torrent *tp, uint32_t index)
 }
 
 uint32_t
-torrent_block_size(struct piece *pc, uint32_t index)
+torrent_piece_blocks(struct torrent *tp, uint32_t piece)
 {
-    if (index < pc->nblocks - 1)
+    return ceil(torrent_piece_size(tp, piece) / (double)PIECE_BLOCKLEN);
+}
+
+uint32_t
+torrent_block_size(struct torrent *tp, uint32_t piece, uint32_t nblocks,
+    uint32_t block)
+{
+    if (block < nblocks - 1)
         return PIECE_BLOCKLEN;
     else {
-        uint32_t allbutlast = PIECE_BLOCKLEN * (pc->nblocks - 1);
-        return torrent_piece_size(pc->n->tp, pc->index) - allbutlast;
+        uint32_t allbutlast = PIECE_BLOCKLEN * (nblocks - 1);
+        return torrent_piece_size(tp, piece) - allbutlast;
     }
 }
 
@@ -52,11 +59,14 @@ torrent_activate(struct torrent *tp)
 void
 torrent_deactivate(struct torrent *tp)
 {
-
+    tp->state = T_STOPPING;
+    tr_stop(tp);
+    net_del_torrent(tp);
+    cm_stop(tp);
 }
 
 int
-torrent_create(struct torrent **res, const char *path)
+torrent_load(struct torrent **res, const char *path)
 {
     struct metainfo *mi;
     int error;
@@ -88,16 +98,17 @@ torrent_create(struct torrent **res, const char *path)
     return error;
 }
 
-void torrent_cm_cb(struct torrent *tp, enum cm_state state)
+void
+torrent_on_cm_started(struct torrent *tp)
 {
-    switch (state) {
-    case CM_STARTED:
-        net_add_torrent(tp);
-        tr_start(tp);
-        break;
-    case CM_STOPPED:
-        break;
-    case CM_ERROR:
-        break;
-    }
+    net_add_torrent(tp);
+    tr_start(tp);
+    tp->state = T_ACTIVE;
+}
+
+void
+torrent_on_cm_stopped(struct torrent *tp)
+{
+    assert(tp->state == T_STOPPING);
+    tp->state = T_INACTIVE;
 }

@@ -37,9 +37,8 @@ piece_alloc(struct net *n, uint32_t index)
     struct piece *pc;
     size_t mem, field, blocks;
     unsigned nblocks;
-    off_t piece_length = torrent_piece_size(n->tp, index);
 
-    nblocks = (unsigned)ceil((double)piece_length / PIECE_BLOCKLEN);
+    nblocks = torrent_piece_blocks(n->tp, index);
     blocks = sizeof(pc->blocks[0]) * nblocks;
     field = (size_t)ceil(nblocks / 8.0);
     mem = sizeof(*pc) + field + blocks;
@@ -63,7 +62,7 @@ piece_alloc(struct net *n, uint32_t index)
     pc->blocks = (struct block *)(pc->down_field + field);
     for (unsigned i = 0; i < nblocks; i++) {
         uint32_t start = i * PIECE_BLOCKLEN;
-        uint32_t len = torrent_block_size(pc, i);
+        uint32_t len = torrent_block_size(n->tp, index, nblocks, i);
         struct block *blk = &pc->blocks[i];
         blk->pc = pc;
         BTPDQ_INIT(&blk->reqs);
