@@ -61,8 +61,13 @@ setup_daemon(const char *dir)
         err(1, "Couldn't create library");
 
     pidfd = open("pid", O_CREAT|O_WRONLY|O_NONBLOCK|O_EXLOCK, 0666);
-    if (pidfd == -1)
-        err(1, "Couldn't open 'pid'");
+    if (pidfd == -1) {
+        if (errno == EAGAIN)
+            errx(1, "Another instance of btpd is probably running in %s.",
+                dir);
+        else
+            err(1, "Couldn't open 'pid'");
+    }
 
     if (btpd_daemon) {
         if (daemon(1, 1) != 0)
@@ -83,6 +88,10 @@ usage(void)
 {
     printf("Usage: btpd [options] [dir]\n"
         "\n"
+        "dir:\n"
+        "\tThe directory in which to run btpd.\n"
+        "\tDefault is '$HOME/.btpd'.\n"
+        "\n"
         "Options:\n"
         "\n"
         "--bw-in n\n"
@@ -97,11 +106,22 @@ usage(void)
         "\tKeep the btpd process in the foregorund and log to std{out,err}.\n"
         "\tThis option is intended for debugging purposes.\n"
         "\n"
+        "--downloaders n\n"
+        "\tControls the number of simultaneous uploads.\n"
+        "\tThe possible values are:\n"
+        "\t\tn < -1 : Choose n >= 2 based on --bw-out (default).\n"
+        "\t\tn = -1 : Upload to every interested peer.\n"
+        "\t\tn =  0 : Dont't upload to anyone.\n"
+        "\t\tn >  0 : Upload to at most n peers simultaneosly.\n"
+        "\n"
+        "--max-peers n\n"
+        "\tLimit the amount of peers to n.\n"
+        "\n"
         "-p n, --port n\n"
         "\tListen at port n. Default is 6881.\n"
         "\n"
         "--prealloc n\n"
-        "\tPreallocate disk space in chunks n kB. Default is 1.\n"
+        "\tPreallocate disk space in chunks of n kB. Default is 1.\n"
         "\tNote that n will be rounded up to the closest multiple of the\n"
         "\ttorrent piece size. If n is zero no preallocation will be done.\n"
         "\n"
@@ -118,7 +138,9 @@ static struct option longopts[] = {
     { "bw-in",  required_argument,      &longval,       1 },
     { "bw-out", required_argument,      &longval,       2 },
     { "prealloc", required_argument,    &longval,       3 },
-    { "help",   no_argument,            &longval,       5 },
+    { "downloaders", required_argument, &longval,       4 },
+    { "max-peers", required_argument,   &longval,       5 },
+    { "help",   no_argument,            &longval,       128 },
     { NULL,     0,                      NULL,           0 }
 };
 
@@ -149,6 +171,12 @@ main(int argc, char **argv)
                 break;
             case 3:
                 cm_alloc_size = atoi(optarg) * 1024;
+                break;
+            case 4:
+                net_max_downloaders = atoi(optarg);
+                break;
+            case 5:
+                net_max_peers = atoi(optarg);
                 break;
             default:
                 usage();

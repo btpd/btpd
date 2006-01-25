@@ -7,7 +7,7 @@
 static struct event m_choke_timer;
 static unsigned m_npeers;
 static struct peer_tq m_peerq = BTPDQ_HEAD_INITIALIZER(m_peerq);
-static int m_max_downloaders = 4;
+static int m_max_downloaders;
 
 struct peer_sort {
     struct peer *p;
@@ -32,7 +32,7 @@ rate_cmp(const void *arg1, const void *arg2)
 static void
 choke_do(void)
 {
-    if (m_max_downloaders == -1) {
+    if (m_max_downloaders < 0) {
         struct peer *p;
         BTPDQ_FOREACH(p, &m_peerq, ul_entry)
             if (p->flags & PF_I_CHOKE)
@@ -42,7 +42,7 @@ choke_do(void)
         BTPDQ_FOREACH(p, &m_peerq, ul_entry)
             if ((p->flags & PF_I_CHOKE) == 0)
                 peer_choke(p);
-    } else if (m_npeers > 0) {
+    } else {
         struct peer_sort worthy[m_npeers];
         int nworthy = 0;
         int i = 0;
@@ -171,6 +171,21 @@ ul_on_uninterest(struct peer *p)
 void
 ul_init(void)
 {
+    if (net_max_downloaders >= -1)
+        m_max_downloaders = net_max_downloaders;
+    else {
+        if (net_bw_limit_out == 0)
+            m_max_downloaders = 8;
+        else if (net_bw_limit_out < (10 << 10))
+            m_max_downloaders = 2;
+        else if (net_bw_limit_out < (20 << 10))
+            m_max_downloaders = 3;
+        else if (net_bw_limit_out < (40 << 10))
+            m_max_downloaders = 4;
+        else
+            m_max_downloaders = 5 + (net_bw_limit_out / (100 << 10));
+    }
+
     evtimer_set(&m_choke_timer, choke_cb, NULL);
     evtimer_add(&m_choke_timer, CHOKE_INTERVAL);
 }

@@ -36,20 +36,27 @@ cmd_stat(int argc, const char *args, FILE *fp)
     errdie(buf_print(&iob, "9:ntorrentsi%ue", btpd_get_ntorrents()));
     errdie(buf_swrite(&iob, "8:torrentsl"));
     BTPDQ_FOREACH(tp, btpd_get_torrents(), entry) {
+        if (tp->state != T_ACTIVE)
+            continue;
+
         uint32_t seen_npieces = 0;
         for (uint32_t i = 0; i < tp->meta.npieces; i++)
-            if (tp->piece_count[i] > 0)
+            if (tp->net->piece_count[i] > 0)
                 seen_npieces++;
-        errdie(buf_print(&iob, "d4:downi%jue", (intmax_t)tp->downloaded));
+        errdie(buf_print(&iob, "d4:downi%jue", (intmax_t)tp->net->downloaded));
         errdie(buf_swrite(&iob, "4:hash20:"));
         errdie(buf_write(&iob, tp->meta.info_hash, 20));
-        errdie(buf_print(&iob, "12:have npiecesi%ue", tp->have_npieces));
-        errdie(buf_print(&iob, "6:npeersi%ue", tp->npeers));
+        errdie(buf_print(&iob, "4:havei%jde", (intmax_t)cm_get_size(tp)));
+        errdie(buf_print(&iob, "6:npeersi%ue", tp->net->npeers));
         errdie(buf_print(&iob, "7:npiecesi%ue", tp->meta.npieces));
         errdie(buf_print(&iob, "4:path%d:%s",
                          (int)strlen(tp->relpath), tp->relpath));
+        errdie(buf_print(&iob, "2:rdi%lue", tp->net->rate_dwn));
+        errdie(buf_print(&iob, "2:rui%lue", tp->net->rate_up));
         errdie(buf_print(&iob, "12:seen npiecesi%ue", seen_npieces));
-        errdie(buf_print(&iob, "2:upi%juee", (intmax_t)tp->uploaded));
+        errdie(buf_print(&iob, "5:totali%jde",
+                   (intmax_t)tp->meta.total_length));
+        errdie(buf_print(&iob, "2:upi%juee", (intmax_t)tp->net->uploaded));
     }
     errdie(buf_swrite(&iob, "ee"));
 
@@ -59,6 +66,7 @@ cmd_stat(int argc, const char *args, FILE *fp)
     free(iob.buf);
 }
 
+#if 0
 static void
 cmd_add(int argc, const char *args, FILE *fp)
 {
@@ -144,15 +152,18 @@ cmd_die(int argc, const char *args, FILE *fp)
     btpd_log(BTPD_L_BTPD, "Someone wants me dead.\n");
     btpd_shutdown();
 }
+#endif
 
 static struct {
     const char *name;
     int nlen;
     void (*fun)(int, const char *, FILE *);
 } cmd_table[] = {
+#if 0
     { "add",    3, cmd_add },
     { "del",    3, cmd_del },
     { "die",    3, cmd_die },
+#endif
     { "stat",   4, cmd_stat }
 };
 

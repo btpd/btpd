@@ -1,7 +1,7 @@
 bin_PROGRAMS=btpd
 btpd_SOURCES=\
 	btpd.c btpd.h\
-	content.c content.h\
+	cli_if.c content.c content.h\
 	download.c download_subr.c download.h\
 	http.c http.h\
 	main.c\

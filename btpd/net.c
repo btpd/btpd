@@ -626,16 +626,9 @@ net_init(void)
     m_bw_bytes_out = net_bw_limit_out;
     m_bw_bytes_in = net_bw_limit_in;
 
-    int nfiles = getdtablesize();
-    if (nfiles <= 20)
-        btpd_err("Too few open files allowed (%d). "
-                 "Check \"ulimit -n\"\n", nfiles);
-    else if (nfiles < 64)
-        btpd_log(BTPD_L_BTPD,
-                 "You have restricted the number of open files to %d. "
-                 "More could be beneficial to the download performance.\n",
-                 nfiles);
-    net_max_peers = nfiles - 20;
+    int safe_fds = min(getdtablesize(), FD_SETSIZE) * 4 / 5;
+    if (net_max_peers == 0 || net_max_peers > safe_fds)
+        net_max_peers = safe_fds;
 
     int sd;
     int flag = 1;

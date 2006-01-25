@@ -216,7 +216,7 @@ btpd_init(void)
     td_init();
     http_init();
     net_init();
-    //ipc_init();
+    ipc_init();
     ul_init();
     cm_init();
 
