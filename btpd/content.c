@@ -199,7 +199,7 @@ void
 cm_stop(struct torrent *tp)
 {
     struct content *cm = tp->cm;
-
+    cm->active = 0;
     struct cm_op *op = BTPDQ_FIRST(&cm->todoq);
     if (op != NULL && op->type == CM_START) {
         pthread_mutex_lock(&m_long_comm.lock);
@@ -562,22 +562,31 @@ test_torrent(struct torrent *tp, volatile sig_atomic_t *cancel)
     return err;
 }
 
+struct rstat {
+    time_t mtime;
+    off_t size;
+};
+
 int
-stat_and_adjust(struct torrent *tp, struct stat ret[])
+stat_and_adjust(struct torrent *tp, struct rstat ret[])
 {
     char path[PATH_MAX];
+    struct stat sb;
     for (int i = 0; i < tp->meta.nfiles; i++) {
         snprintf(path, PATH_MAX, "library/%s/content/%s", tp->relpath,
             tp->meta.files[i].path);
 again:
-        if (stat(path, &ret[i]) == -1) {
+        if (stat(path, &sb) == -1) {
             if (errno == ENOENT) {
-                ret[i].st_mtime = -1;
-                ret[i].st_size = -1;
+                ret[i].mtime = -1;
+                ret[i].size = -1;
             } else
                 return errno;
+        } else {
+            ret[i].mtime = sb.st_mtime;
+            ret[i].size = sb.st_size;
         }
-        if (ret[i].st_size > tp->meta.files[i].length) {
+        if (ret[i].size > tp->meta.files[i].length) {
             if (truncate(path, tp->meta.files[i].length) != 0)
                 return errno;
             goto again;
@@ -587,7 +596,7 @@ again:
 }
 
 static int
-load_resume(struct torrent *tp, struct stat sbs[])
+load_resume(struct torrent *tp, struct rstat sbs[])
 {
     int err, ver;
     FILE *fp;
@@ -606,7 +615,7 @@ load_resume(struct torrent *tp, struct stat sbs[])
         time_t time;
         if (fscanf(fp, "%qd %ld\n", &size, &time) != 2)
             goto invalid;
-        if (sbs[i].st_size != size || sbs[i].st_mtime != time)
+        if (sbs[i].size != size || sbs[i].mtime != time)
             err = EINVAL;
     }
     if (fread(tp->cm->piece_field, 1, pfsiz, fp) != pfsiz)
@@ -623,18 +632,15 @@ invalid:
 }
 
 static int
-save_resume(struct torrent *tp)
+save_resume(struct torrent *tp, struct rstat sbs[])
 {
     int err;
     FILE *fp;
-    struct stat sbs[tp->meta.nfiles];
-    if ((err = stat_and_adjust(tp, sbs)) != 0)
-        return err;
     if ((err = vfopen(&fp, "wb", "library/%s/resume", tp->relpath)) != 0)
         return err;
     fprintf(fp, "%d\n", 1);
     for (int i = 0; i < tp->meta.nfiles; i++)
-        fprintf(fp, "%qd %ld\n", (long long)sbs[i].st_size, sbs[i].st_mtime);
+        fprintf(fp, "%qd %ld\n", (long long)sbs[i].size, sbs[i].mtime);
     fwrite(tp->cm->piece_field, 1, ceil(tp->meta.npieces / 8.0), fp);
     fwrite(tp->cm->block_field, 1, tp->meta.npieces * tp->cm->bppbf, fp);
     if (fclose(fp) != 0)
@@ -645,14 +651,17 @@ save_resume(struct torrent *tp)
 static void
 cm_td_save(struct cm_op *op)
 {
-    save_resume(op->tp);
+    struct torrent *tp = op->tp;
+    struct rstat sbs[tp->meta.nfiles];
+    if (stat_and_adjust(tp, sbs) == 0)
+        save_resume(tp, sbs);
 }
 
 static void
 cm_td_start(struct cm_op *op)
 {
     int err, resume_clean = 0, tested_torrent = 0;
-    struct stat sbs[op->tp->meta.nfiles];
+    struct rstat sbs[op->tp->meta.nfiles];
     struct torrent *tp = op->tp;
     struct content *cm = tp->cm;
 
@@ -664,7 +673,7 @@ cm_td_start(struct cm_op *op)
         memset(cm->pos_field, 0xff, ceil(tp->meta.npieces / 8.0));
         off_t off = 0;
         for (int i = 0; i < tp->meta.nfiles; i++) {
-            if (sbs[i].st_size == -1 || sbs[i].st_size == 0) {
+            if (sbs[i].size == -1 || sbs[i].size == 0) {
                 uint32_t start = off / tp->meta.piece_length;
                 uint32_t end = (off + tp->meta.files[i].length - 1) /
                     tp->meta.piece_length;
@@ -674,8 +683,8 @@ cm_td_start(struct cm_op *op)
                     bzero(cm->block_field + start * cm->bppbf, cm->bppbf);
                     start++;
                 }
-            } else if (sbs[i].st_size < tp->meta.files[i].length) {
-                uint32_t start = (off + sbs[i].st_size) /
+            } else if (sbs[i].size < tp->meta.files[i].length) {
+                uint32_t start = (off + sbs[i].size) /
                     tp->meta.piece_length;
                 uint32_t end = (off + tp->meta.files[i].length - 1) /
                     tp->meta.piece_length;
@@ -729,7 +738,7 @@ cm_td_start(struct cm_op *op)
     }
 
     if (!resume_clean)
-        save_resume(tp);
+        save_resume(tp, sbs);
 
 out:
     if (!op->u.start.cancel && err != 0)
