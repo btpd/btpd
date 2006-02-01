@@ -36,5 +36,6 @@ uint32_t torrent_block_size(struct torrent *tp, uint32_t piece,
 
 void torrent_on_cm_stopped(struct torrent *tp);
 void torrent_on_cm_started(struct torrent *tp);
+void torrent_on_tr_stopped(struct torrent *tp);
 
 #endif

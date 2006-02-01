@@ -34,27 +34,58 @@ static struct event m_sigint;
 static struct event m_sigterm;
 static unsigned m_ntorrents;
 static struct torrent_tq m_torrents = BTPDQ_HEAD_INITIALIZER(m_torrents);
+static unsigned m_nactive;
+static int m_shutdown;
 
 void
-btpd_shutdown(void)
+btpd_exit(int code)
+{
+    btpd_log(BTPD_L_BTPD, "Exiting.\n");
+    exit(code);
+}
+
+void
+btpd_tp_activated(struct torrent *tp)
+{
+    m_nactive++;
+}
+
+void
+btpd_tp_deactivated(struct torrent *tp)
+{
+    m_nactive--;
+    if (m_nactive == 0 && m_shutdown)
+        btpd_exit(0);
+}
+
+static void
+grace_cb(int fd, short type, void *arg)
 {
     struct torrent *tp;
-
-    tp = BTPDQ_FIRST(&m_torrents);
-    while (tp != NULL) {
-        struct torrent *next = BTPDQ_NEXT(tp, entry);
+    BTPDQ_FOREACH(tp, &m_torrents, entry)
         torrent_deactivate(tp);
-        tp = next;
+}
+
+void
+btpd_shutdown(struct timeval *grace_tv)
+{
+    if (m_nactive == 0)
+        btpd_exit(0);
+    else {
+        struct torrent *tp;
+        m_shutdown = 1;
+        BTPDQ_FOREACH(tp, &m_torrents, entry)
+            torrent_deactivate(tp);
+        if (grace_tv != NULL)
+            event_once(-1, EV_TIMEOUT, grace_cb, NULL, grace_tv);
     }
-    btpd_log(BTPD_L_BTPD, "Exiting.\n");
-    exit(0);
 }
 
 static void
 signal_cb(int signal, short type, void *arg)
 {
     btpd_log(BTPD_L_BTPD, "Got signal %d.\n", signal);
-    btpd_shutdown();
+    btpd_shutdown((& (struct timeval) { 30, 0 }));
 }
 
 void

@@ -5,6 +5,7 @@
 #include "benc.h"
 #include "subr.h"
 #include "http.h"
+#include "tracker_req.h"
 
 #define REQ_TIMEOUT (& (struct timeval) { 120, 0 })
 #define RETRY_WAIT (& (struct timeval) { rand_between(35, 70), 0 })
@@ -128,14 +129,19 @@ http_cb(struct http *req, struct http_res *res, void *arg)
     struct torrent *tp = arg;
     struct tracker *tr = tp->tr;
     assert(tr->ttype == TIMER_TIMEOUT);
+    tr->req = NULL;
     if ((http_succeeded(res) &&
             parse_reply(tp, res->content, res->length) == 0)) {
+        tr->nerrors = 0;
         tr->ttype = TIMER_INTERVAL;
         event_add(&tr->timer, (& (struct timeval) { tr->interval, 0 }));
     } else {
+        tr->nerrors++;
         tr->ttype = TIMER_RETRY;
         event_add(&tr->timer, RETRY_WAIT);
     }
+    if (tr->event == TR_EV_STOPPED && (tr->nerrors == 0 || tr->nerrors >= 5))
+        tr_destroy(tp);
 }
 
 static void
@@ -145,8 +151,17 @@ timer_cb(int fd, short type, void *arg)
     struct tracker *tr = tp->tr;
     switch (tr->ttype) {
     case TIMER_TIMEOUT:
+        tr->nerrors++;
+        if (tr->event == TR_EV_STOPPED && tr->nerrors >= 5) {
+            tr_destroy(tp);
+            break;
+        }
     case TIMER_RETRY:
-        tr_send(tp, tp->tr->event);
+        if (tr->event == TR_EV_STOPPED) {
+            event_add(&tr->timer, REQ_TIMEOUT);
+            http_redo(&tr->req);
+        } else
+            tr_send(tp, tr->event);
         break;
     case TIMER_INTERVAL:
         tr_send(tp, TR_EV_EMPTY);
@@ -203,6 +218,18 @@ tr_start(struct torrent *tp)
     tr_send(tp, TR_EV_STARTED);
 
     return 0;
+}
+
+void
+tr_destroy(struct torrent *tp)
+{
+    struct tracker *tr = tp->tr;
+    tp->tr = NULL;
+    event_del(&tr->timer);
+    if (tr->req != NULL)
+        http_cancel(tr->req);
+    free(tr);
+    torrent_on_tr_stopped(tp);
 }
 
 void

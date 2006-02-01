@@ -48,7 +48,7 @@ void btpd_err(const char *fmt, ...);
 void *btpd_malloc(size_t size);
 void *btpd_calloc(size_t nmemb, size_t size);
 
-void btpd_shutdown(void);
+void btpd_shutdown(struct timeval *grace_tv);
 
 struct torrent * btpd_get_torrent(const uint8_t *hash);
 const struct torrent_tq *btpd_get_torrents(void);
@@ -63,5 +63,8 @@ void td_release_lock(void);
 #define td_post_begin td_acquire_lock
 void td_post(void (*fun)(void *), void *arg);
 void td_post_end(void);
+
+void btpd_tp_activated(struct torrent *tp);
+void btpd_tp_deactivated(struct torrent *tp);
 
 #endif

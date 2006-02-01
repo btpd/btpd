@@ -51,18 +51,36 @@ torrent_block_size(struct torrent *tp, uint32_t piece, uint32_t nblocks,
 void
 torrent_activate(struct torrent *tp)
 {
-    assert(tp->state == T_INACTIVE);
-    tp->state = T_STARTING;
-    cm_start(tp);
+    if (tp->state == T_INACTIVE) {
+        tp->state = T_STARTING;
+        cm_start(tp);
+        btpd_tp_activated(tp);
+    }
 }
 
 void
 torrent_deactivate(struct torrent *tp)
 {
-    tp->state = T_STOPPING;
-    tr_stop(tp);
-    net_del_torrent(tp);
-    cm_stop(tp);
+    switch (tp->state) {
+    case T_INACTIVE:
+        break;
+    case T_STARTING:
+    case T_ACTIVE:
+        tp->state = T_STOPPING;
+        if (tp->tr != NULL)
+            tr_stop(tp);
+        if (tp->net != NULL)
+            net_del_torrent(tp);
+        if (tp->cm != NULL)
+            cm_stop(tp);
+        break;
+    case T_STOPPING:
+        if (tp->tr != NULL)
+            tr_destroy(tp);
+        break;
+    default:
+        abort();
+    }
 }
 
 int
@@ -110,5 +128,18 @@ void
 torrent_on_cm_stopped(struct torrent *tp)
 {
     assert(tp->state == T_STOPPING);
-    tp->state = T_INACTIVE;
+    if (tp->tr == NULL) {
+        tp->state = T_INACTIVE;
+        btpd_tp_deactivated(tp);
+    }
+}
+
+void
+torrent_on_tr_stopped(struct torrent *tp)
+{
+    assert(tp->state == T_STOPPING);
+    if (tp->cm == NULL) {
+        tp->state = T_INACTIVE;
+        btpd_tp_deactivated(tp);
+    }
 }
