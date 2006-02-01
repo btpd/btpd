@@ -88,6 +88,17 @@ http_get(struct http **ret,
     return 0;
 }
 
+int
+http_redo(struct http **http)
+{
+    int err;
+    struct http *ret;
+    err = http_get(&ret, (*http)->cb, "%s", (*http)->url);
+    http_cancel(*http);
+    *http = ret;
+    return err;
+}
+
 void
 http_cancel(struct http *http)
 {

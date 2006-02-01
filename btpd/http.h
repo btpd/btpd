@@ -20,6 +20,7 @@ int http_get(struct http **ret,
     void (*cb)(struct http *, struct http_res *, void *),
     void *arg,
     const char *fmt, ...);
+int http_redo(struct http **http);
 void http_cancel(struct http *http);
 
 int http_succeeded(struct http_res *res);
