@@ -174,3 +174,35 @@ rand_between(long min, long max)
 {
     return min + (long)rint((double)random() * (max - min) / RAND_MAX);
 }
+
+int
+write_fully(int fd, const void *buf, size_t len)
+{
+    ssize_t nw;
+    size_t off = 0;
+
+    while (off < len) {
+        nw = write(fd, buf + off, len - off);
+        if (nw == -1)
+            return errno;
+        off += nw;
+    }
+    return 0;
+}
+
+int
+read_fully(int fd, void *buf, size_t len)
+{
+    ssize_t nread;
+    size_t off = 0;
+
+    while (off < len) {
+        nread = read(fd, buf + off, len - off);
+        if (nread == 0)
+            return ECONNRESET;
+        else if (nread == -1)
+            return errno;
+        off += nread;
+    }
+    return 0;
+}
