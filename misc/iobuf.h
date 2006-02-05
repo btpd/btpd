@@ -5,6 +5,7 @@ struct io_buffer {
     size_t buf_off;
     size_t buf_len;
     char *buf;
+    int error;
 };
 
 int buf_init(struct io_buffer *iob, size_t size);
