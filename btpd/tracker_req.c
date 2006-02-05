@@ -130,8 +130,9 @@ http_cb(struct http *req, struct http_res *res, void *arg)
     struct tracker *tr = tp->tr;
     assert(tr->ttype == TIMER_TIMEOUT);
     tr->req = NULL;
-    if ((http_succeeded(res) &&
-            parse_reply(tp, res->content, res->length) == 0)) {
+    if (res->res == HRES_OK &&
+        (tr->event == TR_EV_STOPPED
+            || parse_reply(tp, res->content, res->length) == 0)) {
         tr->nerrors = 0;
         tr->ttype = TIMER_INTERVAL;
         event_add(&tr->timer, (& (struct timeval) { tr->interval, 0 }));
@@ -248,4 +249,10 @@ void
 tr_stop(struct torrent *tp)
 {
     tr_send(tp, TR_EV_STOPPED);
+}
+
+unsigned
+tr_errors(struct torrent *tp)
+{
+    return tp->tr->nerrors;
 }

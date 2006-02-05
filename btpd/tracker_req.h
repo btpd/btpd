@@ -6,5 +6,6 @@ void tr_stop(struct torrent *tp);
 void tr_refresh(struct torrent *tp);
 void tr_complete(struct torrent *tp);
 void tr_destroy(struct torrent *tp);
+unsigned tr_errors(struct torrent *tp);
 
 #endif
