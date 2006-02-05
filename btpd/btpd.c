@@ -123,6 +123,15 @@ btpd_get_torrent(const uint8_t *hash)
     return tp;
 }
 
+struct torrent *
+btpd_get_torrent_num(unsigned num)
+{
+    struct torrent *tp = BTPDQ_FIRST(&m_torrents);
+    while (tp != NULL && tp->num != num)
+        tp = BTPDQ_NEXT(tp, entry);
+    return tp;
+}
+
 const uint8_t *
 btpd_get_peer_id(void)
 {
@@ -253,9 +262,11 @@ btpd_init(void)
 
     load_library();
 
+#if 0
     struct torrent *tp;
     BTPDQ_FOREACH(tp, &m_torrents, entry)
         torrent_activate(tp);
+#endif
 
     signal(SIGPIPE, SIG_IGN);
 

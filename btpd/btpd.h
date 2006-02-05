@@ -50,7 +50,8 @@ void *btpd_calloc(size_t nmemb, size_t size);
 
 void btpd_shutdown(struct timeval *grace_tv);
 
-struct torrent * btpd_get_torrent(const uint8_t *hash);
+struct torrent *btpd_get_torrent(const uint8_t *hash);
+struct torrent *btpd_get_torrent_num(unsigned num);
 const struct torrent_tq *btpd_get_torrents(void);
 void btpd_add_torrent(struct torrent *tp);
 void btpd_del_torrent(struct torrent *tp);
