@@ -12,58 +12,80 @@
 #include <unistd.h>
 
 #include "btpd.h"
+#include "tracker_req.h"
+
+struct cli {
+    int sd;
+    struct event read;
+};
 
 #define buf_swrite(iob, s) buf_write(iob, s, sizeof(s) - 1)
 
 static struct event m_cli_incoming;
 
-static void
-errdie(int error)
-{
-    if (error != 0)
-        btpd_err("io_buf: %s.\n", strerror(error));
-}
-
-static void
-cmd_stat(int argc, const char *args, FILE *fp)
+static int
+cmd_stat(struct cli *cli, int argc, const char *args)
 {
     struct torrent *tp;
     struct io_buffer iob;
-    errdie(buf_init(&iob, (1 << 14)));
+    buf_init(&iob, (1 << 14));
 
-    errdie(buf_swrite(&iob, "d"));
-    errdie(buf_print(&iob, "6:npeersi%ue", net_npeers));
-    errdie(buf_print(&iob, "9:ntorrentsi%ue", btpd_get_ntorrents()));
-    errdie(buf_swrite(&iob, "8:torrentsl"));
+    buf_swrite(&iob, "d");
+    buf_swrite(&iob, "4:codei0e");
+    buf_print(&iob, "6:npeersi%ue", net_npeers);
+    buf_print(&iob, "9:ntorrentsi%ue", btpd_get_ntorrents());
+    buf_swrite(&iob, "8:torrentsl");
     BTPDQ_FOREACH(tp, btpd_get_torrents(), entry) {
-        if (tp->state != T_ACTIVE)
-            continue;
+        if (tp->state == T_ACTIVE) {
+            uint32_t seen_npieces = 0;
+            for (uint32_t i = 0; i < tp->meta.npieces; i++)
+                if (tp->net->piece_count[i] > 0)
+                    seen_npieces++;
 
-        uint32_t seen_npieces = 0;
-        for (uint32_t i = 0; i < tp->meta.npieces; i++)
-            if (tp->net->piece_count[i] > 0)
-                seen_npieces++;
-        errdie(buf_print(&iob, "d4:downi%jue", (intmax_t)tp->net->downloaded));
-        errdie(buf_swrite(&iob, "4:hash20:"));
-        errdie(buf_write(&iob, tp->meta.info_hash, 20));
-        errdie(buf_print(&iob, "4:havei%jde", (intmax_t)cm_get_size(tp)));
-        errdie(buf_print(&iob, "6:npeersi%ue", tp->net->npeers));
-        errdie(buf_print(&iob, "7:npiecesi%ue", tp->meta.npieces));
-        errdie(buf_print(&iob, "4:path%d:%s",
-                         (int)strlen(tp->relpath), tp->relpath));
-        errdie(buf_print(&iob, "2:rdi%lue", tp->net->rate_dwn));
-        errdie(buf_print(&iob, "2:rui%lue", tp->net->rate_up));
-        errdie(buf_print(&iob, "12:seen npiecesi%ue", seen_npieces));
-        errdie(buf_print(&iob, "5:totali%jde",
-                   (intmax_t)tp->meta.total_length));
-        errdie(buf_print(&iob, "2:upi%juee", (intmax_t)tp->net->uploaded));
+            buf_print(&iob, "d4:downi%jue", (intmax_t)tp->net->downloaded);
+            buf_print(&iob, "6:errorsi%ue", tr_errors(tp));
+            buf_swrite(&iob, "4:hash20:");
+            buf_write(&iob, tp->meta.info_hash, 20);
+            buf_print(&iob, "4:havei%jde", (intmax_t)cm_get_size(tp));
+            buf_print(&iob, "6:npeersi%ue", tp->net->npeers);
+            buf_print(&iob, "7:npiecesi%ue", tp->meta.npieces);
+            buf_print(&iob, "3:numi%ue", tp->num);
+            buf_print(&iob, "4:path%d:%s", (int)strlen(tp->meta.name),
+                tp->meta.name);
+            buf_print(&iob, "2:rdi%lue", tp->net->rate_dwn);
+            buf_print(&iob, "2:rui%lue", tp->net->rate_up);
+            buf_print(&iob, "12:seen npiecesi%ue", seen_npieces);
+            buf_swrite(&iob, "5:state1:A");
+            buf_print(&iob, "5:totali%jde", (intmax_t)tp->meta.total_length);
+            buf_print(&iob, "2:upi%juee", (intmax_t)tp->net->uploaded);
+        } else {
+            buf_swrite(&iob, "d4:hash20:");
+            buf_write(&iob, tp->meta.info_hash, 20);
+            buf_print(&iob, "3:numi%ue", tp->num);
+            buf_print(&iob, "4:path%d:%s", (int)strlen(tp->meta.name),
+                tp->meta.name);
+            switch (tp->state) {
+            case T_INACTIVE:
+                buf_swrite(&iob, "5:state1:Ie");
+                break;
+            case T_STARTING:
+                buf_swrite(&iob, "5:state1:Be");
+                break;
+            case T_STOPPING:
+                buf_swrite(&iob, "5:state1:Ee");
+                break;
+            case T_ACTIVE:
+                abort();
+            }
+        }
     }
-    errdie(buf_swrite(&iob, "ee"));
+    buf_swrite(&iob, "ee");
 
     uint32_t len = iob.buf_off;
-    fwrite(&len, sizeof(len), 1, fp);
-    fwrite(iob.buf, 1, iob.buf_off, fp);
+    write_fully(cli->sd, &len, sizeof(len));
+    write_fully(cli->sd, iob.buf, iob.buf_off);
     free(iob.buf);
+    return 0;
 }
 
 #if 0
@@ -71,9 +93,9 @@ static void
 cmd_add(int argc, const char *args, FILE *fp)
 {
     struct io_buffer iob;
-    errdie(buf_init(&iob, (1 << 10)));
+    buf_init(&iob, (1 << 10));
 
-    errdie(buf_write(&iob, "l", 1));
+    buf_write(&iob, "l", 1);
     while (args != NULL) {
         size_t plen;
         char path[PATH_MAX];
@@ -87,16 +109,16 @@ cmd_add(int argc, const char *args, FILE *fp)
         benc_str(args, &pathp, &plen, &args);
 
         if (plen >= PATH_MAX) {
-            errdie(buf_print(&iob, "d4:codei%dee", ENAMETOOLONG));
+            buf_print(&iob, "d4:codei%dee", ENAMETOOLONG);
             continue;
         }
 
         bcopy(pathp, path, plen);
         path[plen] = '\0';
         btpd_log(BTPD_L_BTPD, "add request for %s.\n", path);
-        errdie(buf_print(&iob, "d4:codei%dee", torrent_load(path)));
+        buf_print(&iob, "d4:codei%dee", torrent_load(path));
     }
-    errdie(buf_write(&iob, "e", 1));
+    buf_write(&iob, "e", 1);
 
     uint32_t len = iob.buf_off;
     fwrite(&len, sizeof(len), 1, fp);
@@ -108,9 +130,9 @@ static void
 cmd_del(int argc, const char *args, FILE *fp)
 {
     struct io_buffer iob;
-    errdie(buf_init(&iob, (1 << 10)));
+    buf_init(&iob, (1 << 10));
 
-    errdie(buf_swrite(&iob, "l"));
+    buf_swrite(&iob, "l");
 
     while (args != NULL) {
         size_t len;
@@ -127,13 +149,13 @@ cmd_del(int argc, const char *args, FILE *fp)
         if (tp != NULL) {
             btpd_log(BTPD_L_BTPD, "del request for %s.\n", tp->relpath);
             torrent_unload(tp);
-            errdie(buf_swrite(&iob, "d4:codei0ee"));
+            buf_swrite(&iob, "d4:codei0ee");
         } else {
             btpd_log(BTPD_L_BTPD, "del request didn't match.\n");
-            errdie(buf_print(&iob, "d4:codei%dee", ENOENT));
+            buf_print(&iob, "d4:codei%dee", ENOENT);
         }
     }
-    errdie(buf_swrite(&iob, "e"));
+    buf_swrite(&iob, "e");
 
     uint32_t len = iob.buf_off;
     fwrite(&len, sizeof(len), 1, fp);
@@ -141,78 +163,144 @@ cmd_del(int argc, const char *args, FILE *fp)
     free(iob.buf);
 }
 
-static void
-cmd_die(int argc, const char *args, FILE *fp)
+#endif
+
+static int
+cmd_die(struct cli *cli, int argc, const char *args)
 {
     char res[] = "d4:codei0ee";
     uint32_t len = sizeof(res) - 1;
-    fwrite(&len, sizeof(len), 1, fp);
-    fwrite(res, 1, len, fp);
-    fflush(fp);
+    write_fully(cli->sd, &len, sizeof(len));
+    write_fully(cli->sd, res, len);
     btpd_log(BTPD_L_BTPD, "Someone wants me dead.\n");
-    btpd_shutdown();
+    btpd_shutdown((& (struct timeval) { 0, 0 }));
+    return 0;
 }
-#endif
+
+static int
+cmd_start(struct cli *cli, int argc, const char *args)
+{
+    if (argc != 1 || !benc_isint(args))
+        return EINVAL;
+
+    int code;
+    unsigned num;
+    num = benc_int(args, NULL);
+    struct torrent *tp = btpd_get_torrent_num(num);
+    if (tp != NULL) {
+        torrent_activate(tp);
+        code = 0;
+    } else
+        code = 1;
+
+    struct io_buffer iob;
+    buf_init(&iob, 16);
+    buf_print(&iob, "d4:codei%dee", code);
+    uint32_t len = iob.buf_off;
+    write_fully(cli->sd, &len, sizeof(len));
+    write_fully(cli->sd, iob.buf, iob.buf_off);
+    return 0;
+}
+
+static int
+cmd_stop(struct cli *cli, int argc, const char *args)
+{
+    btpd_log(BTPD_L_BTPD, "%d\n", argc);
+    if (argc != 1 || !benc_isint(args))
+        return EINVAL;
+
+    int code;
+    unsigned num;
+    num = benc_int(args, NULL);
+    struct torrent *tp = btpd_get_torrent_num(num);
+    if (tp != NULL) {
+        torrent_deactivate(tp);
+        code = 0;
+    } else
+        code = 1;
+
+    struct io_buffer iob;
+    buf_init(&iob, 16);
+    buf_print(&iob, "d4:codei%dee", code);
+    uint32_t len = iob.buf_off;
+    write_fully(cli->sd, &len, sizeof(len));
+    write_fully(cli->sd, iob.buf, iob.buf_off);
+    return 0;
+}
 
 static struct {
     const char *name;
     int nlen;
-    void (*fun)(int, const char *, FILE *);
+    int (*fun)(struct cli *cli, int, const char *);
 } cmd_table[] = {
 #if 0
     { "add",    3, cmd_add },
     { "del",    3, cmd_del },
-    { "die",    3, cmd_die },
 #endif
-    { "stat",   4, cmd_stat }
+    { "die",    3, cmd_die },
+    { "start",  5, cmd_start }, 
+    { "stat",   4, cmd_stat },
+    { "stop",   4, cmd_stop }
 };
 
 static int ncmds = sizeof(cmd_table) / sizeof(cmd_table[0]);
 
-static void
-cmd_dispatch(const char *buf, FILE *fp)
+static int
+cmd_dispatch(struct cli *cli, const char *buf)
 {
+    int err = 0;
     size_t cmdlen;
     const char *cmd;
     const char *args;
-    int found = 0;
 
-    benc_str(benc_first(buf), &cmd, &cmdlen, &args);
+    cmd = benc_mem(benc_first(buf), &cmdlen, &args);
 
-    for (int i = 0; !found && i < ncmds; i++) {
-        if (cmdlen == cmd_table[i].nlen &&
-            strncmp(cmd_table[i].name, cmd, cmdlen) == 0) {
-            cmd_table[i].fun(benc_nelems(buf) - 1, args, fp);
-            found = 1;
+    btpd_log(BTPD_L_BTPD, "%.*s\n", (int)cmdlen, cmd);
+    for (int i = 0; i < ncmds; i++) {
+        if ((cmdlen == cmd_table[i].nlen &&
+                strncmp(cmd_table[i].name, cmd, cmdlen) == 0)) {
+            err = cmd_table[i].fun(cli, benc_nelems(buf) - 1, args);
+            break;
         }
     }
+    return err;
 }
 
 static void
-do_ipc(FILE *fp)
+cli_read_cb(int sd, short type, void *arg)
 {
-    uint32_t cmdlen, nread;
-    char *buf;
+    struct cli *cli = arg;
+    uint32_t cmdlen;
+    uint8_t *msg = NULL;
 
-    if (fread(&cmdlen, sizeof(cmdlen), 1, fp) != 1)
-        return;
+    if (read_fully(sd, &cmdlen, sizeof(cmdlen)) != 0)
+        goto error;
 
-    buf = btpd_malloc(cmdlen);
+    msg = btpd_malloc(cmdlen);
+    if (read_fully(sd, msg, cmdlen) != 0)
+        goto error;
 
-    if ((nread = fread(buf, 1, cmdlen, fp)) == cmdlen) {
-        if (benc_validate(buf, cmdlen) == 0 && benc_islst(buf) &&
-            benc_first(buf) != NULL && benc_isstr(benc_first(buf)))
-            cmd_dispatch(buf, fp);
-    }
+    if (!(benc_validate(msg, cmdlen) == 0 && benc_islst(msg) &&
+            benc_first(msg) != NULL && benc_isstr(benc_first(msg))))
+        goto error;
 
-    free(buf);
+    if (cmd_dispatch(cli, msg) != 0)
+        goto error;
+
+    event_add(&cli->read, NULL);
+    return;
+
+error:
+    close(cli->sd);
+    free(cli);
+    if (msg != NULL)
+        free(msg);
 }
 
 void
 client_connection_cb(int sd, short type, void *arg)
 {
     int nsd;
-    FILE *fp;
 
     if ((nsd = accept(sd, NULL, NULL)) < 0) {
         if (errno == EWOULDBLOCK || errno == ECONNABORTED)
@@ -224,14 +312,10 @@ client_connection_cb(int sd, short type, void *arg)
     if ((errno = set_blocking(nsd)) != 0)
         btpd_err("set_blocking: %s.\n", strerror(errno));
 
-    if ((fp = fdopen(nsd, "r+")) == NULL) {
-        close(nsd);
-        return;
-    }
-
-    do_ipc(fp);
-
-    fclose(fp);
+    struct cli *cli = btpd_calloc(1, sizeof(*cli));
+    cli->sd = nsd;
+    event_set(&cli->read, cli->sd, EV_READ, cli_read_cb, cli);
+    event_add(&cli->read, NULL);
 }
 
 void

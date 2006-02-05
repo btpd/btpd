@@ -69,22 +69,22 @@ check_path(const char *path, size_t len)
 int
 fill_fileinfo(const char *fdct, struct fileinfo *tfp)
 {
-    int err;
+    //int err;
     size_t npath, plen, len;
     const char *plst, *iter, *str;
 
-    if ((err = benc_dget_off(fdct, "length", &tfp->length)) != 0)
-        return err;
+    if (!benc_dct_chk(fdct, 2, BE_INT, 1, "length", BE_LST, 1, "path"))
+        return EINVAL;
 
-    if ((err = benc_dget_lst(fdct, "path", &plst)) != 0)
-        return err;
+    tfp->length = benc_dget_int(fdct, "length");
+    plst = benc_dget_lst(fdct, "path");
 
     npath = plen = 0;
     iter = benc_first(plst);
     while (iter != NULL) {
         if (!benc_isstr(iter))
             return EINVAL;
-        benc_str(iter, &str, &len, &iter);
+        str = benc_mem(iter, &len, &iter);
         if (!check_path(str, len))
             return EINVAL;
         npath++;
@@ -97,13 +97,13 @@ fill_fileinfo(const char *fdct, struct fileinfo *tfp)
         return ENOMEM;
 
     iter = benc_first(plst);
-    benc_str(iter, &str, &len, &iter);
+    str = benc_mem(iter, &len, &iter);
     memcpy(tfp->path, str, len);
     plen = len;
     npath--;
     while (npath > 0) {
         tfp->path[plen++] = '/';
-        benc_str(iter, &str, &len, &iter);
+        str = benc_mem(iter, &len, &iter);
         memcpy(tfp->path + plen, str, len);
         plen += len;
         npath--;
@@ -135,35 +135,25 @@ int
 fill_metainfo(const char *bep, struct metainfo *tp, int mem_hashes)
 {
     size_t len;
-    int err;
+    int err = 0;
     const char *base_addr = bep;
     const char *hash_addr;
 
-    if (!benc_isdct(bep))
+    if (!benc_dct_chk(bep, 5,
+            BE_STR, 1, "announce",
+            BE_DCT, 1, "info",
+            BE_INT, 2, "info", "piece length",
+            BE_STR, 2, "info", "pieces",
+            BE_STR, 2, "info", "name"))
         return EINVAL;
 
-    if ((err = benc_dget_strz(bep, "announce", &tp->announce, NULL)) != 0)
-        goto out;
-
-    if ((err = benc_dget_dct(bep, "info", &bep)) != 0)
-        goto out;
-
+    tp->announce = benc_dget_str(bep, "announce", NULL);
+    bep = benc_dget_dct(bep, "info");
     SHA1(bep, benc_length(bep), tp->info_hash);
-
-    if ((err = benc_dget_off(bep, "piece length", &tp->piece_length)) != 0)
-        goto out;
-
-    if ((err = benc_dget_str(bep, "pieces", &hash_addr, &len)) != 0)
-        goto out;
-
-    if (len % 20 != 0) {
-        err = EINVAL;
-        goto out;
-    }
+    tp->piece_length = benc_dget_int(bep, "piece length");
+    hash_addr = benc_dget_mem(bep, "pieces", &len);
     tp->npieces = len / 20;
-
     tp->pieces_off = hash_addr - base_addr;
-
     if (mem_hashes) {
         if ((tp->piece_hash = malloc(len)) == NULL) {
             err = ENOMEM;
@@ -171,12 +161,10 @@ fill_metainfo(const char *bep, struct metainfo *tp, int mem_hashes)
         }
         bcopy(hash_addr, tp->piece_hash, len);
     }
+    tp->name = benc_dget_str(bep, "name", NULL);
 
-    if ((err = benc_dget_strz(bep, "name", &tp->name, NULL)) != 0)
-        goto out;
-
-    err = benc_dget_off(bep, "length", &tp->total_length);
-    if (err == 0) {
+    if (benc_dct_chk(bep, 1, BE_INT, 1, "length")) {
+        tp->total_length = benc_dget_int(bep, "length");
         tp->nfiles = 1;
         tp->files = calloc(1, sizeof(struct fileinfo));
         if (tp->files != NULL) {
@@ -190,14 +178,11 @@ fill_metainfo(const char *bep, struct metainfo *tp, int mem_hashes)
             err = ENOMEM;
             goto out;
         }
-    }
-    else if (err == ENOENT) {
+    } else if (benc_dct_chk(bep, 1, BE_LST, 1, "files")) {
         int i;
         const char *flst, *fdct;
 
-        if ((err = benc_dget_lst(bep, "files", &flst)) != 0)
-            goto out;
-
+        flst = benc_dget_lst(bep, "files");
         tp->nfiles = benc_nelems(flst);
         if (tp->nfiles < 1) {
             err = EINVAL;
@@ -258,7 +243,6 @@ load_metainfo(const char *path, off_t size, int mem_hashes,
     if (err == 0)
         if ((*res = calloc(1, sizeof(**res))) == NULL)
             err = ENOMEM;
-
     if (err == 0)
         if ((err = fill_metainfo(buf, *res, mem_hashes)) != 0)
             free(*res);

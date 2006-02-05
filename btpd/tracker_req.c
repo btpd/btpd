@@ -40,15 +40,12 @@ static void tr_send(struct torrent *tp, enum tr_event event);
 void
 maybe_connect_to(struct torrent *tp, const char *pinfo)
 {
-    const char *pid = NULL;
-    char *ip = NULL;
-    int64_t port;
+    const char *pid;
+    char *ip;
+    int port;
     size_t len;
 
-    if (!benc_isdct(pinfo))
-        return;
-
-    if (benc_dget_str(pinfo, "peer id", &pid, &len) != 0 || len != 20)
+    if ((pid = benc_dget_mem(pinfo, "peer id", &len)) == NULL || len != 20)
         return;
 
     if (bcmp(btpd_get_peer_id(), pid, 20) == 0)
@@ -56,71 +53,60 @@ maybe_connect_to(struct torrent *tp, const char *pinfo)
 
     if (net_torrent_has_peer(tp->net, pid))
         return;
+    
+    if ((ip = benc_dget_str(pinfo, "ip", NULL)) == NULL)
+        return;
 
-    if (benc_dget_strz(pinfo, "ip", &ip, NULL) != 0)
-        goto out;
-
-    if (benc_dget_int64(pinfo, "port", &port) != 0)
-        goto out;
-
+    port = benc_dget_int(pinfo, "port");
     peer_create_out(tp->net, pid, ip, port);
 
-out:
     if (ip != NULL)
         free(ip);
 }
 
+
 static int
 parse_reply(struct torrent *tp, const char *content, size_t size)
 {
-    char *buf;
+    const char *buf;
+    size_t len;
     const char *peers;
-    uint32_t interval;
+    int interval;
 
-    if (benc_validate(content, size) != 0 || !benc_isdct(content)) {
-        btpd_log(BTPD_L_ERROR, "Bad data from tracker.\n");
+    if ((buf = benc_dget_mem(content, "failure reason", &len)) != NULL) {
+        btpd_log(BTPD_L_ERROR, "Tracker failure: %.*s.\n", (int)len, buf);
         return 1;
     }
 
-    if ((benc_dget_strz(content, "failure reason", &buf, NULL)) == 0) {
-        btpd_log(BTPD_L_ERROR, "Tracker failure: %s.\n", buf);
-        free(buf);
-        return 1;
-    }
+    if ((benc_validate(content, size) != 0 ||
+            !benc_dct_chk(content, 2, BE_INT, 1, "interval",
+                BE_ANY, 1, "peers")))
+        goto bad_data;
 
-    if ((benc_dget_uint32(content, "interval", &interval)) != 0) {
-        btpd_log(BTPD_L_ERROR, "Bad data from tracker.\n");
-        return 1;
-    }
+    interval = benc_dget_int(content, "interval");
+    if (interval < 1)
+        goto bad_data;
 
     tp->tr->interval = interval;
-    btpd_log(BTPD_L_BTPD, "Got interval %d.\n", interval);
+    peers = benc_dget_any(content, "peers");
 
-    int error = 0;
-    size_t length;
-
-    if ((error = benc_dget_lst(content, "peers", &peers)) == 0) {
+    if (benc_islst(peers)) {
         for (peers = benc_first(peers);
              peers != NULL && net_npeers < net_max_peers;
              peers = benc_next(peers))
             maybe_connect_to(tp, peers);
-    }
-
-    if (error == EINVAL) {
-        error = benc_dget_str(content, "peers", &peers, &length);
-        if (error == 0 && length % 6 == 0) {
-            size_t i;
-            for (i = 0; i < length && net_npeers < net_max_peers; i += 6)
-                peer_create_out_compact(tp->net, peers + i);
-        }
-    }
-
-    if (error != 0) {
-        btpd_log(BTPD_L_ERROR, "Bad data from tracker.\n");
-        return 1;
-    }
+    } else if (benc_isstr(peers)) {
+        peers = benc_dget_mem(content, "peers", &len);
+        for (size_t i = 0; i < len && net_npeers < net_max_peers; i += 6)
+            peer_create_out_compact(tp->net, peers + i);
+    } else
+        goto bad_data;
 
     return 0;
+
+bad_data:
+    btpd_log(BTPD_L_ERROR, "Bad data from tracker.\n");
+    return 1;
 }
 
 static void

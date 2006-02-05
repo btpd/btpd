@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -99,7 +100,7 @@ benc_length(const char *p)
             ;
         return next - p + 1;
     default:
-        assert(benc_str(p, &next, &blen, NULL) == 0);
+        assert((next = benc_mem(p, &blen, NULL)) != NULL);
         return next - p + blen;
     }
 }
@@ -127,11 +128,12 @@ benc_next(const char *p)
     return *(p + blen) == 'e' ? NULL : p + blen;
 }
 
-int
-benc_str(const char *p, const char **out, size_t *len, const char**next)
+const char *
+benc_mem(const char *p, size_t *len, const char**next)
 {
+    if (!benc_isstr(p))
+        return NULL;
     size_t blen = 0;
-    assert(isdigit(*p));
     blen = *p - '0';
     p++;
     while (isdigit(*p)) {
@@ -141,53 +143,49 @@ benc_str(const char *p, const char **out, size_t *len, const char**next)
     }
     assert(*p == ':');
     benc_safeset(len, blen);
-    benc_safeset(out, p + 1);
     benc_safeset(next, *(p + blen + 1) == 'e' ? NULL : p + blen + 1);
-    return 0;
+    return p + 1;
 }
 
-int
-benc_strz(const char *p, char **out, size_t *len, const char **next)
+char *
+benc_str(const char *p, size_t *len, const char **next)
 {
-    int err;
     size_t blen;
     const char *bstr;
-
-    if ((err = benc_str(p, &bstr, &blen, next)) == 0) {
-        if ((*out = malloc(blen + 1)) != NULL) {
-            memcpy(*out, bstr, blen);
-            (*out)[blen] = '\0';
-            benc_safeset(len, blen);
-        } else
-            err = ENOMEM;
-    }
-    return err;
+    char *ret;
+    if ((bstr = benc_mem(p, &blen, next)) == NULL)
+        return NULL;
+    if ((ret = malloc(blen + 1)) == NULL)
+        return NULL;
+    bcopy(bstr, ret, blen);
+    ret[blen] = '\0';
+    benc_safeset(len, blen);
+    return ret;
 }
 
-int
-benc_stra(const char *p, char **out, size_t *len, const char **next)
+char *
+benc_mema(const char *p, size_t *len, const char **next)
 {
-    int err;
     size_t blen;
     const char *bstr;
-
-    if ((err = benc_str(p, &bstr, &blen, next)) == 0) {
-        if ((*out = malloc(blen)) != NULL) {
-            memcpy(*out, bstr, blen);
-            benc_safeset(len, blen);
-        } else
-            err = ENOMEM;
-    }
-    return err;
+    char *ret;
+    if ((bstr = benc_mem(p, &blen, next)) == NULL)
+        return NULL;
+    if ((ret = malloc(blen)) == NULL)
+        return NULL;
+    bcopy(bstr, ret, blen);
+    benc_safeset(len, blen);
+    return ret;
 }
 
-int
-benc_int64(const char *p, int64_t *out, const char **next)
+long long
+benc_int(const char *p, const char **next)
 {
     int sign = 1;
-    int64_t res = 0;
+    long long res = 0;
 
-    assert(*p == 'i');
+    if (!benc_isint(p))
+        return 0;
     p++;
     if (*p == '-') {
         sign = -1;
@@ -202,122 +200,79 @@ benc_int64(const char *p, int64_t *out, const char **next)
         p++;
     }
     assert(*p == 'e');
-    benc_safeset(out, res);
-    benc_safeset(next, *(p + 1) == 'e' ? NULL : p + 1);
-
-    return 0;
+    benc_safeset(next, *(p + 1) == 'e' ? NULL : p + 1);    
+    return res;
 }
 
-int
-benc_uint32(const char *p, uint32_t *out, const char **next)
+const char *
+benc_dget_any(const char *p, const char *key)
 {
-    int err;
-    int64_t res;
-    if ((err = benc_int64(p, &res, next)) == 0) {
-        if (res >= 0 && res <= 0xffffffffUL)
-            *out = (uint32_t)res;
-        else
-            err = EINVAL;
-    }
-    return err;
-}
-
-int
-benc_dget_any(const char *p, const char *key, const char **val)
-{
-    int res;
+    int cmp;
     size_t len, blen;
     const char *bstr;
 
-    assert(benc_isdct(p));
+    if (!benc_isdct(p))
+        return NULL;
 
     len = strlen(key);
 
     p = benc_first(p);
     while (p != NULL) {
-        if ((res = benc_str(p, &bstr, &blen, &p)) != 0)
-            return res;
+        if (!benc_isstr(p))
+            return NULL;
+        bstr = benc_mem(p, &blen, &p);
 
-        res = strncmp(bstr, key, blen);
-        if (res == 0 && len == blen) {
-            *val = p;
-            return 0;
-        } else if (res <= 0) {
+        cmp = strncmp(bstr, key, blen);
+        if (cmp == 0 && len == blen)
+            return p;
+        else if (cmp <= 0)
             p = benc_next(p);
-        } else
-            return ENOENT;
+        else
+            return NULL;
     }
-    return ENOENT;
+    return NULL;
 }
 
-int
-benc_dget_lst(const char *p, const char *key, const char **val)
+const char *
+benc_dget_lst(const char *p, const char *key)
 {
-    int err;
-    if ((err = benc_dget_any(p, key, val)) == 0)
-        if (!benc_islst(*val))
-            err = EINVAL;
-    return err;
+    const char *ret = benc_dget_any(p, key);
+    return ret != NULL && benc_islst(ret) ? ret : NULL;
 }
 
-int
-benc_dget_dct(const char *p, const char *key, const char **val)
+const char *
+benc_dget_dct(const char *p, const char *key)
 {
-    int err;
-    if ((err = benc_dget_any(p, key, val)) == 0)
-        if (!benc_isdct(*val))
-            err = EINVAL;
-    return err;
+    const char *ret = benc_dget_any(p, key);
+    return ret != NULL && benc_isdct(ret) ? ret : NULL;
 }
 
-int
-benc_dget_str(const char *p, const char *key, const char **val, size_t *len)
+const char *
+benc_dget_mem(const char *p, const char *key, size_t *len)
 {
-    int err;
-    const char *sp;
-    if ((err = benc_dget_any(p, key, &sp)) == 0)
-        err = benc_isstr(sp) ? benc_str(sp, val, len, NULL) : EINVAL;
-    return err;
+    const char *str = benc_dget_any(p, key);
+    return str != NULL && benc_isstr(str) ? benc_mem(str, len, NULL) : NULL;
 }
 
-int
-benc_dget_stra(const char *p, const char *key, char **val, size_t *len)
+char *
+benc_dget_mema(const char *p, const char *key, size_t *len)
 {
-    int err;
-    const char *sp;
-    if ((err = benc_dget_any(p, key, &sp)) == 0)
-        err = benc_isstr(sp) ? benc_stra(sp, val, len, NULL) : EINVAL;
-    return err;
+    const char *str = benc_dget_any(p, key);
+    return str != NULL && benc_isstr(str) ? benc_mema(str, len, NULL) : NULL;
 }
 
-int
-benc_dget_strz(const char *p, const char *key, char **val, size_t *len)
+char *
+benc_dget_str(const char *p, const char *key, size_t *len)
 {
-    int err;
-    const char *sp;
-    if ((err = benc_dget_any(p, key, &sp)) == 0)
-        err = benc_isstr(sp) ? benc_strz(sp, val, len, NULL) : EINVAL;
-    return err;
+    const char *str = benc_dget_any(p, key);
+    return str != NULL && benc_isstr(str) ? benc_str(str, len, NULL) : NULL;
 }
 
-int
-benc_dget_int64(const char *p, const char *key, int64_t *val)
+long long
+benc_dget_int(const char *p, const char *key)
 {
-    int err;
-    const char *ip;
-    if ((err = benc_dget_any(p, key, &ip)) == 0)
-        err = benc_isint(ip) ? benc_int64(ip, val, NULL) : EINVAL;
-    return err;
-}
-
-int
-benc_dget_uint32(const char *p, const char *key, uint32_t *val)
-{
-    int err;
-    const char *ip;
-    if ((err = benc_dget_any(p, key, &ip)) == 0)
-        err = benc_isint(ip) ? benc_uint32(ip, val, NULL) : EINVAL;
-    return err;
+    const char *intp = benc_dget_any(p, key);
+    return intp != NULL && benc_isint(intp) ? benc_int(intp, NULL) : 0;
 }
 
 int
@@ -343,3 +298,131 @@ benc_isstr(const char *p)
 {
     return isdigit(*p);
 }
+
+int
+benc_istype(const char *p, enum be_type type)
+{
+    switch (type) {
+    case BE_ANY:
+        return benc_isdct(p) || benc_isint(p) ||
+            benc_islst(p) || benc_isstr(p);
+    case BE_DCT:
+        return benc_isdct(p);
+    case BE_INT:
+        return benc_isint(p);
+    case BE_LST:
+        return benc_islst(p);
+    case BE_STR:
+        return benc_isstr(p);
+    default:
+        abort();
+    }
+}
+
+int
+benc_dct_chk(const char *p, int count, ...)
+{
+    int i, ok = 1;
+    va_list ap;
+
+    if (!benc_isdct(p))
+        ok = 0;
+
+    va_start(ap, count);
+    for (i = 0; ok && i < count; i++) {
+        enum be_type type = va_arg(ap, enum be_type);
+        int level = va_arg(ap, int);
+        const char *dct = p;
+        const char *key = va_arg(ap, const char *);
+        while (ok && level > 1) {            
+            if ((dct = benc_dget_dct(dct, key)) != NULL) {
+                level--;
+                key = va_arg(ap, const char *);
+            } else
+                ok = 0;
+        }
+        if (ok) {
+            const char *val = benc_dget_any(dct, key);
+            if (val == NULL || !benc_istype(val, type))
+                ok = 0;
+        }
+    }
+    va_end(ap);
+    return ok;
+}
+
+#if 0
+int
+benc_dct_type_check(const char *p, int count, ...)
+{
+    int i;
+    va_list ap;
+
+    benc_validate_dct(p, 2, BE_INT, "code", BE_STR, "hash", 
+
+    if (!benc_isdct(p))
+        return EINVAL;
+
+    va_start(ap, count);
+    for (i = 0; i < count; i++) {
+
+
+    }
+}
+
+int
+benc_dget_many(const char *p, int count, ...)
+{
+    int i;
+    va_list ap;
+    if (!benc_isdct(p))
+        return 0;
+    va_start(ap, count);
+    for (i = 0; i < count; i++) {
+        const char *name = va_arg(ap, const char *);
+        enum be_type type = va_arg(ap, enum be_type);
+        int64_t *iret;
+        size_t *lret;
+        const char **mret;
+        char **aret;
+
+        switch (type) {
+        case BE_INT:
+            iret = va_arg(ap, int64_t *);
+            if (benc_dget_int64(p, name, iret) != 0)
+                goto out;
+            break;
+        case BE_LST:
+            mret = va_arg(ap, const char **);
+            lret = va_arg(ap, size_t *);
+            if (benc_dget_lst(p, name, mret) != 0)
+                goto out;
+            if (lret != NULL)
+                *lret = benc_nelems(*mret);
+            break;
+        case BE_DCT:
+            mret = va_arg(ap, const char **);
+            if (benc_dget_dct(p, name, mret) != 0)
+                goto out;
+            break;
+        case BE_MEM:
+            mret = va_arg(ap, const char **);
+            lret = va_arg(ap, size_t *);
+            if (benc_dget_str(p, name, mret, lret) != 0)
+                goto out;
+            break;
+        case BE_STRZ:
+            aret = va_arg(ap, char **);
+            lret = va_arg(ap, size_t *);
+            if (benc_dget_strz(p, name, aret, lret) != 0)
+                goto out;
+            break;
+        default:
+            abort();
+        }
+    }
+out:
+    va_end(ap);
+    return i;
+}
+#endif
