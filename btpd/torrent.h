@@ -11,6 +11,7 @@ enum torrent_state {
 };
 
 struct torrent {
+    unsigned num;
     const char *relpath;
     struct metainfo meta;
 

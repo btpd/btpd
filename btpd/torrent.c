@@ -19,6 +19,16 @@
 #include "tracker_req.h"
 #include "stream.h"
 
+static unsigned m_next_num;
+
+static unsigned
+num_get_next(void)
+{
+    if (m_next_num == UINT_MAX)
+        btpd_err("Reached maximum torrent number.\n");
+    return m_next_num++;
+}
+
 off_t
 torrent_piece_size(struct torrent *tp, uint32_t index)
 {
@@ -107,6 +117,7 @@ torrent_load(struct torrent **res, const char *path)
         *res = btpd_calloc(1, sizeof(**res));
         (*res)->relpath = strdup(path);
         (*res)->meta = *mi;
+        (*res)->num = num_get_next();
         free(mi);
     } else {
         clear_metainfo(mi);
