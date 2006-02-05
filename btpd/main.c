@@ -86,14 +86,16 @@ setup_daemon(const char *dir)
 static void
 usage(void)
 {
-    printf("Usage: btpd [options] [dir]\n"
+    printf(
+        "The BitTorrent Protocol Daemon.\n"
         "\n"
-        "dir:\n"
-        "\tThe directory in which to run btpd.\n"
-        "\tDefault is '$HOME/.btpd'.\n"
+        "Usage: btpd [options] [dir]\n"
+        "\n"
+        "Arguments:\n"
+        "dir\n"
+        "\tThe directory in which to run btpd. Default is '$HOME/.btpd'.\n"
         "\n"
         "Options:\n"
-        "\n"
         "--bw-in n\n"
         "\tLimit incoming BitTorrent traffic to n kB/s.\n"
         "\tDefault is 0 which means unlimited.\n"
@@ -112,7 +114,10 @@ usage(void)
         "\t\tn < -1 : Choose n >= 2 based on --bw-out (default).\n"
         "\t\tn = -1 : Upload to every interested peer.\n"
         "\t\tn =  0 : Dont't upload to anyone.\n"
-        "\t\tn >  0 : Upload to at most n peers simultaneosly.\n"
+        "\t\tn >  0 : Upload to at most n peers simultaneously.\n"
+        "\n"
+        "--help\n"
+        "\tShow this text.\n"
         "\n"
         "--max-peers n\n"
         "\tLimit the amount of peers to n.\n"
@@ -124,9 +129,6 @@ usage(void)
         "\tPreallocate disk space in chunks of n kB. Default is 1.\n"
         "\tNote that n will be rounded up to the closest multiple of the\n"
         "\ttorrent piece size. If n is zero no preallocation will be done.\n"
-        "\n"
-        "--help\n"
-        "\tShow this help.\n"
         "\n");
     exit(1);
 }
