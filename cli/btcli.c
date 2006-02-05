@@ -165,7 +165,10 @@ void
 usage_stat(void)
 {
     printf(
-        "Display btpd stats.\n"
+        "Display stats for active torrents.\n"
+        "The stats displayed are:\n"
+        "%% got, MB down, rate down. MB up, rate up\n"
+        "peers, %% of pieces seen, tracker errors\n"
         "\n"
         "Usage: stat [-i] [-w seconds]\n"
         "\n"
@@ -180,49 +183,54 @@ usage_stat(void)
 }
 
 void
+print_stat(struct tpstat *cur)
+{
+    printf("%5.1f%% %6.1fM %7.2fkB/s %6.1fM %7.2fkB/s %4u %5.1f%%",
+        100.0 * cur->have / cur->total,
+        (double)cur->downloaded / (1 << 20),
+        (double)cur->rate_down / (20 << 10),
+        (double)cur->uploaded / (1 << 20),
+        (double)cur->rate_up / (20 << 10),
+        cur->npeers,
+        100.0 * cur->nseen / cur->npieces
+        );
+    if (cur->errors > 0)
+        printf(" E%u", cur->errors);
+    printf("\n");
+}
+
+void
 do_stat(int individual, int seconds)
 {
     struct btstat *st;
     struct tpstat tot;
 again:
     bzero(&tot, sizeof(tot));
+    tot.num = -1;
     if ((errno = btpd_stat(ipc, &st)) != 0)
         err(1, "btpd_stat");
     for (int i = 0; i < st->ntorrents; i++) {
         struct tpstat *cur = &st->torrents[i];
         if (cur->state != 'A')
             continue;
-        if (!individual) {
-            tot.uploaded += cur->uploaded;
-            tot.downloaded += cur->downloaded;
-            tot.rate_up += cur->rate_up;
-            tot.rate_down += cur->rate_down;
-            tot.npeers += cur->npeers;
-            continue;
+        tot.uploaded += cur->uploaded;
+        tot.downloaded += cur->downloaded;
+        tot.rate_up += cur->rate_up;
+        tot.rate_down += cur->rate_down;
+        tot.npeers += cur->npeers;
+        tot.nseen += cur->nseen;
+        tot.npieces += cur->npieces;
+        tot.have += cur->have;
+        tot.total += cur->total;
+        if (individual) {
+            printf("%u. %s:\n", cur->num, cur->name);
+            print_stat(cur);
         }
-        printf("%u. %5.1f%% %6.1fM %7.2fkB/s %6.1fM %7.2fkB/s %4u %5.1f%%",
-            cur->num,
-            100.0 * cur->have / cur->total,
-            (double)cur->downloaded / (1 << 20),
-            (double)cur->rate_down / (20 << 10),
-            (double)cur->uploaded / (1 << 20),
-            (double)cur->rate_up / (20 << 10),
-            cur->npeers,
-            100.0 * cur->nseen / cur->npieces
-            );
-        if (cur->errors > 0)
-            printf(" E%u", cur->errors);
-        printf("\n");
     }
     free_btstat(st);
-    if (!individual) {
-        printf("%6.1fM %7.2fkB/s %6.1fM %7.2fkB/s %4u\n",
-            (double)tot.downloaded / (1 << 20),
-            (double)tot.rate_down / (20 << 10),
-            (double)tot.uploaded / (1 << 20),
-            (double)tot.rate_up / (20 << 10),
-            tot.npeers);
-    }
+    if (individual)
+        printf("Total:\n");
+    print_stat(&tot);
     if (seconds > 0) {
         sleep(seconds);
         goto again;
