@@ -69,7 +69,6 @@ check_path(const char *path, size_t len)
 int
 fill_fileinfo(const char *fdct, struct fileinfo *tfp)
 {
-    //int err;
     size_t npath, plen, len;
     const char *plst, *iter, *str;
 
@@ -147,7 +146,10 @@ fill_metainfo(const char *bep, struct metainfo *tp, int mem_hashes)
             BE_STR, 2, "info", "name"))
         return EINVAL;
 
-    tp->announce = benc_dget_str(bep, "announce", NULL);
+    if ((tp->announce = benc_dget_str(bep, "announce", NULL)) == NULL) {
+        err = ENOMEM;
+        goto out;
+    }
     bep = benc_dget_dct(bep, "info");
     SHA1(bep, benc_length(bep), tp->info_hash);
     tp->piece_length = benc_dget_int(bep, "piece length");
