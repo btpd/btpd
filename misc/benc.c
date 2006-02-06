@@ -181,26 +181,13 @@ benc_mema(const char *p, size_t *len, const char **next)
 long long
 benc_int(const char *p, const char **next)
 {
-    int sign = 1;
-    long long res = 0;
-
+    long long res;
+    char *endptr;
     if (!benc_isint(p))
         return 0;
-    p++;
-    if (*p == '-') {
-        sign = -1;
-        p++;
-    }
-    assert(isdigit(*p));
-    res += sign * (*p - '0');
-    p++;
-    while (isdigit(*p)) {
-        res *= sign * 10;
-        res += sign * (*p - '0');
-        p++;
-    }
-    assert(*p == 'e');
-    benc_safeset(next, *(p + 1) == 'e' ? NULL : p + 1);    
+    res = strtoll(p + 1, &endptr, 10);
+    assert(*endptr == 'e');
+    benc_safeset(next, *(endptr + 1) == 'e' ? NULL : endptr + 1);
     return res;
 }
 
@@ -350,79 +337,3 @@ benc_dct_chk(const char *p, int count, ...)
     va_end(ap);
     return ok;
 }
-
-#if 0
-int
-benc_dct_type_check(const char *p, int count, ...)
-{
-    int i;
-    va_list ap;
-
-    benc_validate_dct(p, 2, BE_INT, "code", BE_STR, "hash", 
-
-    if (!benc_isdct(p))
-        return EINVAL;
-
-    va_start(ap, count);
-    for (i = 0; i < count; i++) {
-
-
-    }
-}
-
-int
-benc_dget_many(const char *p, int count, ...)
-{
-    int i;
-    va_list ap;
-    if (!benc_isdct(p))
-        return 0;
-    va_start(ap, count);
-    for (i = 0; i < count; i++) {
-        const char *name = va_arg(ap, const char *);
-        enum be_type type = va_arg(ap, enum be_type);
-        int64_t *iret;
-        size_t *lret;
-        const char **mret;
-        char **aret;
-
-        switch (type) {
-        case BE_INT:
-            iret = va_arg(ap, int64_t *);
-            if (benc_dget_int64(p, name, iret) != 0)
-                goto out;
-            break;
-        case BE_LST:
-            mret = va_arg(ap, const char **);
-            lret = va_arg(ap, size_t *);
-            if (benc_dget_lst(p, name, mret) != 0)
-                goto out;
-            if (lret != NULL)
-                *lret = benc_nelems(*mret);
-            break;
-        case BE_DCT:
-            mret = va_arg(ap, const char **);
-            if (benc_dget_dct(p, name, mret) != 0)
-                goto out;
-            break;
-        case BE_MEM:
-            mret = va_arg(ap, const char **);
-            lret = va_arg(ap, size_t *);
-            if (benc_dget_str(p, name, mret, lret) != 0)
-                goto out;
-            break;
-        case BE_STRZ:
-            aret = va_arg(ap, char **);
-            lret = va_arg(ap, size_t *);
-            if (benc_dget_strz(p, name, aret, lret) != 0)
-                goto out;
-            break;
-        default:
-            abort();
-        }
-    }
-out:
-    va_end(ap);
-    return i;
-}
-#endif
