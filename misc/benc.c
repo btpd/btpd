@@ -315,7 +315,7 @@ benc_dct_chk(const char *p, int count, ...)
         int level = va_arg(ap, int);
         const char *dct = p;
         const char *key = va_arg(ap, const char *);
-        while (ok && level > 1) {            
+        while (ok && level > 1) {
             if ((dct = benc_dget_dct(dct, key)) != NULL) {
                 level--;
                 key = va_arg(ap, const char *);

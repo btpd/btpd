@@ -53,7 +53,7 @@ maybe_connect_to(struct torrent *tp, const char *pinfo)
 
     if (net_torrent_has_peer(tp->net, pid))
         return;
-    
+
     if ((ip = benc_dget_str(pinfo, "ip", NULL)) == NULL)
         return;
 
