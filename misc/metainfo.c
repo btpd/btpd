@@ -157,11 +157,11 @@ fill_metainfo(const char *bep, struct metainfo *tp, int mem_hashes)
     tp->npieces = len / 20;
     tp->pieces_off = hash_addr - base_addr;
     if (mem_hashes) {
-        if ((tp->piece_hash = malloc(len)) == NULL) {
+        tp->piece_hash = (uint8_t (*)[20])benc_dget_mema(bep, "pieces", NULL);
+        if (tp->piece_hash == NULL) {
             err = ENOMEM;
             goto out;
         }
-        bcopy(hash_addr, tp->piece_hash, len);
     }
     tp->name = benc_dget_str(bep, "name", NULL);
 
