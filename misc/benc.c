@@ -133,18 +133,12 @@ benc_mem(const char *p, size_t *len, const char**next)
 {
     if (!benc_isstr(p))
         return NULL;
-    size_t blen = 0;
-    blen = *p - '0';
-    p++;
-    while (isdigit(*p)) {
-        blen *= 10;
-        blen += *p - '0';
-        p++;
-    }
-    assert(*p == ':');
+    char *endptr;
+    size_t blen = strtoul(p, &endptr, 10);
+    assert(*endptr == ':');
     benc_safeset(len, blen);
-    benc_safeset(next, *(p + blen + 1) == 'e' ? NULL : p + blen + 1);
-    return p + 1;
+    benc_safeset(next, *(endptr + blen + 1) == 'e' ? NULL : endptr + blen + 1);
+    return endptr + 1;
 }
 
 char *
