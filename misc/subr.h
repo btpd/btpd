@@ -25,4 +25,6 @@ long rand_between(long min, long max);
 int read_fully(int fd, void *buf, size_t len);
 int write_fully(int fd, const void *buf, size_t len);
 
+char *find_btpd_dir(void);
+
 #endif

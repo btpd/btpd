@@ -6,6 +6,7 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <math.h>
+#include <pwd.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -179,4 +180,22 @@ read_fully(int fd, void *buf, size_t len)
         off += nread;
     }
     return 0;
+}
+
+char *
+find_btpd_dir(void)
+{
+    char *res = getenv("BTPD_HOME");
+    if (res != NULL)
+        return strdup(res);
+    char *home = getenv("HOME");
+    if (home == NULL) {
+        struct passwd *pwent = getpwuid(getuid());
+        endpwent();
+        if (pwent != NULL)
+            home = pwent->pw_dir;
+    }
+    if (home != NULL)
+        asprintf(&res, "%s/.btpd", home);
+    return res;
 }
