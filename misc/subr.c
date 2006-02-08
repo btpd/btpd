@@ -143,32 +143,6 @@ vfopen(FILE **ret, const char *mode, const char *fmt, ...)
     return err;
 }
 
-int
-canon_path(const char *path, char **res)
-{
-    char rp[PATH_MAX];
-
-    if (realpath(path, rp) == NULL)
-        return errno;
-#if 0
-    // This could be necessary on solaris.
-    if (rp[0] != '/') {
-        char wd[MAXPATHLEN];
-        if (getcwd(wd, MAXPATHLEN) == NULL)
-            return errno;
-        if (strlcat(wd, "/", MAXPATHLEN) >= MAXPATHLEN)
-            return ENAMETOOLONG;
-        if (strlcat(wd, rp, MAXPATHLEN) >= MAXPATHLEN)
-            return ENAMETOOLONG;
-        strcpy(rp, wd);
-    }
-#endif
-    if ((*res = strdup(rp)) == NULL)
-        return ENOMEM;
-
-    return 0;
-}
-
 long
 rand_between(long min, long max)
 {

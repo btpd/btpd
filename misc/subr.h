@@ -20,8 +20,6 @@ void set_bit(uint8_t *bits, unsigned long index);
 int has_bit(const uint8_t *bits, unsigned long index);
 void clear_bit(uint8_t *bits, unsigned long index);
 
-int canon_path(const char *path, char **res);
-
 long rand_between(long min, long max);
 
 int read_fully(int fd, void *buf, size_t len);
