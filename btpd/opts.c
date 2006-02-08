@@ -1,6 +1,5 @@
 #include <btpd.h>
 
-short btpd_daemon = 1;
 const char *btpd_dir;
 #ifdef DEBUG
 uint32_t btpd_logmask = BTPD_L_ALL;

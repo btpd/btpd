@@ -448,9 +448,10 @@ net_connect2(struct sockaddr *sa, socklen_t salen, int *sd)
     set_nonblocking(*sd);
 
     if (connect(*sd, sa, salen) == -1 && errno != EINPROGRESS) {
-        btpd_log(BTPD_L_CONN, "Botched connection %s.", strerror(errno));
+        int err = errno;
+        btpd_log(BTPD_L_CONN, "Botched connection %s.\n", strerror(errno));
         close(*sd);
-        return errno;
+        return err;
     }
 
     return 0;

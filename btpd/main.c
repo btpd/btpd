@@ -7,7 +7,6 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <locale.h>
-#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,31 +22,17 @@ writepid(int pidfd)
     fclose(fp);
 }
 
-static char *
-find_homedir(void)
-{
-    char *res = getenv("BTPD_HOME");
-    if (res == NULL) {
-        char *home = getenv("HOME");
-        if (home == NULL) {
-            struct passwd *pwent = getpwuid(getuid());
-            if (pwent == NULL)
-                errx(1, "Can't find my home directory.\n");
-            home = pwent->pw_dir;
-            endpwent();
-        }
-        asprintf(&res, "%s/.btpd", home);
-    }
-    return res;
-}
-
 static void
-setup_daemon(const char *dir)
+setup_daemon(int daemonize, const char *dir, const char *log)
 {
     int pidfd;
 
+    if (log == NULL)
+        log = "log";
+
     if (dir == NULL)
-        dir = find_homedir();
+        if ((dir = find_btpd_dir()) == NULL)
+            errx(1, "Cannot find the btpd directory");
 
     btpd_dir = dir;
 
@@ -57,8 +42,8 @@ setup_daemon(const char *dir)
     if (chdir(dir) != 0)
         err(1, "Couldn't change working directory to '%s'", dir);
 
-    if (mkdir("library", 0777) == -1 && errno != EEXIST)
-        err(1, "Couldn't create library");
+    if (mkdir("torrents", 0777) == -1 && errno != EEXIST)
+        err(1, "Couldn't create torrents subdir");
 
     pidfd = open("pid", O_CREAT|O_WRONLY|O_NONBLOCK|O_EXLOCK, 0666);
     if (pidfd == -1) {
@@ -69,12 +54,12 @@ setup_daemon(const char *dir)
             err(1, "Couldn't open 'pid'");
     }
 
-    if (btpd_daemon) {
+    if (daemonize) {
         if (daemon(1, 1) != 0)
             err(1, "Failed to daemonize");
         freopen("/dev/null", "r", stdin);
-        if (freopen("log", "a", stdout) == NULL)
-            err(1, "Couldn't open 'log'");
+        if (freopen(log, "a", stdout) == NULL)
+            err(1, "Couldn't open '%s'", log);
         dup2(fileno(stdout), fileno(stderr));
         setlinebuf(stdout);
         setlinebuf(stderr);
@@ -89,11 +74,7 @@ usage(void)
     printf(
         "The BitTorrent Protocol Daemon.\n"
         "\n"
-        "Usage: btpd [options] [dir]\n"
-        "\n"
-        "Arguments:\n"
-        "dir\n"
-        "\tThe directory in which to run btpd. Default is '$HOME/.btpd'.\n"
+        "Usage: btpd [-d dir] [-p port] [more options...]\n"
         "\n"
         "Options:\n"
         "--bw-in n\n"
@@ -104,9 +85,8 @@ usage(void)
         "\tLimit outgoing BitTorrent traffic to n kB/s.\n"
         "\tDefault is 0 which means unlimited.\n"
         "\n"
-        "-d\n"
-        "\tKeep the btpd process in the foregorund and log to std{out,err}.\n"
-        "\tThis option is intended for debugging purposes.\n"
+        "-d dir\n"
+        "\tThe directory in which to run btpd. Default is '$HOME/.btpd'.\n"
         "\n"
         "--downloaders n\n"
         "\tControls the number of simultaneous uploads.\n"
@@ -119,8 +99,15 @@ usage(void)
         "--help\n"
         "\tShow this text.\n"
         "\n"
+        "--logfile file\n"
+        "\tWhere to put the logfile. By default it's put in the btpd dir.\n"
+        "\n"
         "--max-peers n\n"
         "\tLimit the amount of peers to n.\n"
+        "\n"
+        "--no-daemon\n"
+        "\tKeep the btpd process in the foregorund and log to std{out,err}.\n"
+        "\tThis option is intended for debugging purposes.\n"
         "\n"
         "-p n, --port n\n"
         "\tListen at port n. Default is 6881.\n"
@@ -142,6 +129,8 @@ static struct option longopts[] = {
     { "prealloc", required_argument,    &longval,       3 },
     { "downloaders", required_argument, &longval,       4 },
     { "max-peers", required_argument,   &longval,       5 },
+    { "no-daemon", no_argument,         &longval,       6 },
+    { "logfile", required_argument,     &longval,       7 },
     { "help",   no_argument,            &longval,       128 },
     { NULL,     0,                      NULL,           0 }
 };
@@ -149,16 +138,17 @@ static struct option longopts[] = {
 int
 main(int argc, char **argv)
 {
-    char *dir = NULL;
+    char *dir = NULL, *log = NULL;
+    int daemonize = 1;
 
     setlocale(LC_ALL, "");
 
     for (;;) {
-        switch (getopt_long(argc, argv, "dp:", longopts, NULL)) {
+        switch (getopt_long(argc, argv, "d:p:", longopts, NULL)) {
         case -1:
             goto args_done;
         case 'd':
-            btpd_daemon = 0;
+            dir = optarg;
             break;
         case 'p':
             net_port = atoi(optarg);
@@ -180,6 +170,12 @@ main(int argc, char **argv)
             case 5:
                 net_max_peers = atoi(optarg);
                 break;
+            case 6:
+                daemonize = 0;
+                break;
+            case 7:
+                log = optarg;
+                break;
             default:
                 usage();
             }
@@ -193,12 +189,10 @@ args_done:
     argc -= optind;
     argv += optind;
 
-    if (argc > 1)
-        usage();
     if (argc > 0)
-        dir = argv[0];
+        usage();
 
-    setup_daemon(dir);
+    setup_daemon(daemonize, dir, log);
 
     event_init();
 

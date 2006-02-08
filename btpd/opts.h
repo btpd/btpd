@@ -1,7 +1,6 @@
 #ifndef BTPD_OPTS_H
 #define BTPD_OPTS_H
 
-extern short btpd_daemon;
 extern const char *btpd_dir;
 extern uint32_t btpd_logmask;
 extern int net_max_downloaders;

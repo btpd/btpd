@@ -1,3 +1,7 @@
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
@@ -81,7 +85,7 @@ ipc_response(struct ipc *ipc, char **out, uint32_t *len)
     *len = size;
     return 0;
 }
- 
+
 static int
 ipc_req_res(struct ipc *ipc, const char *req, uint32_t qlen, char **res,
     uint32_t *rlen)
@@ -125,7 +129,7 @@ btpd_die(struct ipc *ipc, int seconds)
     if (seconds >= 0)
         buf_print(&iob, "l3:diei%dee", seconds);
     else
-        buf_print(&iob, "l3:diee");
+        buf_swrite(&iob, "l3:diee");
     return ipc_buf_req(ipc, &iob);
 }
 
@@ -150,21 +154,18 @@ parse_btstat(const uint8_t *res, struct btstat **out)
     int i = 0;
     for (const char *tp = benc_first(tlst); tp != NULL; tp = benc_next(tp)) {
         struct tpstat *ts = &st->torrents[i];
-        ts->num = benc_dget_int(tp, "num");
         ts->name = benc_dget_str(tp, "path", NULL);
-        ts->state = *benc_dget_str(tp, "state", NULL);
-        if (ts->state == 'A') {
-            ts->errors = benc_dget_int(tp, "errors");
-            ts->npieces = benc_dget_int(tp, "npieces");
-            ts->nseen = benc_dget_int(tp, "seen npieces");
-            ts->npeers = benc_dget_int(tp, "npeers");
-            ts->downloaded = benc_dget_int(tp, "downloaded");
-            ts->uploaded = benc_dget_int(tp, "uploaded");
-            ts->rate_down = benc_dget_int(tp, "rd");
-            ts->rate_up = benc_dget_int(tp, "ru");
-            ts->have = benc_dget_int(tp, "have");
-            ts->total = benc_dget_int(tp, "total");
-        }
+        ts->state = benc_dget_int(tp, "state");
+        ts->errors = benc_dget_int(tp, "errors");
+        ts->npieces = benc_dget_int(tp, "npieces");
+        ts->nseen = benc_dget_int(tp, "seen npieces");
+        ts->npeers = benc_dget_int(tp, "npeers");
+        ts->downloaded = benc_dget_int(tp, "down");
+        ts->uploaded = benc_dget_int(tp, "up");
+        ts->rate_down = benc_dget_int(tp, "rd");
+        ts->rate_up = benc_dget_int(tp, "ru");
+        ts->have = benc_dget_int(tp, "have");
+        ts->total = benc_dget_int(tp, "total");
         i++;
     }
     *out = st;
@@ -197,29 +198,26 @@ btpd_stat(struct ipc *ipc, struct btstat **out)
     return err;
 }
 
-static enum ipc_code
-btpd_common_num(struct ipc *ipc, const char *cmd, unsigned num)
+enum ipc_code
+btpd_add(struct ipc *ipc, const uint8_t *hash, const char *torrent,
+    const char *content)
 {
     struct io_buffer iob;
-    buf_init(&iob, 16);
-    buf_print(&iob, "l%d:%si%uee", (int)strlen(cmd), cmd, num);
-    return ipc_buf_req(ipc, &iob);    
+    buf_init(&iob, (1 << 10));
+    buf_print(&iob, "l3:addd7:content%d:%s4:hash20:", (int)strlen(content),
+        content);
+    buf_write(&iob, hash, 20);
+    buf_print(&iob, "7:torrent%d:%see", (int)strlen(torrent), torrent);
+    return ipc_buf_req(ipc, &iob);
 }
 
 enum ipc_code
-btpd_del_num(struct ipc *ipc, unsigned num)
+btpd_del(struct ipc *ipc, const uint8_t *hash)
 {
-    return btpd_common_num(ipc, "del", num);
-}
-
-enum ipc_code
-btpd_start_num(struct ipc *ipc, unsigned num)
-{
-    return btpd_common_num(ipc, "start", num);
-}
-
-enum ipc_code
-btpd_stop_num(struct ipc *ipc, unsigned num)
-{
-    return btpd_common_num(ipc, "stop", num);
+    struct io_buffer iob;
+    buf_init(&iob, 32);
+    buf_swrite(&iob, "l3:del20:");
+    buf_write(&iob, hash, 20);
+    buf_write(&iob, "e", 1);
+    return ipc_buf_req(ipc, &iob);
 }

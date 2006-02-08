@@ -98,14 +98,14 @@ static int
 fd_cb_rd(const char *path, int *fd, void *arg)
 {
     struct torrent *tp = arg;
-    return vopen(fd, O_RDONLY, "library/%s/content/%s", tp->relpath, path);
+    return vopen(fd, O_RDONLY, "torrents/%s/content/%s", tp->relpath, path);
 }
 
 static int
 fd_cb_wr(const char *path, int *fd, void *arg)
 {
     struct torrent *tp = arg;
-    return vopen(fd, O_RDWR|O_CREAT, "library/%s/content/%s", tp->relpath,
+    return vopen(fd, O_RDWR|O_CREAT, "torrents/%s/content/%s", tp->relpath,
         path);
 }
 
@@ -464,7 +464,7 @@ test_hash(struct torrent *tp, uint8_t *hash, uint32_t piece)
         int fd;
         int err;
 
-        err = vopen(&fd, O_RDONLY, "library/%s/torrent", tp->relpath);
+        err = vopen(&fd, O_RDONLY, "torrents/%s/torrent", tp->relpath);
         if (err != 0)
             btpd_err("test_hash: %s\n", strerror(err));
 
@@ -531,7 +531,7 @@ test_torrent(struct torrent *tp, volatile sig_atomic_t *cancel)
     uint8_t (*hashes)[SHA_DIGEST_LENGTH];
     uint8_t hash[SHA_DIGEST_LENGTH];
 
-    if ((err = vfopen(&fp, "r", "library/%s/torrent", tp->relpath)) != 0)
+    if ((err = vfopen(&fp, "r", "torrents/%s/torrent", tp->relpath)) != 0)
         return err;
 
     hashes = btpd_malloc(tp->meta.npieces * SHA_DIGEST_LENGTH);
@@ -573,7 +573,7 @@ stat_and_adjust(struct torrent *tp, struct rstat ret[])
     char path[PATH_MAX];
     struct stat sb;
     for (int i = 0; i < tp->meta.nfiles; i++) {
-        snprintf(path, PATH_MAX, "library/%s/content/%s", tp->relpath,
+        snprintf(path, PATH_MAX, "torrents/%s/content/%s", tp->relpath,
             tp->meta.files[i].path);
 again:
         if (stat(path, &sb) == -1) {
@@ -603,7 +603,7 @@ load_resume(struct torrent *tp, struct rstat sbs[])
     size_t pfsiz = ceil(tp->meta.npieces / 8.0);
     size_t bfsiz = tp->meta.npieces * tp->cm->bppbf;
 
-    if ((err = vfopen(&fp, "r" , "library/%s/resume", tp->relpath)) != 0)
+    if ((err = vfopen(&fp, "r" , "torrents/%s/resume", tp->relpath)) != 0)
         return err;
 
     if (fscanf(fp, "%d\n", &ver) != 1)
@@ -636,7 +636,7 @@ save_resume(struct torrent *tp, struct rstat sbs[])
 {
     int err;
     FILE *fp;
-    if ((err = vfopen(&fp, "wb", "library/%s/resume", tp->relpath)) != 0)
+    if ((err = vfopen(&fp, "wb", "torrents/%s/resume", tp->relpath)) != 0)
         return err;
     fprintf(fp, "%d\n", 1);
     for (int i = 0; i < tp->meta.nfiles; i++)

@@ -48,14 +48,9 @@ void btpd_err(const char *fmt, ...);
 void *btpd_malloc(size_t size);
 void *btpd_calloc(size_t nmemb, size_t size);
 
-void btpd_shutdown(struct timeval *grace_tv);
+void btpd_shutdown(int grace_seconds);
+int btpd_is_stopping(void);
 
-struct torrent *btpd_get_torrent(const uint8_t *hash);
-struct torrent *btpd_get_torrent_num(unsigned num);
-const struct torrent_tq *btpd_get_torrents(void);
-void btpd_add_torrent(struct torrent *tp);
-void btpd_del_torrent(struct torrent *tp);
-unsigned btpd_get_ntorrents(void);
 const uint8_t *btpd_get_peer_id(void);
 
 void td_acquire_lock(void);
@@ -65,7 +60,6 @@ void td_release_lock(void);
 void td_post(void (*fun)(void *), void *arg);
 void td_post_end(void);
 
-void btpd_tp_activated(struct torrent *tp);
-void btpd_tp_deactivated(struct torrent *tp);
+void btpd_on_no_torrents(void);
 
 #endif

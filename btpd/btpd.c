@@ -32,9 +32,6 @@
 static uint8_t m_peer_id[20];
 static struct event m_sigint;
 static struct event m_sigterm;
-static unsigned m_ntorrents;
-static struct torrent_tq m_torrents = BTPDQ_HEAD_INITIALIZER(m_torrents);
-static unsigned m_nactive;
 static int m_shutdown;
 
 void
@@ -44,92 +41,35 @@ btpd_exit(int code)
     exit(code);
 }
 
-void
-btpd_tp_activated(struct torrent *tp)
-{
-    m_nactive++;
-}
-
-void
-btpd_tp_deactivated(struct torrent *tp)
-{
-    m_nactive--;
-    if (m_nactive == 0 && m_shutdown)
-        btpd_exit(0);
-}
-
 static void
 grace_cb(int fd, short type, void *arg)
 {
     struct torrent *tp;
-    BTPDQ_FOREACH(tp, &m_torrents, entry)
-        torrent_deactivate(tp);
+    BTPDQ_FOREACH(tp, torrent_get_all(), entry)
+        torrent_stop(tp);
 }
 
 void
-btpd_shutdown(struct timeval *grace_tv)
+btpd_shutdown(int grace_seconds)
 {
-    if (m_nactive == 0)
+    if (torrent_count() == 0)
         btpd_exit(0);
     else {
         struct torrent *tp;
         m_shutdown = 1;
-        BTPDQ_FOREACH(tp, &m_torrents, entry)
-            torrent_deactivate(tp);
-        if (grace_tv != NULL)
-            event_once(-1, EV_TIMEOUT, grace_cb, NULL, grace_tv);
+        BTPDQ_FOREACH(tp, torrent_get_all(), entry)
+            if (tp->state != T_STOPPING)
+                torrent_stop(tp);
+        if (grace_seconds >= 0) {
+            event_once(-1, EV_TIMEOUT, grace_cb, NULL,
+                (& (struct timeval) { grace_seconds, 0 }));
+        }
     }
 }
 
-static void
-signal_cb(int signal, short type, void *arg)
+int btpd_is_stopping(void)
 {
-    btpd_log(BTPD_L_BTPD, "Got signal %d.\n", signal);
-    btpd_shutdown((& (struct timeval) { 30, 0 }));
-}
-
-void
-btpd_add_torrent(struct torrent *tp)
-{
-    BTPDQ_INSERT_TAIL(&m_torrents, tp, entry);
-    m_ntorrents++;
-}
-
-void
-btpd_del_torrent(struct torrent *tp)
-{
-    BTPDQ_REMOVE(&m_torrents, tp, entry);
-    m_ntorrents--;
-}
-
-const struct torrent_tq *
-btpd_get_torrents(void)
-{
-    return &m_torrents;
-}
-
-unsigned
-btpd_get_ntorrents(void)
-{
-    return m_ntorrents;
-}
-
-struct torrent *
-btpd_get_torrent(const uint8_t *hash)
-{
-    struct torrent *tp = BTPDQ_FIRST(&m_torrents);
-    while (tp != NULL && bcmp(hash, tp->meta.info_hash, 20) != 0)
-        tp = BTPDQ_NEXT(tp, entry);
-    return tp;
-}
-
-struct torrent *
-btpd_get_torrent_num(unsigned num)
-{
-    struct torrent *tp = BTPDQ_FIRST(&m_torrents);
-    while (tp != NULL && tp->num != num)
-        tp = BTPDQ_NEXT(tp, entry);
-    return tp;
+    return m_shutdown;
 }
 
 const uint8_t *
@@ -138,28 +78,18 @@ btpd_get_peer_id(void)
     return m_peer_id;
 }
 
-static int
-nodot(struct dirent *dp)
+void
+btpd_on_no_torrents(void)
 {
-    return !(strcmp(".", dp->d_name) == 0 || strcmp("..", dp->d_name) == 0);
+    if (m_shutdown)
+        btpd_exit(0);
 }
 
 static void
-load_library(void)
+signal_cb(int signal, short type, void *arg)
 {
-    int ne;
-    struct dirent **entries;
-    if ((ne = scandir("library", &entries, nodot, NULL)) < 0)
-        btpd_err("Couldn't open the library.\n");
-
-    for (int i = 0; i < ne; i++) {
-        struct torrent *tp;
-        struct dirent *e = entries[i];
-        if (torrent_load(&tp, e->d_name) == 0)
-            btpd_add_torrent(tp);
-        free(e);
-    }
-    free(entries);
+    btpd_log(BTPD_L_BTPD, "Got signal %d.\n", signal);
+    btpd_shutdown(30);
 }
 
 struct td_cb {
@@ -259,14 +189,6 @@ btpd_init(void)
     ipc_init();
     ul_init();
     cm_init();
-
-    load_library();
-
-#if 0
-    struct torrent *tp;
-    BTPDQ_FOREACH(tp, &m_torrents, entry)
-        torrent_activate(tp);
-#endif
 
     signal(SIGPIPE, SIG_IGN);
 

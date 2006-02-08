@@ -1,66 +1,179 @@
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "btpd_if.h"
+#include "metainfo.h"
+#include "subr.h"
 
-static const char *btpd_dir = "/usr/btpd";
-static struct ipc *ipc;
+const char *btpd_dir;
+struct ipc *ipc;
 
-static void
-handle_ipc_res(enum ipc_code code)
-{
-    switch (code) {
-    case IPC_OK:
-        return;
-    case IPC_FAIL:
-        warnx("Ipc failed.\n");
-        break;
-    case IPC_COMMERR:
-        errx(1, "Communication error.\n");
-    }
-}
-
-static void
+void
 btpd_connect(void)
 {
     if ((errno = ipc_open(btpd_dir, &ipc)) != 0)
-        errx(1, "Couldn't connect to btpd in %s (%s).\n",
-            btpd_dir, strerror(errno));
+        err(1, "cannot open connection to btpd in %s", btpd_dir);
+}
+
+enum ipc_code
+handle_ipc_res(enum ipc_code code, const char *target)
+{
+    switch (code) {
+    case IPC_OK:
+        break;
+    case IPC_FAIL:
+        warnx("btpd couldn't execute the requested operation for %s", target);
+        break;
+    case IPC_ERROR:
+        warnx("btpd encountered an error for %s", target);
+        break;
+    default:
+        errx(1, "fatal error in communication with btpd");
+    }
+    return code;
+}
+
+void
+print_state_name(struct tpstat *ts)
+{
+    char statec[] = ">*<U";
+    int state = min(ts->state, 3);
+    printf("%c. %s", statec[state], ts->name);
+}
+
+void
+print_stat(struct tpstat *cur)
+{
+    printf("%5.1f%% %6.1fM %7.2fkB/s %6.1fM %7.2fkB/s %4u %5.1f%%",
+        100.0 * cur->have / cur->total,
+        (double)cur->downloaded / (1 << 20),
+        (double)cur->rate_down / (20 << 10),
+        (double)cur->uploaded / (1 << 20),
+        (double)cur->rate_up / (20 << 10),
+        cur->npeers,
+        100.0 * cur->nseen / cur->npieces);
+    if (cur->errors > 0)
+        printf(" E%u", cur->errors);
+    printf("\n");
 }
 
 void
 usage_add(void)
 {
     printf(
-        "Add a torrent to btpd.\n"
+        "Add torrents to btpd.\n"
         "\n"
-        "Usage: add [-a] [-s] [-c dir] -f file\n"
+        "Usage: add [--topdir] -d dir file\n"
+        "       add file ...\n"
+        "\n"
+        "Arguments:\n"
+        "file ...\n"
+        "\tOne or more torrents to add.\n"
         "\n"
         "Options:\n"
-        "-a\n"
+        "-d dir\n"
+        "\tUse the dir for content.\n"
+        "\n"
+        "--topdir\n"
         "\tAppend the torrent top directory (if any) to the content path.\n"
-        "\n"
-        "-c dir\n"
-        "\tThe directory where the content is (or will be downloaded to).\n"
-        "\tDefault is the directory containing the torrent file.\n"
-        "\n"
-        "-f file\n"
-        "\tThe torrent to add.\n"
-        "\n"
-        "-s\n"
-        "\tStart the torrent.\n"
+        "\tThis option cannot be used without the '-d' option.\n"
         "\n"
         );
     exit(1);
 }
 
+struct option add_opts [] = {
+    { "help", no_argument, NULL, 'H' },
+    { "topdir", no_argument, NULL, 'T'},
+    {NULL, 0, NULL, 0}
+};
+
+int
+content_link(uint8_t *hash, char *buf)
+{
+    int n;
+    char relpath[41];
+    char path[PATH_MAX];
+    for (int i = 0; i < 20; i++)
+        snprintf(relpath + i * 2, 3, "%.2x", hash[i]);
+    snprintf(path, PATH_MAX, "%s/torrents/%s/content", btpd_dir, relpath);
+    if ((n = readlink(path, buf, PATH_MAX)) == -1)
+        return errno;
+    buf[min(n, PATH_MAX)] = '\0';
+    return 0;
+}
+
 void
 cmd_add(int argc, char **argv)
 {
+    int ch, topdir = 0;
+    char *dir = NULL, bdir[PATH_MAX];
+
+    while ((ch = getopt_long(argc, argv, "d:", add_opts, NULL)) != -1) {
+        switch (ch) {
+        case 'T':
+            topdir = 1;
+            break;
+        case 'd':
+            dir = optarg;
+            break;
+        default:
+            usage_add();
+        }
+    }
+    argc -= optind;
+    argv += optind;
+
+    if (argc < 1 || (topdir == 1 && dir == NULL) || (dir != NULL && argc > 1))
+        usage_add();
+
+    if (dir != NULL)
+        if (realpath(dir, bdir) == NULL)
+            err(1, "path error on %s", bdir);
+
+    btpd_connect();
+    for (int i = 0; i < argc; i++) {
+        struct metainfo *mi;
+        char dpath[PATH_MAX], fpath[PATH_MAX];
+
+        if ((errno = load_metainfo(argv[i], -1, 0, &mi)) != 0) {
+            warn("error loading torrent %s", argv[i]);
+            continue;
+        }
+
+        if ((topdir &&
+                !(mi->nfiles == 1
+                    && strcmp(mi->name, mi->files[0].path) == 0)))
+            snprintf(dpath, PATH_MAX, "%s/%s", bdir, mi->name);
+        else if (dir != NULL)
+            strlcpy(dpath, bdir, PATH_MAX);
+        else {
+            if (content_link(mi->info_hash, dpath) != 0) {
+                warnx("unknown content dir for %s", argv[i]);
+                errx(1, "use the '-d' option");
+            }
+        }
+
+        if (mkdir(dpath, 0777) != 0 && errno != EEXIST)
+            err(1, "couldn't create directory %s", dpath);
+
+        if (realpath(argv[i], fpath) == NULL)
+            err(1, "path error on %s", fpath);
+
+        handle_ipc_res(btpd_add(ipc, mi->info_hash, fpath, dpath), argv[1]);
+        clear_metainfo(mi);
+        free(mi);
+    }
 }
 
 void
@@ -69,11 +182,11 @@ usage_del(void)
     printf(
         "Remove torrents from btpd.\n"
         "\n"
-        "Usage: del num ...\n"
+        "Usage: del file ...\n"
         "\n"
         "Arguments:\n"
-        "num\n"
-        "\tThe number of the torrent to remove.\n"
+        "file ...\n"
+        "\tThe torrents to remove.\n"
         "\n");
     exit(1);
 }
@@ -84,16 +197,17 @@ cmd_del(int argc, char **argv)
     if (argc < 2)
         usage_del();
 
-    unsigned nums[argc - 1];
-    char *endptr;
-    for (int i = 0; i < argc - 1; i++) {
-        nums[i] = strtoul(argv[i + 1], &endptr, 10);
-        if (strlen(argv[i + 1]) > endptr - argv[i + 1])
-            usage_del();
-    }
     btpd_connect();
-    for (int i = 0; i < argc -1; i++)
-        handle_ipc_res(btpd_del_num(ipc, nums[i]));
+    for (int i = 1; i < argc; i++) {
+        struct metainfo *mi;
+        if ((errno = load_metainfo(argv[i], -1, 0, &mi)) != 0) {
+            warn("error loading torrent %s", argv[i]);
+            continue;
+        }
+        handle_ipc_res(btpd_del(ipc, mi->info_hash), argv[i]);
+        clear_metainfo(mi);
+        free(mi);
+    }
 }
 
 void
@@ -118,24 +232,23 @@ cmd_kill(int argc, char **argv)
 {
     int seconds = -1;
     char *endptr;
-    if (argc == 1)
-        ;
-    else if (argc == 2) {
+
+    if (argc == 2) {
         seconds = strtol(argv[1], &endptr, 10);
         if (strlen(argv[1]) > endptr - argv[1] || seconds < 0)
             usage_kill();
-    } else
+    } else if (argc > 2)
         usage_kill();
 
     btpd_connect();
-    btpd_die(ipc, seconds);
+    handle_ipc_res(btpd_die(ipc, seconds), "kill");
 }
 
 void
 usage_list(void)
 {
     printf(
-        "List btpd's torrents.\n"
+        "List active torrents.\n"
         "\n"
         "Usage: list\n"
         "\n"
@@ -152,12 +265,13 @@ cmd_list(int argc, char **argv)
         usage_list();
 
     btpd_connect();
-    if ((errno = btpd_stat(ipc, &st)) != 0)
-        err(1, "btpd_stat");
-    for (int i = 0; i < st->ntorrents; i++)
-        printf("%u. %s (%c)\n", st->torrents[i].num, st->torrents[i].name,
-            st->torrents[i].state);
-    printf("Listed %u torrent%s.\n", st->ntorrents,
+    if (handle_ipc_res(btpd_stat(ipc, &st), "list") != IPC_OK)
+        exit(1);
+    for (int i = 0; i < st->ntorrents; i++) {
+        print_state_name(&st->torrents[i]);
+        putchar('\n');
+    }
+    printf("%u torrent%s.\n", st->ntorrents,
         st->ntorrents == 1 ? "" : "s");
 }
 
@@ -166,9 +280,9 @@ usage_stat(void)
 {
     printf(
         "Display stats for active torrents.\n"
-        "The stats displayed are:\n"
+        "The displayed stats are:\n"
         "%% got, MB down, rate down. MB up, rate up\n"
-        "peers, %% of pieces seen, tracker errors\n"
+        "peer count, %% of pieces seen, tracker errors\n"
         "\n"
         "Usage: stat [-i] [-w seconds]\n"
         "\n"
@@ -183,36 +297,17 @@ usage_stat(void)
 }
 
 void
-print_stat(struct tpstat *cur)
-{
-    printf("%5.1f%% %6.1fM %7.2fkB/s %6.1fM %7.2fkB/s %4u %5.1f%%",
-        100.0 * cur->have / cur->total,
-        (double)cur->downloaded / (1 << 20),
-        (double)cur->rate_down / (20 << 10),
-        (double)cur->uploaded / (1 << 20),
-        (double)cur->rate_up / (20 << 10),
-        cur->npeers,
-        100.0 * cur->nseen / cur->npieces
-        );
-    if (cur->errors > 0)
-        printf(" E%u", cur->errors);
-    printf("\n");
-}
-
-void
 do_stat(int individual, int seconds)
 {
     struct btstat *st;
     struct tpstat tot;
 again:
     bzero(&tot, sizeof(tot));
-    tot.num = -1;
-    if ((errno = btpd_stat(ipc, &st)) != 0)
-        err(1, "btpd_stat");
+    tot.state = T_ACTIVE;
+    if (handle_ipc_res(btpd_stat(ipc, &st), "stat") != IPC_OK)
+        exit(1);
     for (int i = 0; i < st->ntorrents; i++) {
         struct tpstat *cur = &st->torrents[i];
-        if (cur->state != 'A')
-            continue;
         tot.uploaded += cur->uploaded;
         tot.downloaded += cur->downloaded;
         tot.rate_up += cur->rate_up;
@@ -223,7 +318,8 @@ again:
         tot.have += cur->have;
         tot.total += cur->total;
         if (individual) {
-            printf("%u. %s:\n", cur->num, cur->name);
+            print_state_name(cur);
+            printf(":\n");
             print_stat(cur);
         }
     }
@@ -237,8 +333,8 @@ again:
     }
 }
 
-static struct option stat_opts [] = {
-    { "help", no_argument, NULL, 1 },
+struct option stat_opts [] = {
+    { "help", no_argument, NULL, 'H' },
     {NULL, 0, NULL, 0}
 };
 
@@ -272,73 +368,7 @@ cmd_stat(int argc, char **argv)
     do_stat(iflag, seconds);
 }
 
-void
-usage_start(void)
-{
-    printf(
-        "Activate torrents.\n"
-        "\n"
-        "Usage: start num ...\n"
-        "\n"
-        "Arguments:\n"
-        "num\n"
-        "\tThe number of the torrent to activate.\n"
-        "\n");
-    exit(1);
-}
-
-void
-cmd_start(int argc, char **argv)
-{
-    if (argc < 2)
-        usage_start();
-
-    unsigned nums[argc - 1];
-    char *endptr;
-    for (int i = 0; i < argc - 1; i++) {
-        nums[i] = strtoul(argv[i + 1], &endptr, 10);
-        if (strlen(argv[i + 1]) > endptr - argv[i + 1])
-            usage_start();
-    }
-    btpd_connect();
-    for (int i = 0; i < argc -1; i++)
-        handle_ipc_res(btpd_start_num(ipc, nums[i]));
-}
-
-void
-usage_stop(void)
-{
-    printf(
-        "Deactivate torrents.\n"
-        "\n"
-        "Usage: stop num ...\n"
-        "\n"
-        "Arguments:\n"
-        "num\n"
-        "\tThe number of the torrent to deactivate.\n"
-        "\n");
-    exit(1);
-}
-
-void
-cmd_stop(int argc, char **argv)
-{
-    if (argc < 2)
-        usage_stop();
-
-    unsigned nums[argc - 1];
-    char *endptr;
-    for (int i = 0; i < argc - 1; i++) {
-        nums[i] = strtoul(argv[i + 1], &endptr, 10);
-        if (strlen(argv[i + 1]) > endptr - argv[i + 1])
-            usage_stop();
-    }
-    btpd_connect();
-    for (int i = 0; i < argc -1; i++)
-        handle_ipc_res(btpd_stop_num(ipc, nums[i]));
-}
-
-static struct {
+struct {
     const char *name;
     void (*fun)(int, char **);
     void (*help)(void);
@@ -347,19 +377,16 @@ static struct {
     { "del", cmd_del, usage_del },
     { "kill", cmd_kill, usage_kill },
     { "list", cmd_list, usage_list },
-    { "start", cmd_start, usage_start },
-    { "stat", cmd_stat, usage_stat },
-    { "stop", cmd_stop, usage_stop }
+    { "stat", cmd_stat, usage_stat }
 };
 
-static int ncmds = sizeof(cmd_table) / sizeof(cmd_table[0]);
+int ncmds = sizeof(cmd_table) / sizeof(cmd_table[0]);
 
 void
 usage(void)
 {
     printf(
-        "btcli is the btpd command line interface. Use this tool to interact\n"
-        "with a btpd process.\n"
+        "btcli is the btpd command line interface.\n"
         "\n"
         "Usage: btcli [main options] command [command options]\n"
         "\n"
@@ -375,15 +402,13 @@ usage(void)
         "del\n"
         "kill\n"
         "list\n"
-        "start\n"
         "stat\n"
-        "stop\n"
         "\n");
     exit(1);
 }
 
-static struct option base_opts [] = {
-    { "help", no_argument, NULL, 1 },
+struct option base_opts [] = {
+    { "help", no_argument, NULL, 'H' },
     {NULL, 0, NULL, 0}
 };
 
@@ -400,7 +425,7 @@ main(int argc, char **argv)
         case 'd':
             btpd_dir = optarg;
             break;
-        case 1:
+        case 'H':
             help = 1;
             break;
         default:
@@ -413,6 +438,10 @@ main(int argc, char **argv)
     if (argc == 0)
         usage();
 
+    if (btpd_dir == NULL)
+        if ((btpd_dir = find_btpd_dir()) == NULL)
+            errx(1, "cannot find the btpd directory");
+
     optind = 0;
     int found = 0;
     for (int i = 0; !found && i < ncmds; i++) {
@@ -424,7 +453,7 @@ main(int argc, char **argv)
                 cmd_table[i].fun(argc, argv);
         }
     }
-    
+
     if (!found)
         usage();
 

@@ -19,9 +19,38 @@ struct cli {
     struct event read;
 };
 
-#define buf_swrite(iob, s) buf_write(iob, s, sizeof(s) - 1)
-
 static struct event m_cli_incoming;
+
+enum ipc_code { // XXX: Same as in cli/btpd_if.h
+    IPC_OK,
+    IPC_FAIL,
+    IPC_ERROR,
+    IPC_COMMERR
+};
+
+static int
+write_buffer(struct cli *cli, struct io_buffer *iob)
+{
+    int err = 0;
+    if (!iob->error) {
+        uint32_t len = iob->buf_off;
+        write_fully(cli->sd, &len, sizeof(len));
+        err = write_fully(cli->sd, iob->buf, iob->buf_off);
+    } else
+        btpd_err("Out of memory.\n");
+    if (iob->buf != NULL)
+        free(iob->buf);
+    return err;
+}
+
+static int
+write_code_buffer(struct cli *cli, enum ipc_code code)
+{
+    struct io_buffer iob;
+    buf_init(&iob, 16);
+    buf_print(&iob, "d4:codei%uee", code);
+    return write_buffer(cli, &iob);
+}
 
 static int
 cmd_stat(struct cli *cli, int argc, const char *args)
@@ -33,9 +62,9 @@ cmd_stat(struct cli *cli, int argc, const char *args)
     buf_swrite(&iob, "d");
     buf_swrite(&iob, "4:codei0e");
     buf_print(&iob, "6:npeersi%ue", net_npeers);
-    buf_print(&iob, "9:ntorrentsi%ue", btpd_get_ntorrents());
+    buf_print(&iob, "9:ntorrentsi%ue", torrent_count());
     buf_swrite(&iob, "8:torrentsl");
-    BTPDQ_FOREACH(tp, btpd_get_torrents(), entry) {
+    BTPDQ_FOREACH(tp, torrent_get_all(), entry) {
         if (tp->state == T_ACTIVE) {
             uint32_t seen_npieces = 0;
             for (uint32_t i = 0; i < tp->meta.npieces; i++)
@@ -49,183 +78,96 @@ cmd_stat(struct cli *cli, int argc, const char *args)
             buf_print(&iob, "4:havei%jde", (intmax_t)cm_get_size(tp));
             buf_print(&iob, "6:npeersi%ue", tp->net->npeers);
             buf_print(&iob, "7:npiecesi%ue", tp->meta.npieces);
-            buf_print(&iob, "3:numi%ue", tp->num);
             buf_print(&iob, "4:path%d:%s", (int)strlen(tp->meta.name),
                 tp->meta.name);
             buf_print(&iob, "2:rdi%lue", tp->net->rate_dwn);
             buf_print(&iob, "2:rui%lue", tp->net->rate_up);
             buf_print(&iob, "12:seen npiecesi%ue", seen_npieces);
-            buf_swrite(&iob, "5:state1:A");
+            buf_print(&iob, "5:statei%ue", tp->state);
             buf_print(&iob, "5:totali%jde", (intmax_t)tp->meta.total_length);
             buf_print(&iob, "2:upi%juee", (intmax_t)tp->net->uploaded);
         } else {
             buf_swrite(&iob, "d4:hash20:");
             buf_write(&iob, tp->meta.info_hash, 20);
-            buf_print(&iob, "3:numi%ue", tp->num);
             buf_print(&iob, "4:path%d:%s", (int)strlen(tp->meta.name),
                 tp->meta.name);
-            switch (tp->state) {
-            case T_INACTIVE:
-                buf_swrite(&iob, "5:state1:Ie");
-                break;
-            case T_STARTING:
-                buf_swrite(&iob, "5:state1:Be");
-                break;
-            case T_STOPPING:
-                buf_swrite(&iob, "5:state1:Ee");
-                break;
-            case T_ACTIVE:
-                abort();
-            }
+            buf_print(&iob, "5:statei%uee", tp->state);
         }
     }
     buf_swrite(&iob, "ee");
-
-    uint32_t len = iob.buf_off;
-    write_fully(cli->sd, &len, sizeof(len));
-    write_fully(cli->sd, iob.buf, iob.buf_off);
-    free(iob.buf);
-    return 0;
+    return write_buffer(cli, &iob);
 }
 
-#if 0
-static void
-cmd_add(int argc, const char *args, FILE *fp)
+static int
+cmd_add(struct cli *cli, int argc, const char *args)
 {
-    struct io_buffer iob;
-    buf_init(&iob, (1 << 10));
+    if (argc != 1)
+        return EINVAL;
+    if (btpd_is_stopping())
+        return write_code_buffer(cli, IPC_FAIL);
 
-    buf_write(&iob, "l", 1);
-    while (args != NULL) {
-        size_t plen;
-        char path[PATH_MAX];
-        const char *pathp;
+    size_t hlen;
+    struct torrent *tp;
+    enum ipc_code code = IPC_OK;
+    const uint8_t *hash = benc_dget_mem(args, "hash", &hlen);
+    char *content = benc_dget_str(args, "content", NULL);
+    char *torrent = benc_dget_str(args, "torrent", NULL);
 
-        if (!benc_isstr(args)) {
-            free(iob.buf);
-            return;
-        }
-
-        benc_str(args, &pathp, &plen, &args);
-
-        if (plen >= PATH_MAX) {
-            buf_print(&iob, "d4:codei%dee", ENAMETOOLONG);
-            continue;
-        }
-
-        bcopy(pathp, path, plen);
-        path[plen] = '\0';
-        btpd_log(BTPD_L_BTPD, "add request for %s.\n", path);
-        buf_print(&iob, "d4:codei%dee", torrent_load(path));
+    if (!(hlen == 20 && content != NULL && torrent != NULL)) {
+        code = IPC_COMMERR;
+        goto out;
     }
-    buf_write(&iob, "e", 1);
+    if ((tp = torrent_get(hash)) != NULL) {
+        code = tp->state == T_STOPPING ? IPC_FAIL : IPC_OK;
+        goto out;
+    }
+    if (torrent_set_links(hash, torrent, content) != 0) {
+        code = IPC_ERROR;
+        goto out;
+    }
+    if (torrent_start(hash) != 0)
+        code = IPC_ERROR;
 
-    uint32_t len = iob.buf_off;
-    fwrite(&len, sizeof(len), 1, fp);
-    fwrite(iob.buf, 1, iob.buf_off, fp);
-    free(iob.buf);
+out:
+    if (content != NULL)
+        free(content);
+    if (torrent != NULL)
+        free(torrent);
+
+    if (code == IPC_COMMERR)
+        return EINVAL;
+    else
+        return write_code_buffer(cli, code);
 }
 
-static void
-cmd_del(int argc, const char *args, FILE *fp)
+static int
+cmd_del(struct cli *cli, int argc, const char *args)
 {
-    struct io_buffer iob;
-    buf_init(&iob, (1 << 10));
+    if (argc != 1 || !benc_isstr(args))
+        return EINVAL;
 
-    buf_swrite(&iob, "l");
-
-    while (args != NULL) {
-        size_t len;
-        const char *hash;
-        struct torrent *tp;
-
-        if (!benc_isstr(args) ||
-            benc_str(args, &hash, &len, &args) != 0 || len != 20) {
-            free(iob.buf);
-            return;
-        }
-
-        tp = btpd_get_torrent(hash);
-        if (tp != NULL) {
-            btpd_log(BTPD_L_BTPD, "del request for %s.\n", tp->relpath);
-            torrent_unload(tp);
-            buf_swrite(&iob, "d4:codei0ee");
-        } else {
-            btpd_log(BTPD_L_BTPD, "del request didn't match.\n");
-            buf_print(&iob, "d4:codei%dee", ENOENT);
-        }
-    }
-    buf_swrite(&iob, "e");
-
-    uint32_t len = iob.buf_off;
-    fwrite(&len, sizeof(len), 1, fp);
-    fwrite(iob.buf, 1, iob.buf_off, fp);
-    free(iob.buf);
+    size_t hlen;
+    uint8_t *hash = (uint8_t *)benc_mem(args, &hlen, NULL);
+    if (hlen != 20)
+        return EINVAL;
+    struct torrent *tp = torrent_get(hash);
+    if (tp != NULL)
+        torrent_stop(tp);
+    return write_code_buffer(cli, IPC_OK);
 }
-
-#endif
 
 static int
 cmd_die(struct cli *cli, int argc, const char *args)
 {
-    char res[] = "d4:codei0ee";
-    uint32_t len = sizeof(res) - 1;
-    write_fully(cli->sd, &len, sizeof(len));
-    write_fully(cli->sd, res, len);
-    btpd_log(BTPD_L_BTPD, "Someone wants me dead.\n");
-    btpd_shutdown((& (struct timeval) { 0, 0 }));
-    return 0;
-}
-
-static int
-cmd_start(struct cli *cli, int argc, const char *args)
-{
-    if (argc != 1 || !benc_isint(args))
-        return EINVAL;
-
-    int code;
-    unsigned num;
-    num = benc_int(args, NULL);
-    struct torrent *tp = btpd_get_torrent_num(num);
-    if (tp != NULL) {
-        torrent_activate(tp);
-        code = 0;
-    } else
-        code = 1;
-
-    struct io_buffer iob;
-    buf_init(&iob, 16);
-    buf_print(&iob, "d4:codei%dee", code);
-    uint32_t len = iob.buf_off;
-    write_fully(cli->sd, &len, sizeof(len));
-    write_fully(cli->sd, iob.buf, iob.buf_off);
-    return 0;
-}
-
-static int
-cmd_stop(struct cli *cli, int argc, const char *args)
-{
-    btpd_log(BTPD_L_BTPD, "%d\n", argc);
-    if (argc != 1 || !benc_isint(args))
-        return EINVAL;
-
-    int code;
-    unsigned num;
-    num = benc_int(args, NULL);
-    struct torrent *tp = btpd_get_torrent_num(num);
-    if (tp != NULL) {
-        torrent_deactivate(tp);
-        code = 0;
-    } else
-        code = 1;
-
-    struct io_buffer iob;
-    buf_init(&iob, 16);
-    buf_print(&iob, "d4:codei%dee", code);
-    uint32_t len = iob.buf_off;
-    write_fully(cli->sd, &len, sizeof(len));
-    write_fully(cli->sd, iob.buf, iob.buf_off);
-    return 0;
+    int err = write_code_buffer(cli, IPC_OK);
+    if (!btpd_is_stopping()) {
+        int grace_seconds = -1;
+        if (argc == 1 && benc_isint(args))
+            grace_seconds = benc_int(args, NULL);
+        btpd_log(BTPD_L_BTPD, "Someone wants me dead.\n");
+        btpd_shutdown(grace_seconds);
+    }
+    return err;
 }
 
 static struct {
@@ -233,14 +175,10 @@ static struct {
     int nlen;
     int (*fun)(struct cli *cli, int, const char *);
 } cmd_table[] = {
-#if 0
     { "add",    3, cmd_add },
     { "del",    3, cmd_del },
-#endif
     { "die",    3, cmd_die },
-    { "start",  5, cmd_start }, 
-    { "stat",   4, cmd_stat },
-    { "stop",   4, cmd_stop }
+    { "stat",   4, cmd_stat }
 };
 
 static int ncmds = sizeof(cmd_table) / sizeof(cmd_table[0]);
@@ -248,22 +186,19 @@ static int ncmds = sizeof(cmd_table) / sizeof(cmd_table[0]);
 static int
 cmd_dispatch(struct cli *cli, const char *buf)
 {
-    int err = 0;
     size_t cmdlen;
     const char *cmd;
     const char *args;
 
     cmd = benc_mem(benc_first(buf), &cmdlen, &args);
 
-    btpd_log(BTPD_L_BTPD, "%.*s\n", (int)cmdlen, cmd);
     for (int i = 0; i < ncmds; i++) {
         if ((cmdlen == cmd_table[i].nlen &&
                 strncmp(cmd_table[i].name, cmd, cmdlen) == 0)) {
-            err = cmd_table[i].fun(cli, benc_nelems(buf) - 1, args);
-            break;
+            return cmd_table[i].fun(cli, benc_nelems(buf) - 1, args);
         }
     }
-    return err;
+    return ENOENT;
 }
 
 static void

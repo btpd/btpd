@@ -1,15 +1,18 @@
 #ifndef BTPD_IF_H
 #define BTPD_IF_H
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-
 struct ipc;
+
+enum torrent_state { //XXX: Same as in btpd/torrent.h
+    T_STARTING,
+    T_ACTIVE,
+    T_STOPPING
+};
 
 enum ipc_code {
     IPC_OK,
     IPC_FAIL,
+    IPC_ERROR,
     IPC_COMMERR
 };
 
@@ -17,8 +20,7 @@ struct btstat {
     unsigned ntorrents;
     struct tpstat {
         char *name;
-        unsigned num;
-        char state;
+        enum torrent_state state;
 
         unsigned errors;
         unsigned npeers;
@@ -32,13 +34,11 @@ struct btstat {
 int ipc_open(const char *dir, struct ipc **out);
 int ipc_close(struct ipc *ipc);
 
+enum ipc_code btpd_add(struct ipc *ipc, const uint8_t *hash,
+    const char *torrent, const char *content);
+enum ipc_code btpd_del(struct ipc *ipc, const uint8_t *hash);
 enum ipc_code btpd_die(struct ipc *ipc, int seconds);
 enum ipc_code btpd_stat(struct ipc *ipc, struct btstat **out);
-
-enum ipc_code btpd_del_num(struct ipc *ipc, unsigned num);
-enum ipc_code btpd_start_num(struct ipc *ipc, unsigned num);
-enum ipc_code btpd_stop_num(struct ipc *ipc, unsigned num);
-
 void free_btstat(struct btstat *stat);
 
 #endif
