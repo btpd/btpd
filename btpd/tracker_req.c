@@ -37,7 +37,7 @@ struct tracker {
 
 static void tr_send(struct torrent *tp, enum tr_event event);
 
-void
+static void
 maybe_connect_to(struct torrent *tp, const char *pinfo)
 {
     const char *pid;
@@ -66,21 +66,25 @@ maybe_connect_to(struct torrent *tp, const char *pinfo)
 
 
 static int
-parse_reply(struct torrent *tp, const char *content, size_t size)
+parse_reply(struct torrent *tp, const char *content, size_t size, int parse)
 {
     const char *buf;
     size_t len;
     const char *peers;
     int interval;
 
+    if (benc_validate(content, size) != 0)
+        goto bad_data;
+
     if ((buf = benc_dget_mem(content, "failure reason", &len)) != NULL) {
         btpd_log(BTPD_L_ERROR, "Tracker failure: %.*s.\n", (int)len, buf);
         return 1;
     }
 
-    if ((benc_validate(content, size) != 0 ||
-            !benc_dct_chk(content, 2, BE_INT, 1, "interval",
-                BE_ANY, 1, "peers")))
+    if (!parse)
+        return 0;
+
+    if (!benc_dct_chk(content, 2, BE_INT, 1, "interval", BE_ANY, 1, "peers"))
         goto bad_data;
 
     interval = benc_dget_int(content, "interval");
@@ -110,15 +114,27 @@ bad_data:
 }
 
 static void
+tr_set_stopped(struct torrent *tp)
+{
+    struct tracker *tr = tp->tr;
+    event_del(&tr->timer);
+    tr->ttype = TIMER_NONE;
+    if (tr->req != NULL) {
+        http_cancel(tr->req);
+        tr->req = NULL;
+    }
+    torrent_on_tr_stopped(tp);
+}
+
+static void
 http_cb(struct http *req, struct http_res *res, void *arg)
 {
     struct torrent *tp = arg;
     struct tracker *tr = tp->tr;
     assert(tr->ttype == TIMER_TIMEOUT);
     tr->req = NULL;
-    if (res->res == HRES_OK &&
-        (tr->event == TR_EV_STOPPED
-            || parse_reply(tp, res->content, res->length) == 0)) {
+    if (res->res == HRES_OK && parse_reply(tp, res->content, res->length,
+            tr->event != TR_EV_STOPPED) == 0) {
         tr->nerrors = 0;
         tr->ttype = TIMER_INTERVAL;
         event_add(&tr->timer, (& (struct timeval) { tr->interval, 0 }));
@@ -128,7 +144,7 @@ http_cb(struct http *req, struct http_res *res, void *arg)
         event_add(&tr->timer, RETRY_WAIT);
     }
     if (tr->event == TR_EV_STOPPED && (tr->nerrors == 0 || tr->nerrors >= 5))
-        tr_destroy(tp);
+        tr_set_stopped(tp);
 }
 
 static void
@@ -138,17 +154,15 @@ timer_cb(int fd, short type, void *arg)
     struct tracker *tr = tp->tr;
     switch (tr->ttype) {
     case TIMER_TIMEOUT:
+        btpd_log(BTPD_L_ERROR, "Tracker request timed out for '%s'.\n",
+            tp->meta.name);
         tr->nerrors++;
         if (tr->event == TR_EV_STOPPED && tr->nerrors >= 5) {
-            tr_destroy(tp);
+            tr_set_stopped(tp);
             break;
         }
     case TIMER_RETRY:
-        if (tr->event == TR_EV_STOPPED) {
-            event_add(&tr->timer, REQ_TIMEOUT);
-            http_redo(&tr->req);
-        } else
-            tr_send(tp, tr->event);
+        tr_send(tp, tr->event);
         break;
     case TIMER_INTERVAL:
         tr_send(tp, TR_EV_EMPTY);
@@ -188,27 +202,21 @@ tr_send(struct torrent *tp, enum tr_event event)
 }
 
 int
-tr_start(struct torrent *tp)
+tr_create(struct torrent *tp)
 {
-    assert(tp->tr == NULL);
     if (strncmp(tp->meta.announce, "http://", sizeof("http://") - 1) != 0) {
         btpd_log(BTPD_L_ERROR,
             "btpd currently has no support for the protocol specified in "
             "'%s'.\n", tp->meta.announce);
         return EINVAL;
     }
-
-    struct tracker *tr = btpd_calloc(1, sizeof(*tr));
-    evtimer_set(&tr->timer, timer_cb, tp);
-    tp->tr = tr;
-
-    tr_send(tp, TR_EV_STARTED);
-
+    tp->tr = btpd_calloc(1, sizeof(*tp->tr));
+    evtimer_set(&tp->tr->timer, timer_cb, tp);
     return 0;
 }
 
 void
-tr_destroy(struct torrent *tp)
+tr_kill(struct torrent *tp)
 {
     struct tracker *tr = tp->tr;
     tp->tr = NULL;
@@ -216,7 +224,12 @@ tr_destroy(struct torrent *tp)
     if (tr->req != NULL)
         http_cancel(tr->req);
     free(tr);
-    torrent_on_tr_stopped(tp);
+}
+
+void
+tr_start(struct torrent *tp)
+{
+    tr_send(tp, TR_EV_STARTED);
 }
 
 void
@@ -234,7 +247,16 @@ tr_complete(struct torrent *tp)
 void
 tr_stop(struct torrent *tp)
 {
-    tr_send(tp, TR_EV_STOPPED);
+    if (tp->tr->event == TR_EV_STOPPED)
+        tr_set_stopped(tp);
+    else
+        tr_send(tp, TR_EV_STOPPED);
+}
+
+int
+tr_active(struct torrent *tp)
+{
+    return tp->tr->ttype != TIMER_NONE;
 }
 
 unsigned

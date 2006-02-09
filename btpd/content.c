@@ -159,7 +159,7 @@ add_todo(struct content *cm, struct cm_op *op)
 }
 
 void
-cm_destroy(struct torrent *tp)
+cm_kill(struct torrent *tp)
 {
     struct content *cm = tp->cm;
     bts_close(cm->rds);
@@ -168,7 +168,6 @@ cm_destroy(struct torrent *tp)
     free(cm->hold_field);
     free(cm->pos_field);
     tp->cm = NULL;
-    torrent_on_cm_stopped(tp);
 }
 
 void
@@ -215,7 +214,14 @@ cm_stop(struct torrent *tp)
         cm_write_done(tp);
 
     if (BTPDQ_EMPTY(&cm->todoq))
-        cm_destroy(tp);
+        torrent_on_cm_stopped(tp);
+}
+
+int
+cm_active(struct torrent *tp)
+{
+    struct content *cm = tp->cm;
+    return cm->active || !BTPDQ_EMPTY(&cm->todoq);
 }
 
 #define SAVE_INTERVAL (& (struct timeval) { 15, 0 })
@@ -261,14 +267,14 @@ cm_td_cb(void *arg)
             assert(cm->npieces_got < tp->meta.npieces);
             cm->npieces_got++;
             set_bit(cm->piece_field, op->u.test.piece);
-            if (tp->net != NULL)
+            if (net_active(tp))
                 dl_on_ok_piece(op->tp->net, op->u.test.piece);
             if (cm_full(tp))
                 cm_write_done(tp);
         } else {
             cm->ncontent_bytes -= torrent_piece_size(tp, op->u.test.piece);
             bzero(cm->block_field + op->u.test.piece * cm->bppbf, cm->bppbf);
-            if (tp->net != NULL)
+            if (net_active(tp))
                 dl_on_bad_piece(tp->net, op->u.test.piece);
         }
         break;
@@ -281,16 +287,14 @@ cm_td_cb(void *arg)
     if (!BTPDQ_EMPTY(&cm->todoq))
         run_todo(cm);
     else if (!cm->active)
-        cm_destroy(tp);
+        torrent_on_cm_stopped(tp);
 }
 
-int
-cm_start(struct torrent *tp)
+void
+cm_create(struct torrent *tp)
 {
-    int err;
-    struct content *cm = btpd_calloc(1, sizeof(*cm));
     size_t pfield_size = ceil(tp->meta.npieces / 8.0);
-    cm->active = 1;
+    struct content *cm = btpd_calloc(1, sizeof(*cm));
     cm->bppbf = ceil((double)tp->meta.piece_length / (1 << 17));
     cm->piece_field = btpd_calloc(pfield_size, 1);
     cm->hold_field = btpd_calloc(pfield_size, 1);
@@ -298,18 +302,24 @@ cm_start(struct torrent *tp)
     cm->block_field = btpd_calloc(tp->meta.npieces * cm->bppbf, 1);
 
     BTPDQ_INIT(&cm->todoq);
-
-    if ((err = bts_open(&cm->rds, &tp->meta, fd_cb_rd, tp)) != 0)
-        btpd_err("Error opening stream (%s).\n", strerror(err));
-    tp->cm = cm;
-
     evtimer_set(&cm->save_timer, save_timer_cb, tp);
 
+    tp->cm = cm;
+}
+
+void
+cm_start(struct torrent *tp)
+{
+    struct content *cm = tp->cm;
+
+    if ((errno = bts_open(&cm->rds, &tp->meta, fd_cb_rd, tp)) != 0)
+        btpd_err("Error opening stream (%s).\n", strerror(errno));
+
+    cm->active = 1;
     struct cm_op *op = btpd_calloc(1, sizeof(*op));
     op->tp = tp;
     op->type = CM_START;
     add_todo(cm, op);
-    return 0;
 }
 
 int

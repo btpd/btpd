@@ -20,8 +20,12 @@ extern unsigned net_npeers;
 
 void net_init(void);
 
-void net_add_torrent(struct torrent *tp);
-void net_del_torrent(struct torrent *tp);
+void net_create(struct torrent *tp);
+void net_kill(struct torrent *tp);
+
+void net_start(struct torrent *tp);
+void net_stop(struct torrent *tp);
+int net_active(struct torrent *tp);
 
 int net_torrent_has_peer(struct net *n, const uint8_t *id);
 

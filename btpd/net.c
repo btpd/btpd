@@ -52,7 +52,7 @@ net_torrent_has_peer(struct net *n, const uint8_t *id)
 }
 
 void
-net_add_torrent(struct torrent *tp)
+net_create(struct torrent *tp)
 {
     size_t field_size = ceil(tp->meta.npieces / 8.0);
     size_t mem = sizeof(*(tp->net)) + field_size +
@@ -62,21 +62,32 @@ net_add_torrent(struct torrent *tp)
     n->tp = tp;
     tp->net = n;
 
-    n->active = 1;
     BTPDQ_INIT(&n->getlst);
 
     n->busy_field = (uint8_t *)(n + 1);
     n->piece_count = (unsigned *)(n->busy_field + field_size);
-
-    BTPDQ_INSERT_HEAD(&m_torrents, n, entry);
-    m_ntorrents++;
 }
 
 void
-net_del_torrent(struct torrent *tp)
+net_kill(struct torrent *tp)
+{
+    free(tp->net);
+    tp->net = NULL;
+}
+
+void
+net_start(struct torrent *tp)
 {
     struct net *n = tp->net;
-    tp->net = NULL;
+    BTPDQ_INSERT_HEAD(&m_torrents, n, entry);
+    m_ntorrents++;
+    n->active = 1;
+}
+
+void
+net_stop(struct torrent *tp)
+{
+    struct net *n = tp->net;
 
     assert(m_ntorrents > 0);
     m_ntorrents--;
@@ -104,8 +115,12 @@ net_del_torrent(struct torrent *tp)
         peer_kill(p);
         p = next;
     }
+}
 
-    free(n);
+int
+net_active(struct torrent *tp)
+{
+    return tp->net->active;
 }
 
 void

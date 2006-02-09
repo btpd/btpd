@@ -126,11 +126,18 @@ torrent_start(const uint8_t *hash)
     bcopy(relpath, tp->relpath, RELPATH_SIZE);
     tp->meta = *mi;
     free(mi);
-    BTPDQ_INSERT_TAIL(&m_torrents, tp, entry);
-    m_ntorrents++;
-    cm_start(tp);
 
-    return 0;
+    if ((error = tr_create(tp)) == 0) {
+        net_create(tp);
+        cm_create(tp);
+        BTPDQ_INSERT_TAIL(&m_torrents, tp, entry);
+        m_ntorrents++;
+        cm_start(tp);
+    } else {
+        clear_metainfo(&tp->meta);
+        free(tp);
+    }
+    return error;
 }
 
 void
@@ -140,16 +147,13 @@ torrent_stop(struct torrent *tp)
     case T_STARTING:
     case T_ACTIVE:
         tp->state = T_STOPPING;
-        if (tp->tr != NULL)
-            tr_stop(tp);
-        if (tp->net != NULL)
-            net_del_torrent(tp);
-        if (tp->cm != NULL)
-            cm_stop(tp);
+        tr_stop(tp);
+        net_stop(tp);
+        cm_stop(tp);
         break;
     case T_STOPPING:
-        if (tp->tr != NULL)
-            tr_destroy(tp);
+        if (tr_active(tp))
+            tr_stop(tp);
         break;
     }
 }
@@ -162,6 +166,9 @@ torrent_kill(struct torrent *tp)
     m_ntorrents--;
     BTPDQ_REMOVE(&m_torrents, tp, entry);
     clear_metainfo(&tp->meta);
+    tr_kill(tp);
+    net_kill(tp);
+    cm_kill(tp);
     free(tp);
     if (m_ntorrents == 0)
         btpd_on_no_torrents();
@@ -171,16 +178,15 @@ void
 torrent_on_cm_started(struct torrent *tp)
 {
     tp->state = T_ACTIVE;
-    net_add_torrent(tp);
-    if (tr_start(tp) != 0)
-        torrent_stop(tp);
+    net_start(tp);
+    tr_start(tp);
 }
 
 void
 torrent_on_cm_stopped(struct torrent *tp)
 {
     assert(tp->state == T_STOPPING);
-    if (tp->tr == NULL)
+    if (!tr_active(tp))
         torrent_kill(tp);
 }
 
@@ -188,6 +194,6 @@ void
 torrent_on_tr_stopped(struct torrent *tp)
 {
     assert(tp->state == T_STOPPING);
-    if (tp->cm == NULL)
+    if (!cm_active(tp))
         torrent_kill(tp);
 }

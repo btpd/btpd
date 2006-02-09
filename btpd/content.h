@@ -3,9 +3,13 @@
 
 void cm_init(void);
 
-int cm_start(struct torrent *tp);
+void cm_create(struct torrent *tp);
+void cm_kill(struct torrent *tp);
+
+void cm_start(struct torrent *tp);
 void cm_stop(struct torrent * tp);
 
+int cm_active(struct torrent *tp);
 int cm_full(struct torrent *tp);
 
 uint8_t *cm_get_piece_field(struct torrent *tp);
