@@ -17,8 +17,8 @@ struct net {
     unsigned *piece_count;
     struct piece_tq getlst;
 
-    uint64_t uploaded, downloaded;
     unsigned long rate_up, rate_dwn;
+    unsigned long long uploaded, downloaded;
 
     unsigned npeers;
     struct peer_tq peers;
