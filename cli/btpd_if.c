@@ -154,6 +154,7 @@ parse_btstat(const uint8_t *res, struct btstat **out)
     int i = 0;
     for (const char *tp = benc_first(tlst); tp != NULL; tp = benc_next(tp)) {
         struct tpstat *ts = &st->torrents[i];
+        ts->hash = benc_dget_mema(tp, "hash", NULL);
         ts->name = benc_dget_str(tp, "path", NULL);
         ts->state = benc_dget_int(tp, "state");
         ts->errors = benc_dget_int(tp, "errors");
@@ -175,9 +176,12 @@ parse_btstat(const uint8_t *res, struct btstat **out)
 void
 free_btstat(struct btstat *st)
 {
-    for (unsigned i = 0; i < st->ntorrents; i++)
+    for (unsigned i = 0; i < st->ntorrents; i++) {
+        if (st->torrents[i].hash != NULL)
+            free(st->torrents[i].hash);
         if (st->torrents[i].name != NULL)
             free(st->torrents[i].name);
+    }
     free(st);
 }
 

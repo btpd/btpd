@@ -19,6 +19,7 @@ enum ipc_code {
 struct btstat {
     unsigned ntorrents;
     struct tpstat {
+        uint8_t *hash;
         char *name;
         enum torrent_state state;
 
