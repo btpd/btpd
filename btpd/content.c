@@ -183,12 +183,11 @@ cm_save(struct torrent *tp)
 static void
 cm_write_done(struct torrent *tp)
 {
-    int err;
     struct content *cm = tp->cm;
 
-    if ((err = bts_close(cm->wrs)) != 0)
-        btpd_err("Error closing write stream for %s (%s).\n", tp->relpath,
-            strerror(err));
+    if ((errno = bts_close(cm->wrs)) != 0)
+        btpd_err("Error closing write stream for '%s' (%s).\n",
+            torrent_name(tp), strerror(errno));
     cm->wrs = NULL;
     event_del(&cm->save_timer);
     cm_save(tp);
@@ -243,7 +242,7 @@ cm_td_cb(void *arg)
     struct content *cm = tp->cm;
 
     if (op->error)
-        btpd_err("IO error for %s.\n", tp->relpath);
+        btpd_err("IO error for '%s'.\n", torrent_name(tp));
 
     switch (op->type) {
     case CM_ALLOC:
@@ -255,8 +254,8 @@ cm_td_cb(void *arg)
             assert(!op->u.start.cancel);
             if (!cm_full(tp)) {
                 if ((err = bts_open(&cm->wrs, &tp->meta, fd_cb_wr, tp)) != 0)
-                    btpd_err("Couldn't open write stream for %s (%s).\n",
-                        tp->relpath, strerror(err));
+                    btpd_err("Couldn't open write stream for '%s' (%s).\n",
+                        torrent_name(tp), strerror(err));
                 event_add(&cm->save_timer, SAVE_INTERVAL);
             }
             torrent_on_cm_started(tp);

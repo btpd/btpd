@@ -77,7 +77,8 @@ parse_reply(struct torrent *tp, const char *content, size_t size, int parse)
         goto bad_data;
 
     if ((buf = benc_dget_mem(content, "failure reason", &len)) != NULL) {
-        btpd_log(BTPD_L_ERROR, "Tracker failure: %.*s.\n", (int)len, buf);
+        btpd_log(BTPD_L_ERROR, "Tracker failure: '%.*s' for '%s'.\n",
+            (int)len, buf, torrent_name(tp));
         return 1;
     }
 
@@ -109,7 +110,8 @@ parse_reply(struct torrent *tp, const char *content, size_t size, int parse)
     return 0;
 
 bad_data:
-    btpd_log(BTPD_L_ERROR, "Bad data from tracker.\n");
+    btpd_log(BTPD_L_ERROR, "Bad data from tracker for '%s'.\n",
+        torrent_name(tp));
     return 1;
 }
 
@@ -155,7 +157,7 @@ timer_cb(int fd, short type, void *arg)
     switch (tr->ttype) {
     case TIMER_TIMEOUT:
         btpd_log(BTPD_L_ERROR, "Tracker request timed out for '%s'.\n",
-            tp->meta.name);
+            torrent_name(tp));
         tr->nerrors++;
         if (tr->event == TR_EV_STOPPED && tr->nerrors >= 5) {
             tr_set_stopped(tp);

@@ -43,6 +43,12 @@ torrent_get(const uint8_t *hash)
     return tp;
 }
 
+const char *
+torrent_name(struct torrent *tp)
+{
+    return tp->meta.name;
+}
+
 off_t
 torrent_piece_size(struct torrent *tp, uint32_t index)
 {
@@ -120,13 +126,12 @@ torrent_start(const uint8_t *hash)
         return error;
     }
 
-    btpd_log(BTPD_L_BTPD, "Starting torrent '%s'.\n", mi->name);
-
     tp = btpd_calloc(1, sizeof(*tp));
     bcopy(relpath, tp->relpath, RELPATH_SIZE);
     tp->meta = *mi;
     free(mi);
 
+    btpd_log(BTPD_L_BTPD, "Starting torrent '%s'.\n", torrent_name(tp));
     if ((error = tr_create(tp)) == 0) {
         net_create(tp);
         cm_create(tp);
@@ -161,7 +166,7 @@ torrent_stop(struct torrent *tp)
 static void
 torrent_kill(struct torrent *tp)
 {
-    btpd_log(BTPD_L_BTPD, "Removed torrent '%s'.\n", tp->meta.name);
+    btpd_log(BTPD_L_BTPD, "Removed torrent '%s'.\n", torrent_name(tp));
     assert(m_ntorrents > 0);
     m_ntorrents--;
     BTPDQ_REMOVE(&m_torrents, tp, entry);

@@ -38,6 +38,7 @@ off_t torrent_piece_size(struct torrent *tp, uint32_t piece);
 uint32_t torrent_piece_blocks(struct torrent *tp, uint32_t piece);
 uint32_t torrent_block_size(struct torrent *tp, uint32_t piece,
     uint32_t nblocks, uint32_t block);
+const char *torrent_name(struct torrent *tp);
 
 void torrent_on_cm_stopped(struct torrent *tp);
 void torrent_on_cm_started(struct torrent *tp);
