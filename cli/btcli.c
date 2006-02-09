@@ -170,7 +170,7 @@ cmd_add(int argc, char **argv)
         if (realpath(argv[i], fpath) == NULL)
             err(1, "path error on %s", fpath);
 
-        handle_ipc_res(btpd_add(ipc, mi->info_hash, fpath, dpath), argv[1]);
+        handle_ipc_res(btpd_add(ipc, mi->info_hash, fpath, dpath), argv[i]);
         clear_metainfo(mi);
         free(mi);
     }
