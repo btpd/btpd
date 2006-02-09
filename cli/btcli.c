@@ -284,11 +284,15 @@ usage_stat(void)
         "%% got, MB down, rate down. MB up, rate up\n"
         "peer count, %% of pieces seen, tracker errors\n"
         "\n"
-        "Usage: stat [-i] [-w seconds]\n"
+        "Usage: stat [-i] [-w seconds] [file ...]\n"
+        "\n"
+        "Arguments:\n"
+        "file ...\n"
+        "\tOnly display stats for the given torrent(s).\n"
         "\n"
         "Options:\n"
         "-i\n"
-        "\tDisplay indivudal lines for each active torrent.\n"
+        "\tDisplay individual lines for each torrent.\n"
         "\n"
         "-w n\n"
         "\tDisplay stats every n seconds.\n"
@@ -297,7 +301,7 @@ usage_stat(void)
 }
 
 void
-do_stat(int individual, int seconds)
+do_stat(int individual, int seconds, int hash_count, uint8_t (*hashes)[20])
 {
     struct btstat *st;
     struct tpstat tot;
@@ -308,6 +312,14 @@ again:
         exit(1);
     for (int i = 0; i < st->ntorrents; i++) {
         struct tpstat *cur = &st->torrents[i];
+        if (hash_count > 0) {
+            int found = 0;
+            for (int h = 0; !found && h < hash_count; h++)
+                if (bcmp(cur->hash, hashes[h], 20) == 0)
+                    found = 1;
+            if (!found)
+                continue;
+        }
         tot.uploaded += cur->uploaded;
         tot.downloaded += cur->downloaded;
         tot.rate_up += cur->rate_up;
@@ -343,6 +355,7 @@ cmd_stat(int argc, char **argv)
 {
     int ch;
     int wflag = 0, iflag = 0, seconds = 0;
+    uint8_t (*hashes)[20];
     char *endptr;
     while ((ch = getopt_long(argc, argv, "iw:", stat_opts, NULL)) != -1) {
         switch (ch) {
@@ -361,11 +374,20 @@ cmd_stat(int argc, char **argv)
     }
     argc -= optind;
     argv += optind;
-    if (argc > 0)
-        usage_stat();
 
+    if (argc > 0) {
+        hashes = malloc(argc * 20);
+        for (int i = 0; i < argc; i++) {
+            struct metainfo *mi;
+            if ((errno = load_metainfo(argv[i], -1, 0, &mi)) != 0)
+                err(1, "error loading torrent %s", argv[i]);
+            bcopy(mi->info_hash, hashes[i], 20);
+            clear_metainfo(mi);
+            free(mi);
+        }
+    }
     btpd_connect();
-    do_stat(iflag, seconds);
+    do_stat(iflag, seconds, argc, hashes);
 }
 
 struct {
