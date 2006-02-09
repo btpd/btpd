@@ -65,34 +65,26 @@ cmd_stat(struct cli *cli, int argc, const char *args)
     buf_print(&iob, "9:ntorrentsi%ue", torrent_count());
     buf_swrite(&iob, "8:torrentsl");
     BTPDQ_FOREACH(tp, torrent_get_all(), entry) {
-        if (tp->state == T_ACTIVE) {
-            uint32_t seen_npieces = 0;
-            for (uint32_t i = 0; i < tp->meta.npieces; i++)
-                if (tp->net->piece_count[i] > 0)
-                    seen_npieces++;
+        uint32_t seen_npieces = 0;
+        for (uint32_t i = 0; i < tp->meta.npieces; i++)
+            if (tp->net->piece_count[i] > 0)
+                seen_npieces++;
 
-            buf_print(&iob, "d4:downi%jue", (intmax_t)tp->net->downloaded);
-            buf_print(&iob, "6:errorsi%ue", tr_errors(tp));
-            buf_swrite(&iob, "4:hash20:");
-            buf_write(&iob, tp->meta.info_hash, 20);
-            buf_print(&iob, "4:havei%jde", (intmax_t)cm_get_size(tp));
-            buf_print(&iob, "6:npeersi%ue", tp->net->npeers);
-            buf_print(&iob, "7:npiecesi%ue", tp->meta.npieces);
-            buf_print(&iob, "4:path%d:%s", (int)strlen(tp->meta.name),
-                tp->meta.name);
-            buf_print(&iob, "2:rdi%lue", tp->net->rate_dwn);
-            buf_print(&iob, "2:rui%lue", tp->net->rate_up);
-            buf_print(&iob, "12:seen npiecesi%ue", seen_npieces);
-            buf_print(&iob, "5:statei%ue", tp->state);
-            buf_print(&iob, "5:totali%jde", (intmax_t)tp->meta.total_length);
-            buf_print(&iob, "2:upi%juee", (intmax_t)tp->net->uploaded);
-        } else {
-            buf_swrite(&iob, "d4:hash20:");
-            buf_write(&iob, tp->meta.info_hash, 20);
-            buf_print(&iob, "4:path%d:%s", (int)strlen(tp->meta.name),
-                tp->meta.name);
-            buf_print(&iob, "5:statei%uee", tp->state);
-        }
+        buf_print(&iob, "d4:downi%llde", tp->net->downloaded);
+        buf_print(&iob, "6:errorsi%ue", tr_errors(tp));
+        buf_swrite(&iob, "4:hash20:");
+        buf_write(&iob, tp->meta.info_hash, 20);
+        buf_print(&iob, "4:havei%jde", (intmax_t)cm_get_size(tp));
+        buf_print(&iob, "6:npeersi%ue", tp->net->npeers);
+        buf_print(&iob, "7:npiecesi%ue", tp->meta.npieces);
+        buf_print(&iob, "4:path%d:%s", (int)strlen(tp->meta.name),
+            tp->meta.name);
+        buf_print(&iob, "2:rdi%lue", tp->net->rate_dwn);
+        buf_print(&iob, "2:rui%lue", tp->net->rate_up);
+        buf_print(&iob, "12:seen npiecesi%ue", seen_npieces);
+        buf_print(&iob, "5:statei%ue", tp->state);
+        buf_print(&iob, "5:totali%jde", (intmax_t)tp->meta.total_length);
+        buf_print(&iob, "2:upi%lldee", tp->net->uploaded);
     }
     buf_swrite(&iob, "ee");
     return write_buffer(cli, &iob);
@@ -150,10 +142,12 @@ cmd_del(struct cli *cli, int argc, const char *args)
     uint8_t *hash = (uint8_t *)benc_mem(args, &hlen, NULL);
     if (hlen != 20)
         return EINVAL;
+    // Stopping a torrent may trigger exit so we need to reply before.
+    int ret = write_code_buffer(cli, IPC_OK);
     struct torrent *tp = torrent_get(hash);
     if (tp != NULL)
         torrent_stop(tp);
-    return write_code_buffer(cli, IPC_OK);
+    return ret;
 }
 
 static int
