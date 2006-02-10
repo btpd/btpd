@@ -97,7 +97,8 @@ dl_on_ok_piece(struct net *n, uint32_t piece)
     piece_free(pc);
 
     if (cm_full(n->tp)) {
-        btpd_log(BTPD_L_BTPD, "Finished: %s.\n", n->tp->relpath);
+        btpd_log(BTPD_L_BTPD, "Finished downloading '%s'.\n",
+            torrent_name(tn->tp));
         tr_complete(n->tp);
         BTPDQ_FOREACH(p, &n->peers, p_entry)
             assert(p->nwant == 0);
