@@ -40,16 +40,16 @@ print_metainfo(struct metainfo *tp)
         printf("%.2x", tp->info_hash[i]);
     printf("\n");
     printf("Tracker URL: %s\n", tp->announce);
-    printf("Piece length: %jd\n", (intmax_t)tp->piece_length);
+    printf("Piece length: %lld\n", (long long)tp->piece_length);
     printf("Number of pieces: %u\n", tp->npieces);
     printf("Number of files: %u\n", tp->nfiles);
     printf("Advisory name: %s\n", tp->name);
     printf("Files:\n");
     for (i = 0; i < tp->nfiles; i++) {
-        printf("%s (%jd)\n",
-            tp->files[i].path, (intmax_t)tp->files[i].length);
+        printf("%s (%lld)\n",
+            tp->files[i].path, (long long)tp->files[i].length);
     }
-    printf("Total length: %jd\n\n", (intmax_t)tp->total_length);
+    printf("Total length: %lld\n\n", (long long)tp->total_length);
 }
 
 static int

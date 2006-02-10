@@ -195,11 +195,11 @@ tr_send(struct torrent *tp, enum tr_event event)
         snprintf(e_id + i * 3, 4, "%%%.2x", peer_id[i]);
 
     http_get(&tr->req, http_cb, tp,
-        "%s%cinfo_hash=%s&peer_id=%s&port=%d&uploaded=%ju"
-        "&downloaded=%ju&left=%ju&compact=1%s%s",
+        "%s%cinfo_hash=%s&peer_id=%s&port=%d&uploaded=%llu"
+        "&downloaded=%llu&left=%llu&compact=1%s%s",
         tp->meta.announce, qc, e_hash, e_id, net_port,
-        (intmax_t)tp->net->uploaded, (intmax_t)tp->net->downloaded,
-        (intmax_t)tp->meta.total_length - cm_content(tp),
+        tp->net->uploaded, tp->net->downloaded,
+        (long long)tp->meta.total_length - cm_content(tp),
         event == TR_EV_EMPTY ? "" : "&event=", m_events[event]);
 }
 

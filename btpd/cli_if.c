@@ -72,9 +72,9 @@ cmd_stat(struct cli *cli, int argc, const char *args)
                 seen_npieces++;
 
         buf_swrite(&iob, "d");
-        buf_print(&iob, "11:content goti%jde", (intmax_t)cm_content(tp));
-        buf_print(&iob, "12:content sizei%jde",
-            (intmax_t)tp->meta.total_length);
+        buf_print(&iob, "11:content goti%llde", (long long)cm_content(tp));
+        buf_print(&iob, "12:content sizei%llde",
+            (long long)tp->meta.total_length);
         buf_print(&iob, "10:downloadedi%llde", tp->net->downloaded);
         buf_swrite(&iob, "9:info hash20:");
         buf_write(&iob, tp->meta.info_hash, 20);
