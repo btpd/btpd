@@ -145,29 +145,12 @@ torrent_start(const uint8_t *hash)
     return error;
 }
 
-void
-torrent_stop(struct torrent *tp)
-{
-    switch (tp->state) {
-    case T_STARTING:
-    case T_ACTIVE:
-        tp->state = T_STOPPING;
-        tr_stop(tp);
-        net_stop(tp);
-        cm_stop(tp);
-        break;
-    case T_STOPPING:
-        if (tr_active(tp))
-            tr_stop(tp);
-        break;
-    }
-}
-
 static void
 torrent_kill(struct torrent *tp)
 {
     btpd_log(BTPD_L_BTPD, "Removed torrent '%s'.\n", torrent_name(tp));
     assert(m_ntorrents > 0);
+    assert(!(tr_active(tp) || net_active(tp) || cm_active(tp)));
     m_ntorrents--;
     BTPDQ_REMOVE(&m_torrents, tp, entry);
     clear_metainfo(&tp->meta);
@@ -177,6 +160,32 @@ torrent_kill(struct torrent *tp)
     free(tp);
     if (m_ntorrents == 0)
         btpd_on_no_torrents();
+}
+
+void
+torrent_stop(struct torrent *tp)
+{
+    int tra, cma;
+    switch (tp->state) {
+    case T_STARTING:
+    case T_ACTIVE:
+        tp->state = T_STOPPING;
+        if (net_active(tp))
+            net_stop(tp);
+        tra = tr_active(tp);
+        cma = cm_active(tp);
+        if (tra)
+            tr_stop(tp);
+        if (cma)
+            cm_stop(tp);
+        if (!(tra || cma))
+            torrent_kill(tp);
+        break;
+    case T_STOPPING:
+        if (tr_active(tp))
+            tr_stop(tp);
+        break;
+    }
 }
 
 void
