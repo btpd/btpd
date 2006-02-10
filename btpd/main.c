@@ -72,7 +72,7 @@ static void
 usage(void)
 {
     printf(
-        "The BitTorrent Protocol Daemon.\n"
+        "btpd is the BitTorrent Protocol Daemon.\n"
         "\n"
         "Usage: btpd [-d dir] [-p port] [more options...]\n"
         "\n"
@@ -88,14 +88,6 @@ usage(void)
         "-d dir\n"
         "\tThe directory in which to run btpd. Default is '$HOME/.btpd'.\n"
         "\n"
-        "--downloaders n\n"
-        "\tControls the number of simultaneous uploads.\n"
-        "\tThe possible values are:\n"
-        "\t\tn < -1 : Choose n >= 2 based on --bw-out (default).\n"
-        "\t\tn = -1 : Upload to every interested peer.\n"
-        "\t\tn =  0 : Dont't upload to anyone.\n"
-        "\t\tn >  0 : Upload to at most n peers simultaneously.\n"
-        "\n"
         "--help\n"
         "\tShow this text.\n"
         "\n"
@@ -104,6 +96,14 @@ usage(void)
         "\n"
         "--max-peers n\n"
         "\tLimit the amount of peers to n.\n"
+        "\n"
+        "--max-uploads n\n"
+        "\tControls the number of simultaneous uploads.\n"
+        "\tThe possible values are:\n"
+        "\t\tn < -1 : Choose n >= 2 based on --bw-out (default).\n"
+        "\t\tn = -1 : Upload to every interested peer.\n"
+        "\t\tn =  0 : Dont't upload to anyone.\n"
+        "\t\tn >  0 : Upload to at most n peers simultaneously.\n"
         "\n"
         "--no-daemon\n"
         "\tKeep the btpd process in the foregorund and log to std{out,err}.\n"
@@ -127,7 +127,7 @@ static struct option longopts[] = {
     { "bw-in",  required_argument,      &longval,       1 },
     { "bw-out", required_argument,      &longval,       2 },
     { "prealloc", required_argument,    &longval,       3 },
-    { "downloaders", required_argument, &longval,       4 },
+    { "max-uploads", required_argument, &longval,       4 },
     { "max-peers", required_argument,   &longval,       5 },
     { "no-daemon", no_argument,         &longval,       6 },
     { "logfile", required_argument,     &longval,       7 },
@@ -165,7 +165,7 @@ main(int argc, char **argv)
                 cm_alloc_size = atoi(optarg) * 1024;
                 break;
             case 4:
-                net_max_downloaders = atoi(optarg);
+                net_max_uploads = atoi(optarg);
                 break;
             case 5:
                 net_max_peers = atoi(optarg);

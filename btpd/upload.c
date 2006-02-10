@@ -7,7 +7,7 @@
 static struct event m_choke_timer;
 static unsigned m_npeers;
 static struct peer_tq m_peerq = BTPDQ_HEAD_INITIALIZER(m_peerq);
-static int m_max_downloaders;
+static int m_max_uploads;
 
 struct peer_sort {
     struct peer *p;
@@ -32,12 +32,12 @@ rate_cmp(const void *arg1, const void *arg2)
 static void
 choke_do(void)
 {
-    if (m_max_downloaders < 0) {
+    if (m_max_uploads < 0) {
         struct peer *p;
         BTPDQ_FOREACH(p, &m_peerq, ul_entry)
             if (p->flags & PF_I_CHOKE)
                 peer_unchoke(p);
-    } else if (m_max_downloaders == 0) {
+    } else if (m_max_uploads == 0) {
         struct peer *p;
         BTPDQ_FOREACH(p, &m_peerq, ul_entry)
             if ((p->flags & PF_I_CHOKE) == 0)
@@ -69,7 +69,7 @@ choke_do(void)
         qsort(worthy, nworthy, sizeof(worthy[0]), rate_cmp);
 
         bzero(unchoked, sizeof(unchoked));
-        for (i = nworthy - 1; i >= 0 && found < m_max_downloaders - 1; i--) {
+        for (i = nworthy - 1; i >= 0 && found < m_max_uploads - 1; i--) {
             if ((worthy[i].p->flags & PF_P_WANT) != 0)
                 found++;
             if ((worthy[i].p->flags & PF_I_CHOKE) != 0)
@@ -80,7 +80,7 @@ choke_do(void)
         i = 0;
         BTPDQ_FOREACH(p, &m_peerq, ul_entry) {
             if (!unchoked[i]) {
-                if (found < m_max_downloaders && !peer_full(p)) {
+                if (found < m_max_uploads && !peer_full(p)) {
                     if (p->flags & PF_P_WANT)
                         found++;
                     if (p->flags & PF_I_CHOKE)
@@ -177,19 +177,19 @@ ul_on_uninterest(struct peer *p)
 void
 ul_init(void)
 {
-    if (net_max_downloaders >= -1)
-        m_max_downloaders = net_max_downloaders;
+    if (net_max_uploads >= -1)
+        m_max_uploads = net_max_uploads;
     else {
         if (net_bw_limit_out == 0)
-            m_max_downloaders = 8;
+            m_max_uploads = 8;
         else if (net_bw_limit_out < (10 << 10))
-            m_max_downloaders = 2;
+            m_max_uploads = 2;
         else if (net_bw_limit_out < (20 << 10))
-            m_max_downloaders = 3;
+            m_max_uploads = 3;
         else if (net_bw_limit_out < (40 << 10))
-            m_max_downloaders = 4;
+            m_max_uploads = 4;
         else
-            m_max_downloaders = 5 + (net_bw_limit_out / (100 << 10));
+            m_max_uploads = 5 + (net_bw_limit_out / (100 << 10));
     }
 
     evtimer_set(&m_choke_timer, choke_cb, NULL);
