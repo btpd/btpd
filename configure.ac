@@ -10,16 +10,18 @@ AC_PROG_RANLIB
 CFLAGS="$CFLAGS -std=c99"
 CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64"
 
-AC_ARG_WITH(event,
-[  --with-event=dir        use libevent installed in dir],
+ACX_PTHREAD([], [echo Must have pthread support; exit 1])
+
+AC_ARG_WITH(libevent,
+[  --with-libevent=dir     use libevent installed in dir],
 [
         AC_SUBST(event_LDFLAGS,["-L${withval}/lib -Wl,-rpath=${withval}/lib"])
         AC_SUBST(event_CPPFLAGS,"-I${withval}/include")
 ],
 [])
 
-AC_ARG_WITH(ssl,
-[  --with-ssl=dir          use openssl installed in dir],
+AC_ARG_WITH(openssl,
+[  --with-openssl=dir      use openssl installed in dir],
 [
         AC_SUBST(openssl_LDFLAGS,["-L${withval}/lib -Wl,-rpath=${withval}/lib"])
         AC_SUBST(openssl_CPPFLAGS,"-I${withval}/include")
@@ -71,12 +73,12 @@ if test x$CURLCONF = x -o \! \( -r "$CURLCONF" -a -x "$CURLCONF" \); then
    echo Must have the curl-config script
    exit 1
 else
-   AC_SUBST(CURL_CFLAGS, `$CURLCONF --cflags`)
-   AC_SUBST(CURL_LDFLAGS, `$CURLCONF --libs`)
+   AC_SUBST(curl_CFLAGS, `$CURLCONF --cflags`)
+   AC_SUBST(curl_LDFLAGS, `$CURLCONF --libs`)
 fi
 
 old_LDFLAGS="$LDFLAGS"
-LDFLAGS="$LDFLAGS $CURL_LDFLAGS"
+LDFLAGS="$LDFLAGS $curl_LDFLAGS"
 AC_CHECK_LIB(curl, curl_easy_strerror, :, echo Must have recent curl; exit 1)
 LDFLAGS=$old_LDFLAGS
 
