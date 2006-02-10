@@ -199,7 +199,7 @@ tr_send(struct torrent *tp, enum tr_event event)
         "&downloaded=%ju&left=%ju&compact=1%s%s",
         tp->meta.announce, qc, e_hash, e_id, net_port,
         (intmax_t)tp->net->uploaded, (intmax_t)tp->net->downloaded,
-        (intmax_t)tp->meta.total_length - cm_get_size(tp),
+        (intmax_t)tp->meta.total_length - cm_content(tp),
         event == TR_EV_EMPTY ? "" : "&event=", m_events[event]);
 }
 

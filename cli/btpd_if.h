@@ -22,12 +22,11 @@ struct btstat {
         uint8_t *hash;
         char *name;
         enum torrent_state state;
-
-        unsigned errors;
-        unsigned npeers;
-        uint32_t npieces, nseen;
-        off_t have, total;
-        long long downloaded, uploaded;
+        unsigned tr_errors;
+        unsigned peers;
+        uint32_t pieces_got, pieces_seen, torrent_pieces;
+        off_t content_got, content_size;
+        unsigned long long downloaded, uploaded;
         unsigned long rate_up, rate_down;
     } torrents[];
 };

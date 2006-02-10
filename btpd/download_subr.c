@@ -106,7 +106,7 @@ static int
 dl_should_enter_endgame(struct net *n)
 {
     int should;
-    if (cm_get_npieces(n->tp) + n->npcs_busy == n->tp->meta.npieces) {
+    if (cm_pieces(n->tp) + n->npcs_busy == n->tp->meta.npieces) {
         should = 1;
         struct piece *pc;
         BTPDQ_FOREACH(pc, &n->getlst, entry) {

@@ -154,19 +154,20 @@ parse_btstat(const uint8_t *res, struct btstat **out)
     int i = 0;
     for (const char *tp = benc_first(tlst); tp != NULL; tp = benc_next(tp)) {
         struct tpstat *ts = &st->torrents[i];
-        ts->hash = benc_dget_mema(tp, "hash", NULL);
-        ts->name = benc_dget_str(tp, "path", NULL);
+        ts->hash = benc_dget_mema(tp, "info hash", NULL);
+        ts->name = benc_dget_str(tp, "name", NULL);
         ts->state = benc_dget_int(tp, "state");
-        ts->errors = benc_dget_int(tp, "errors");
-        ts->npieces = benc_dget_int(tp, "npieces");
-        ts->nseen = benc_dget_int(tp, "seen npieces");
-        ts->npeers = benc_dget_int(tp, "npeers");
-        ts->downloaded = benc_dget_int(tp, "down");
-        ts->uploaded = benc_dget_int(tp, "up");
-        ts->rate_down = benc_dget_int(tp, "rd");
-        ts->rate_up = benc_dget_int(tp, "ru");
-        ts->have = benc_dget_int(tp, "have");
-        ts->total = benc_dget_int(tp, "total");
+        ts->peers = benc_dget_int(tp, "peers");
+        ts->tr_errors = benc_dget_int(tp, "tracker errors");
+        ts->content_got = benc_dget_int(tp, "content got");
+        ts->content_size = benc_dget_int(tp, "content size");
+        ts->pieces_got = benc_dget_int(tp, "pieces got");
+        ts->pieces_seen = benc_dget_int(tp, "pieces seen");
+        ts->torrent_pieces = benc_dget_int(tp, "torrent pieces");
+        ts->downloaded = benc_dget_int(tp, "downloaded");
+        ts->uploaded = benc_dget_int(tp, "uploaded");
+        ts->rate_down = benc_dget_int(tp, "rate down");
+        ts->rate_up = benc_dget_int(tp, "rate up");
         i++;
     }
     *out = st;

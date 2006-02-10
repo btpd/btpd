@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <math.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -434,13 +435,13 @@ cm_full(struct torrent *tp)
 }
 
 off_t
-cm_get_size(struct torrent *tp)
+cm_content(struct torrent *tp)
 {
     return tp->cm->ncontent_bytes;
 }
 
 uint32_t
-cm_get_npieces(struct torrent *tp)
+cm_pieces(struct torrent *tp)
 {
     return tp->cm->npieces_got;
 }

@@ -121,7 +121,7 @@ nb_create_have(uint32_t index)
 struct net_buf *
 nb_create_multihave(struct torrent *tp)
 {
-    uint32_t have_npieces = cm_get_npieces(tp);
+    uint32_t have_npieces = cm_pieces(tp);
     struct net_buf *out = nb_create_alloc(NB_MULTIHAVE, 9 * have_npieces);
     for (uint32_t i = 0, count = 0; count < have_npieces; i++) {
         if (cm_has_piece(tp, i)) {

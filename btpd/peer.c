@@ -343,8 +343,8 @@ peer_on_shake(struct peer *p)
     printid[i] = '\0';
     btpd_log(BTPD_L_MSG, "received shake(%s) from %p\n", printid, p);
     p->piece_field = btpd_calloc(1, (int)ceil(p->n->tp->meta.npieces / 8.0));
-    if (cm_get_npieces(p->n->tp) > 0) {
-        if ((cm_get_npieces(p->n->tp) * 9 < 5 +
+    if (cm_pieces(p->n->tp) > 0) {
+        if ((cm_pieces(p->n->tp) * 9 < 5 +
                 ceil(p->n->tp->meta.npieces / 8.0)))
             peer_send(p, nb_create_multihave(p->n->tp));
         else {

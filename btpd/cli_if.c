@@ -65,26 +65,30 @@ cmd_stat(struct cli *cli, int argc, const char *args)
     buf_print(&iob, "9:ntorrentsi%ue", torrent_count());
     buf_swrite(&iob, "8:torrentsl");
     BTPDQ_FOREACH(tp, torrent_get_all(), entry) {
+        const char *name = torrent_name(tp);
         uint32_t seen_npieces = 0;
         for (uint32_t i = 0; i < tp->meta.npieces; i++)
             if (tp->net->piece_count[i] > 0)
                 seen_npieces++;
 
-        buf_print(&iob, "d4:downi%llde", tp->net->downloaded);
-        buf_print(&iob, "6:errorsi%ue", tr_errors(tp));
-        buf_swrite(&iob, "4:hash20:");
+        buf_swrite(&iob, "d");
+        buf_print(&iob, "11:content goti%jde", (intmax_t)cm_content(tp));
+        buf_print(&iob, "12:content sizei%jde",
+            (intmax_t)tp->meta.total_length);
+        buf_print(&iob, "10:downloadedi%llde", tp->net->downloaded);
+        buf_swrite(&iob, "9:info hash20:");
         buf_write(&iob, tp->meta.info_hash, 20);
-        buf_print(&iob, "4:havei%jde", (intmax_t)cm_get_size(tp));
-        buf_print(&iob, "6:npeersi%ue", tp->net->npeers);
-        buf_print(&iob, "7:npiecesi%ue", tp->meta.npieces);
-        buf_print(&iob, "4:path%d:%s", (int)strlen(tp->meta.name),
-            tp->meta.name);
-        buf_print(&iob, "2:rdi%lue", tp->net->rate_dwn);
-        buf_print(&iob, "2:rui%lue", tp->net->rate_up);
-        buf_print(&iob, "12:seen npiecesi%ue", seen_npieces);
+        buf_print(&iob, "4:name%d:%s", (int)strlen(name), name);
+        buf_print(&iob, "5:peersi%ue", tp->net->npeers);
+        buf_print(&iob, "10:pieces goti%ue", cm_pieces(tp));
+        buf_print(&iob, "11:pieces seeni%ue", seen_npieces);
+        buf_print(&iob, "9:rate downi%lue", tp->net->rate_dwn);
+        buf_print(&iob, "7:rate upi%lue", tp->net->rate_up);
         buf_print(&iob, "5:statei%ue", tp->state);
-        buf_print(&iob, "5:totali%jde", (intmax_t)tp->meta.total_length);
-        buf_print(&iob, "2:upi%lldee", tp->net->uploaded);
+        buf_print(&iob, "14:torrent piecesi%ue", tp->meta.npieces);
+        buf_print(&iob, "14:tracker errorsi%ue", tr_errors(tp));
+        buf_print(&iob, "8:uploadedi%llde", tp->net->uploaded);
+        buf_swrite(&iob, "e");
     }
     buf_swrite(&iob, "ee");
     return write_buffer(cli, &iob);

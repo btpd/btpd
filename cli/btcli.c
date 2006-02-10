@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,24 +47,37 @@ handle_ipc_res(enum ipc_code code, const char *target)
 void
 print_state_name(struct tpstat *ts)
 {
-    char statec[] = ">*<U";
-    int state = min(ts->state, 3);
-    printf("%c. %s", statec[state], ts->name);
+    char c;
+    switch (ts->state) {
+    case T_STARTING:
+        c = '+';
+        break;
+    case T_ACTIVE:
+        c = ts->pieces_got == ts->torrent_pieces ? 'S' : 'L';
+        break;
+    case T_STOPPING:
+        c = '-';
+        break;
+    default:
+        c = 'U';
+        break;
+    }
+    printf("%c. %s", c, ts->name);
 }
 
 void
-print_stat(struct tpstat *cur)
+print_stat(struct tpstat *ts)
 {
     printf("%5.1f%% %6.1fM %7.2fkB/s %6.1fM %7.2fkB/s %4u %5.1f%%",
-        100.0 * cur->have / cur->total,
-        (double)cur->downloaded / (1 << 20),
-        (double)cur->rate_down / (20 << 10),
-        (double)cur->uploaded / (1 << 20),
-        (double)cur->rate_up / (20 << 10),
-        cur->npeers,
-        100.0 * cur->nseen / cur->npieces);
-    if (cur->errors > 0)
-        printf(" E%u", cur->errors);
+        100.0 * ts->content_got / ts->content_size,
+        (double)ts->downloaded / (1 << 20),
+        (double)ts->rate_down / (20 << 10),
+        (double)ts->uploaded / (1 << 20),
+        (double)ts->rate_up / (20 << 10),
+        ts->peers,
+        100.0 * ts->pieces_seen / ts->torrent_pieces);
+    if (ts->tr_errors > 0)
+        printf(" E%u", ts->tr_errors);
     printf("\n");
 }
 
@@ -156,7 +170,7 @@ cmd_add(int argc, char **argv)
                     && strcmp(mi->name, mi->files[0].path) == 0)))
             snprintf(dpath, PATH_MAX, "%s/%s", bdir, mi->name);
         else if (dir != NULL)
-            strlcpy(dpath, bdir, PATH_MAX);
+            strncpy(dpath, bdir, PATH_MAX);
         else {
             if (content_link(mi->info_hash, dpath) != 0) {
                 warnx("unknown content dir for %s", argv[i]);
@@ -307,7 +321,6 @@ do_stat(int individual, int seconds, int hash_count, uint8_t (*hashes)[20])
     struct tpstat tot;
 again:
     bzero(&tot, sizeof(tot));
-    tot.state = T_ACTIVE;
     if (handle_ipc_res(btpd_stat(ipc, &st), "stat") != IPC_OK)
         exit(1);
     for (int i = 0; i < st->ntorrents; i++) {
@@ -324,11 +337,11 @@ again:
         tot.downloaded += cur->downloaded;
         tot.rate_up += cur->rate_up;
         tot.rate_down += cur->rate_down;
-        tot.npeers += cur->npeers;
-        tot.nseen += cur->nseen;
-        tot.npieces += cur->npieces;
-        tot.have += cur->have;
-        tot.total += cur->total;
+        tot.peers += cur->peers;
+        tot.pieces_seen += cur->pieces_seen;
+        tot.torrent_pieces += cur->torrent_pieces;
+        tot.content_got += cur->content_got;
+        tot.content_size += cur->content_size;
         if (individual) {
             print_state_name(cur);
             printf(":\n");
@@ -355,7 +368,7 @@ cmd_stat(int argc, char **argv)
 {
     int ch;
     int wflag = 0, iflag = 0, seconds = 0;
-    uint8_t (*hashes)[20];
+    uint8_t (*hashes)[20] = NULL;
     char *endptr;
     while ((ch = getopt_long(argc, argv, "iw:", stat_opts, NULL)) != -1) {
         switch (ch) {

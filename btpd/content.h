@@ -12,10 +12,11 @@ void cm_stop(struct torrent * tp);
 int cm_active(struct torrent *tp);
 int cm_full(struct torrent *tp);
 
+off_t cm_content(struct torrent *tp);
+uint32_t cm_pieces(struct torrent *tp);
+
 uint8_t *cm_get_piece_field(struct torrent *tp);
 uint8_t *cm_get_block_field(struct torrent *tp, uint32_t piece);
-
-uint32_t cm_get_npieces(struct torrent *tp);
 
 int cm_has_piece(struct torrent *tp, uint32_t piece);
 
@@ -26,7 +27,5 @@ int cm_get_bytes(struct torrent *tp, uint32_t piece, uint32_t begin,
 
 void cm_prealloc(struct torrent *tp, uint32_t piece);
 void cm_test_piece(struct torrent *tp, uint32_t piece);
-
-off_t cm_get_size(struct torrent *tp);
 
 #endif
