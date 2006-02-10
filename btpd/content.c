@@ -168,6 +168,7 @@ cm_kill(struct torrent *tp)
     free(cm->block_field);
     free(cm->hold_field);
     free(cm->pos_field);
+    free(cm);
     tp->cm = NULL;
 }
 

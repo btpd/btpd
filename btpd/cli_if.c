@@ -220,6 +220,7 @@ cli_read_cb(int sd, short type, void *arg)
     if (cmd_dispatch(cli, msg) != 0)
         goto error;
 
+    free(msg);
     event_add(&cli->read, NULL);
     return;
 
