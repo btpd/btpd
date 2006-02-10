@@ -113,8 +113,8 @@ dl_on_bad_piece(struct net *n, uint32_t piece)
 {
     struct piece *pc = dl_find_piece(n, piece);
 
-    btpd_log(BTPD_L_ERROR, "Bad hash for piece %u of %s.\n",
-        pc->index, n->tp->relpath);
+    btpd_log(BTPD_L_ERROR, "Bad hash for piece %u of '%s'.\n",
+        pc->index, torrent_name(n->tp));
 
     for (uint32_t i = 0; i < pc->nblocks; i++)
         clear_bit(pc->down_field, i);
