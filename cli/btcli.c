@@ -131,7 +131,7 @@ void
 cmd_add(int argc, char **argv)
 {
     int ch, topdir = 0;
-    char *dir = NULL, bdir[PATH_MAX];
+    char *dir = NULL;
 
     while ((ch = getopt_long(argc, argv, "d:", add_opts, NULL)) != -1) {
         switch (ch) {
@@ -151,14 +151,10 @@ cmd_add(int argc, char **argv)
     if (argc < 1 || (topdir == 1 && dir == NULL) || (dir != NULL && argc > 1))
         usage_add();
 
-    if (dir != NULL)
-        if (realpath(dir, bdir) == NULL)
-            err(1, "path error on %s", bdir);
-
     btpd_connect();
     for (int i = 0; i < argc; i++) {
         struct metainfo *mi;
-        char dpath[PATH_MAX], fpath[PATH_MAX];
+        char rdpath[PATH_MAX], dpath[PATH_MAX], fpath[PATH_MAX];
 
         if ((errno = load_metainfo(argv[i], -1, 0, &mi)) != 0) {
             warn("error loading torrent %s", argv[i]);
@@ -168,9 +164,9 @@ cmd_add(int argc, char **argv)
         if ((topdir &&
                 !(mi->nfiles == 1
                     && strcmp(mi->name, mi->files[0].path) == 0)))
-            snprintf(dpath, PATH_MAX, "%s/%s", bdir, mi->name);
+            snprintf(dpath, PATH_MAX, "%s/%s", dir, mi->name);
         else if (dir != NULL)
-            strncpy(dpath, bdir, PATH_MAX);
+            strncpy(dpath, dir, PATH_MAX);
         else {
             if (content_link(mi->info_hash, dpath) != 0) {
                 warnx("unknown content dir for %s", argv[i]);
@@ -181,10 +177,13 @@ cmd_add(int argc, char **argv)
         if (mkdir(dpath, 0777) != 0 && errno != EEXIST)
             err(1, "couldn't create directory %s", dpath);
 
+        if (realpath(dpath, rdpath) == NULL)
+            err(1, "path error on %s", dpath);
+
         if (realpath(argv[i], fpath) == NULL)
             err(1, "path error on %s", fpath);
 
-        handle_ipc_res(btpd_add(ipc, mi->info_hash, fpath, dpath), argv[i]);
+        handle_ipc_res(btpd_add(ipc, mi->info_hash, fpath, rdpath), argv[i]);
         clear_metainfo(mi);
         free(mi);
     }
