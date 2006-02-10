@@ -5,6 +5,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <file.h>
 #include <getopt.h>
 #include <locale.h>
 #include <stdio.h>
@@ -45,14 +46,11 @@ setup_daemon(int daemonize, const char *dir, const char *log)
     if (mkdir("torrents", 0777) == -1 && errno != EEXIST)
         err(1, "Couldn't create torrents subdir");
 
-    pidfd = open("pid", O_CREAT|O_WRONLY|O_NONBLOCK|O_EXLOCK, 0666);
-    if (pidfd == -1) {
-        if (errno == EAGAIN)
-            errx(1, "Another instance of btpd is probably running in %s.",
-                dir);
-        else
-            err(1, "Couldn't open 'pid'");
-    }
+    if ((pidfd = open("pid", O_CREAT|O_WRONLY, 0666)) == -1)
+        err(1, "Couldn't open 'pid'");
+
+    if (flock(pidfd, LOCK_NB|LOCK_EX) == -1)
+        errx(1, "Another instance of btpd is probably running in %s.", dir);
 
     if (daemonize) {
         if (daemon(1, 1) != 0)
