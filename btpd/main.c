@@ -1,11 +1,11 @@
 #include <sys/types.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 
 #include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <file.h>
 #include <getopt.h>
 #include <locale.h>
 #include <stdio.h>
