@@ -111,10 +111,8 @@ http_td_cb(void *arg)
     struct http *h = arg;
     if (h->res.res == HRES_OK)
         curl_easy_getinfo(h->curlh, CURLINFO_RESPONSE_CODE, &h->res.code);
-    if (h->res.res == HRES_FAIL) {
-        btpd_log(BTPD_L_ERROR, "Http error for url '%s' (%s).\n", h->url,
-            curl_easy_strerror(h->res.code));
-    }
+    if (h->res.res == HRES_FAIL)
+        h->res.errmsg = curl_easy_strerror(h->res.code);
     if (h->state != HS_CANCEL)
         h->cb(h, &h->res, h->cb_arg);
     curl_easy_cleanup(h->curlh);

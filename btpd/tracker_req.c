@@ -141,6 +141,9 @@ http_cb(struct http *req, struct http_res *res, void *arg)
         tr->ttype = TIMER_INTERVAL;
         event_add(&tr->timer, (& (struct timeval) { tr->interval, 0 }));
     } else {
+        if (res->res == HRES_FAIL)
+            btpd_log(BTPD_L_BTPD, "Tracker request for '%s' failed (%s).\n",
+                torrent_name(tp), res->errmsg);
         tr->nerrors++;
         tr->ttype = TIMER_RETRY;
         event_add(&tr->timer, RETRY_WAIT);

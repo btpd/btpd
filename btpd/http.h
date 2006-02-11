@@ -12,6 +12,7 @@ enum http_status {
 struct http_res {
     enum http_status res;
     long code;
+    const char *errmsg;
     char *content;
     size_t length;
 };
