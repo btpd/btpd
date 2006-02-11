@@ -111,7 +111,7 @@ usage(void)
         "\tListen at port n. Default is 6881.\n"
         "\n"
         "--prealloc n\n"
-        "\tPreallocate disk space in chunks of n kB. Default is 1.\n"
+        "\tPreallocate disk space in chunks of n kB. Default is 2048.\n"
         "\tNote that n will be rounded up to the closest multiple of the\n"
         "\ttorrent piece size. If n is zero no preallocation will be done.\n"
         "\n");
