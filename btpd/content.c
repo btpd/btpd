@@ -622,7 +622,7 @@ load_resume(struct torrent *tp, struct rstat sbs[])
     if (ver != 1)
         goto invalid;
     for (int i = 0; i < tp->meta.nfiles; i++) {
-        long long size;
+        quad_t size;
         long time;
         if (fscanf(fp, "%qd %ld\n", &size, &time) != 2)
             goto invalid;
@@ -651,7 +651,7 @@ save_resume(struct torrent *tp, struct rstat sbs[])
         return err;
     fprintf(fp, "%d\n", 1);
     for (int i = 0; i < tp->meta.nfiles; i++)
-        fprintf(fp, "%qd %ld\n", (long long)sbs[i].size, (long)sbs[i].mtime);
+        fprintf(fp, "%lld %ld\n", (long long)sbs[i].size, (long)sbs[i].mtime);
     fwrite(tp->cm->piece_field, 1, ceil(tp->meta.npieces / 8.0), fp);
     fwrite(tp->cm->block_field, 1, tp->meta.npieces * tp->cm->bppbf, fp);
     if (fclose(fp) != 0)
