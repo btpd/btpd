@@ -1,11 +1,36 @@
-btpd-0.7:
+btpd 0.8:
+---------
+
+Misc:
+- btpd now requires pthreads.
+- btpd keeps its logs and other information it needs in its own directory.
+  $HOME/.btpd is the default location.
+- Various changes in btpd options ant btcli use. See '--help'.
+- The user chooses where to place content for each torrent.
+- Better disk IO performance.
+- Configureable disk preallocation to reduce file fragmentation.
+- The unchoke algorithm is global instead of per torrent. The number
+  of peers to upload to is configurable.
+- Tracker errors are displayed in 'btcli stat' and most importantly don't
+  make torrents unload on startup.
+- The rates displayed by btcli are now computed in btpd and are averaged
+  over the last 20 seconds.
+- btpd now compares size and mtime of content to see if the resume file is
+  valid.
+
+Bug fixes:
+- Double uninterest messages could be sent to some peers in endgame mode.
+- A function was called prematurely which could trigger an assert in rare
+  cases.
+
+btpd 0.7:
 ---------
 
 Bug fixes:
 - Some communication stupidities was fixed, resulting in better download
   performance.
 
-btpd-0.6:
+btpd 0.6:
 ---------
 
 Misc:
@@ -13,14 +38,14 @@ Misc:
   This protects from running out of memory because of a greedy peer.
 - End game is more efficient and uses much less memory.
 
-btpd-0.5:
+btpd 0.5:
 ---------
 
 Bug fixes:
 - The bitfield could be sent too late. This could cause the receiving
   peer to close the connection.
 
-btpd-0.4:
+btpd 0.4:
 ---------
 
 Misc:
@@ -36,7 +61,7 @@ Bug fixes:
   while the peer was in handshake.
 - Some situations in end game or with bad hashes could cause a crash.
 
-btpd-0.3:
+btpd 0.3:
 ---------
 
 Misc:
