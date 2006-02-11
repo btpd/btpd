@@ -1,59 +1,138 @@
-+ PROGRAMS
+                     The BitTorrent Protocol Daemon
 
-btpd consists of the following programs:
-* btpd     - The BitTorrent client.
-* btcli    - Command line interface to btpd.
-* btinfo   - Shows information from a torrent file.
+                                README
 
-All programs take the "--help" option.
+Contents
+1               Introduction
+1.a               What is btpd?
+1.b               The programs
+2.              Using btpd
+2.a               Typical usage pattern
+2.b               Starting btpd
+2.c               Sharing torrents
+2.d               Information on active torrents
+2.e               Murder
+3               Building
+3.a               Requirements
+3.b               Standard build
 
-+ DIRECTORY STRUCTURE
+1. Introduction
 
-foo.torrent
-        The torrent metainfo file.
+1.a What is btpd?
 
-foo.torrent.d
-        Content will be downloaded to, and uploaded from, this dir.
-        It and its subdirectories and files will be created by
-        btpd as it downloads them.
+  btpd is a BitTorrent client consisting of a daemon and client commands,
+  which can be used to read and/or manipulate the daemon state. The daemon
+  is capable of running several torrents simultaneously and only uses one
+  tcp port. It's fairly low on resource usage and should be perfect for a
+  torrent distribution site. Efficient downloads and ease of use makes this
+  client a good choice for the casual user as well.
 
-foo.torrent.i
-        Created by 'btcli add'. Contains info on downloaded pieces.
+1.b The programs
 
-+ SAMPLE USAGE
+  btpd consists of the following programs:
+  * btpd     - The BitTorrent client.
+  * btcli    - Command line interface to btpd.
+  * btinfo   - Shows information from a torrent file.
 
-NOTE: Don't start one instance of btpd per torrent. You should only
-need one instance regardless of how many torrents you want to share.
+  All programs accept the helpful "--help" option.
 
-Start btpd:
-# btpd
+2. Using btpd
 
-Start downloading or seeding bar.torrent:
-# btcli add /path/to/bar.torrent
+2.a Typical usage pattern
 
-List active torrents (only bar.torrent atm):
-# btcli list
+  When you use this client you will mostly use the btcli tool. With btcli
+  you can tell btpd which torrents to run, list the active torrents and
+  display stats for them. You can even tell btpd to exit if you're so in-
+  clined. Before you can use this tool however, btpd must be started. The
+  typical usage pattern goes something like this:
+    1. start btpd.
+    2. add one or more torrents to btpd.
+    3. any of many different actions: display stats, add more or remove
+       torrents, go drink coffe, etc...
+  666. tell btpd to exit.
 
-Show some stats:
-# btcli stat
+2.b Starting btpd
 
-Stop downloading/seeding bar.torrent:
-# btcli del /path/to/bar.torrent
+  NOTE: As described in the section above, you should only need one instance
+  of btpd regardless of how many torrents you want to share.
 
-Shut down btpd (Why would you do such a thing?):
-# btcli die
+  To start btpd with default settings you only need to run it. There are
+  however, many useful options you may want to use. To see a full list run
+  'btpd --help'.
 
-+ BUILDING
+  btdp will store information and write its log in $HOME/.btpd. Therefore
+  it needs to be able to write there during its execution. You can specify
+  another directory via the '-d' option or the $BTPD_HOME variable.
 
-Make sure you have recent versions of the following software:
-* curl      - Get at <URL:http://curl.haxx.se/>
-* openssl   - Get at <URL:http://www.openssl.org/>
-* libevent  - Get at <URL:http://www.monkey.org/~provos/libevent/>
+  I recommend specifiying the maximum number of uploads. BitTorrent employs a
+  tit for tat algorithm, so uploading at good rates allows for downloading.
+  Try to find a balance between uploads/outgoing bandwidth and the number of
+  active torrents.
 
-You also need a c99 compiler. A non antique GCC should do.
+2.c Sharing torrents
 
-# ./configure
-# make
-# make install
+  To make btpd start leeching or seeding a torrent you use the 'btcli add'
+  command. In similar vein the 'btcli del' command will make btpd stop shar-
+  ing the torrent.
 
-See ./configure --help for options if it fails.
+  The first time you add a torrent you must specify where btpd should put
+  its content. This is not needed on subsequent add's of the same torrent
+  since btpd stores that information. Of course, if you move the content
+  directory between runs you need to specify it again.
+
+  Examples:
+  Add foo.torrent and download its content to the foo.content directory.
+  # btcli add -d foo.content foo.torrent
+
+  Stop sharing foo.torrent.
+  # btcli del foo.torrent
+
+  Start it again. Notice the absence of '-d foo.content'.
+  # btcli add foo.torrent
+
+  Add bar.torrent and place the content like the mainline client.
+  # btcli add --topdir -d . bar.torrent
+
+2.d Information on active torrents
+
+  In case you're not happy only guessing about your torrents progress, or
+  can't remember which torrents are active, you may want to take a look at
+  the 'btcli stat' and 'btcli list' commands. 'btcli list' will, not totally
+  surprisingly, display a list of active torrents. 'btcli stat' will display
+  information such as rates and MBs uploaded and downloaded. See
+  'btcli --help stat' to make sense of it.
+
+  Each line 'btcli list' shows is prefixed by either '+', '-', 'S' or 'L'.
+  + means the torrent hasn't been started yet, because btpd is checking
+    the content of either this or another torrent with '+'.
+  - means the torrent is being stopped.
+  S means btpd is seeding the torrent.
+  L means btpd is leeching the torrent.
+
+2.e Murder
+
+  Too slay the innocent btpd process issue the command 'btcli kill'.
+  Horrible user!
+
+3. Building
+
+3.a Requirements
+
+  You should have a *BSD, Linux or sufficiently similar system with pthread
+  support.
+
+  Make sure you have recent versions of the following software:
+  * curl      - Get at <URL:http://curl.haxx.se/>
+  * openssl   - Get at <URL:http://www.openssl.org/>
+  * libevent  - Get at <URL:http://www.monkey.org/~provos/libevent/>
+
+  You also need a c99 compiler. A non antique GCC should do.
+
+3.b Standard build
+
+  # ./configure
+  # make
+  # make install
+
+  See './configure --help' for options if the above fails or you're overcome
+  by curiousity.
