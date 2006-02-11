@@ -362,7 +362,7 @@ cm_prealloc(struct torrent *tp, uint32_t piece)
 {
     struct content *cm = tp->cm;
 
-    if (cm_alloc_size == 0)
+    if (cm_alloc_size <= 0)
         set_bit(cm->pos_field, piece);
     else {
         unsigned npieces = ceil((double)cm_alloc_size / tp->meta.piece_length);
