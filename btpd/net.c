@@ -94,6 +94,8 @@ net_stop(struct torrent *tp)
     BTPDQ_REMOVE(&m_torrents, n, entry);
 
     n->active = 0;
+    n->rate_up = 0;
+    n->rate_dwn = 0;
 
     ul_on_lost_torrent(n);
 
