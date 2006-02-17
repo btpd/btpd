@@ -44,31 +44,26 @@ handle_ipc_res(enum ipc_code code, const char *target)
     return code;
 }
 
-void
-print_state_name(struct tpstat *ts)
+char
+state_char(struct tpstat *ts)
 {
-    char c;
     switch (ts->state) {
     case T_STARTING:
-        c = '+';
-        break;
+        return '+';
     case T_ACTIVE:
-        c = ts->pieces_got == ts->torrent_pieces ? 'S' : 'L';
-        break;
+        return ts->pieces_got == ts->torrent_pieces ? 'S' : 'L';
     case T_STOPPING:
-        c = '-';
-        break;
+        return '-';
     default:
-        c = 'U';
-        break;
+        return ' ';
     }
-    printf("%c. %s", c, ts->name);
 }
 
 void
 print_stat(struct tpstat *ts)
 {
-    printf("%5.1f%% %6.1fM %7.2fkB/s %6.1fM %7.2fkB/s %4u %5.1f%%",
+    printf("%c %5.1f%% %6.1fM %7.2fkB/s %6.1fM %7.2fkB/s %4u %5.1f%%",
+        state_char(ts),
         100.0 * ts->content_got / ts->content_size,
         (double)ts->downloaded / (1 << 20),
         (double)ts->rate_down / (20 << 10),
@@ -281,8 +276,8 @@ cmd_list(int argc, char **argv)
     if (handle_ipc_res(btpd_stat(ipc, &st), "list") != IPC_OK)
         exit(1);
     for (int i = 0; i < st->ntorrents; i++) {
-        print_state_name(&st->torrents[i]);
-        putchar('\n');
+        struct tpstat *ts = &st->torrents[i];
+        printf("%c. %s\n", state_char(ts), ts->name);
     }
     printf("%u torrent%s.\n", st->ntorrents,
         st->ntorrents == 1 ? "" : "s");
@@ -320,6 +315,7 @@ do_stat(int individual, int seconds, int hash_count, uint8_t (*hashes)[20])
     struct tpstat tot;
 again:
     bzero(&tot, sizeof(tot));
+    tot.state = -1;
     if (handle_ipc_res(btpd_stat(ipc, &st), "stat") != IPC_OK)
         exit(1);
     for (int i = 0; i < st->ntorrents; i++) {
@@ -341,9 +337,10 @@ again:
         tot.torrent_pieces += cur->torrent_pieces;
         tot.content_got += cur->content_got;
         tot.content_size += cur->content_size;
+        if (cur->tr_errors > 0)
+            tot.tr_errors++;
         if (individual) {
-            print_state_name(cur);
-            printf(":\n");
+            printf("%s:\n", cur->name);
             print_stat(cur);
         }
     }
