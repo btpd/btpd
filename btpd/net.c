@@ -128,13 +128,19 @@ net_active(struct torrent *tp)
 void
 net_write32(void *buf, uint32_t num)
 {
-    *(uint32_t *)buf = htonl(num);
+    uint8_t *p = buf;
+    *p = (num >> 24) & 0xff;
+    *(p + 1) = (num >> 16) & 0xff;
+    *(p + 2) = (num >> 8) & 0xff;
+    *(p + 3) = num & 0xff;
 }
 
 uint32_t
 net_read32(const void *buf)
 {
-    return ntohl(*(uint32_t *)buf);
+    const uint8_t *p = buf;
+    return (uint32_t)*p << 24 | (uint32_t)*(p + 1) << 16
+        | (uint16_t)*(p + 2) << 8 | *(p + 3);
 }
 
 static unsigned long
