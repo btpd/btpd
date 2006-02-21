@@ -90,7 +90,8 @@ struct piece {
     unsigned nbusy;
     unsigned next_block;
 
-    struct block *blocks;
+    struct net_buf **eg_reqs;
+    struct block_request_tq reqs;
 
     const uint8_t *have_field;
     uint8_t *down_field;
@@ -98,15 +99,9 @@ struct piece {
     BTPDQ_ENTRY(piece) entry;
 };
 
-struct block {
-    struct piece *pc;
-    struct net_buf *msg;
-    struct block_request_tq reqs;
-};
-
 struct block_request {
     struct peer *p;
-    struct block *blk;
+    struct net_buf *msg;
     BTPDQ_ENTRY(block_request) p_entry;
     BTPDQ_ENTRY(block_request) blk_entry;
 };

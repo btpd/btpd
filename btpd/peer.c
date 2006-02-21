@@ -160,15 +160,16 @@ peer_request(struct peer *p, struct block_request *req)
     assert(p->nreqs_out < MAXPIPEDREQUESTS);
     p->nreqs_out++;
     BTPDQ_INSERT_TAIL(&p->my_reqs, req, p_entry);
-    peer_send(p, req->blk->msg);
+    peer_send(p, req->msg);
 }
 
 int
-peer_requested(struct peer *p, struct block *blk)
+peer_requested(struct peer *p, uint32_t piece, uint32_t block)
 {
+    uint32_t begin = block * PIECE_BLOCKLEN;
     struct block_request *req;
     BTPDQ_FOREACH(req, &p->my_reqs, p_entry)
-        if (req->blk == blk)
+        if (nb_get_index(req->msg) == piece && nb_get_begin(req->msg) == begin)
             return 1;
     return 0;
 }
@@ -182,7 +183,7 @@ peer_cancel(struct peer *p, struct block_request *req, struct net_buf *nb)
     int removed = 0;
     struct nb_link *nl;
     BTPDQ_FOREACH(nl, &p->outq, entry) {
-        if (nl->nb == req->blk->msg) {
+        if (nl->nb == req->msg) {
             removed = peer_unsend(p, nl);
             break;
         }
@@ -448,9 +449,9 @@ peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
 {
     struct block_request *req;
     BTPDQ_FOREACH(req, &p->my_reqs, p_entry)
-        if ((nb_get_begin(req->blk->msg) == begin &&
-                nb_get_index(req->blk->msg) == index &&
-                nb_get_length(req->blk->msg) == length))
+        if ((nb_get_begin(req->msg) == begin &&
+                nb_get_index(req->msg) == index &&
+                nb_get_length(req->msg) == length))
             break;
     if (req != NULL) {
         btpd_log(BTPD_L_MSG, "received piece(%u,%u,%u) from %p\n",

@@ -155,36 +155,38 @@ dl_on_block(struct peer *p, struct block_request *req,
     uint32_t index, uint32_t begin, uint32_t length, const uint8_t *data)
 {
     struct net *n = p->n;
-    struct block *blk = req->blk;
-    struct piece *pc = blk->pc;
+    struct piece *pc = dl_find_piece(n, index);
 
     cm_put_bytes(p->n->tp, index, begin, data, length);
     pc->ngot++;
 
     if (n->endgame) {
-        struct block_request *req;
+        struct block_request *req, *next;
         struct net_buf *cancel = nb_create_cancel(index, begin, length);
         nb_hold(cancel);
-        BTPDQ_FOREACH(req, &blk->reqs, blk_entry) {
-            if (req->p != p)
-                peer_cancel(req->p, req, cancel);
-            pc->nreqs--;
+        BTPDQ_FOREACH(req, &pc->reqs, blk_entry) {
+            if (nb_get_begin(req->msg) == begin) {
+                if (req->p != p)
+                    peer_cancel(req->p, req, cancel);
+                pc->nreqs--;
+            }
         }
         nb_drop(cancel);
         dl_piece_reorder_eg(pc);
-        req = BTPDQ_FIRST(&blk->reqs);
-        while (req != NULL) {
-            struct block_request *next = BTPDQ_NEXT(req, blk_entry);
+        BTPDQ_FOREACH_MUTABLE(req, &pc->reqs, blk_entry, next) {
+            if (nb_get_begin(req->msg) != begin)
+                continue;
+            BTPDQ_REMOVE(&pc->reqs, req, blk_entry);
+            nb_drop(req->msg);
             if (peer_leech_ok(req->p) && !peer_laden(req->p))
                 dl_assign_requests_eg(req->p);
             free(req);
-            req = next;
         }
-        BTPDQ_INIT(&blk->reqs);
         if (pc->ngot == pc->nblocks)
             cm_test_piece(pc->n->tp, pc->index);
     } else {
-        BTPDQ_REMOVE(&blk->reqs, req, blk_entry);
+        BTPDQ_REMOVE(&pc->reqs, req, blk_entry);
+        nb_drop(req->msg);
         free(req);
         pc->nreqs--;
         // XXX: Needs to be looked at if we introduce snubbing.

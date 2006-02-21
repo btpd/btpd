@@ -29,7 +29,7 @@ void peer_request(struct peer *p, struct block_request *req);
 void peer_cancel(struct peer *p, struct block_request *req,
     struct net_buf *nb);
 
-int peer_requested(struct peer *p, struct block *blk);
+int peer_requested(struct peer *p, uint32_t piece, uint32_t block);
 
 void peer_create_in(int sd);
 void peer_create_out(struct net *n, const uint8_t *id,
