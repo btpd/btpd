@@ -329,7 +329,6 @@ dl_new_request(struct peer *p, struct piece *pc, struct net_buf *msg)
         set_bit(pc->down_field, pc->next_block);
         pc->nbusy++;
     }
-    INCNEXTBLOCK(pc);
     peer_request(p, req);
     return req;
 }
@@ -350,6 +349,7 @@ dl_piece_assign_requests(struct piece *pc, struct peer *p)
                    || has_bit(pc->down_field, pc->next_block)))
             INCNEXTBLOCK(pc);
         dl_new_request(p, pc, NULL);
+        INCNEXTBLOCK(pc);
         count++;
     } while (!piece_full(pc) && !peer_laden(p));
 
@@ -447,12 +447,13 @@ dl_piece_assign_requests_eg(struct piece *pc, struct peer *p)
             INCNEXTBLOCK(pc);
             continue;
         }
-        struct block_request *req = 
+        struct block_request *req =
             dl_new_request(p, pc, pc->eg_reqs[pc->next_block]);
         if (pc->eg_reqs[pc->next_block] == NULL) {
             pc->eg_reqs[pc->next_block] = req->msg;
             nb_hold(req->msg);
         }
+        INCNEXTBLOCK(pc);
     } while (!peer_laden(p) && pc->next_block != first_block);
 }
 
