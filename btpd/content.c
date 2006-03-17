@@ -562,6 +562,10 @@ test_torrent(struct torrent *tp, volatile sig_atomic_t *cancel)
             break;
         if (test_hash(tp, hash, piece) == 0)
             set_bit(tp->cm->piece_field, piece);
+        else {
+            clear_bit(tp->cm->piece_field, piece);
+            bzero(cm->block_field + piece * cm->bppbf, cm->bppbf);
+        }
         if (*cancel) {
             err = EINTR;
             break;
@@ -684,23 +688,18 @@ cm_td_start(struct cm_op *op)
         memset(cm->pos_field, 0xff, ceil(tp->meta.npieces / 8.0));
         off_t off = 0;
         for (int i = 0; i < tp->meta.nfiles; i++) {
-            if (sbs[i].size == -1 || sbs[i].size == 0) {
-                uint32_t start = off / tp->meta.piece_length;
-                uint32_t end = (off + tp->meta.files[i].length - 1) /
-                    tp->meta.piece_length;
+            if (sbs[i].size != tp->meta.files[i].length) {
+                uint32_t start, end;
+                end = (off + tp->meta.files[i].length - 1)
+                    / tp->meta.piece_length;
+                if (sbs[i].size == -1)
+                    start = off / tp->meta.piece_length;
+                else
+                    start = (off + sbs[i].size) / tp->meta.piece_length;
                 while (start <= end) {
                     clear_bit(cm->pos_field, start);
                     clear_bit(cm->piece_field, start);
                     bzero(cm->block_field + start * cm->bppbf, cm->bppbf);
-                    start++;
-                }
-            } else if (sbs[i].size < tp->meta.files[i].length) {
-                uint32_t start = (off + sbs[i].size) /
-                    tp->meta.piece_length;
-                uint32_t end = (off + tp->meta.files[i].length - 1) /
-                    tp->meta.piece_length;
-                while (start <= end) {
-                    clear_bit(cm->pos_field, start);
                     start++;
                 }
             }
