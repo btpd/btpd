@@ -562,10 +562,8 @@ test_torrent(struct torrent *tp, volatile sig_atomic_t *cancel)
             break;
         if (test_hash(tp, hash, piece) == 0)
             set_bit(tp->cm->piece_field, piece);
-        else {
+        else
             clear_bit(tp->cm->piece_field, piece);
-            bzero(cm->block_field + piece * cm->bppbf, cm->bppbf);
-        }
         if (*cancel) {
             err = EINTR;
             break;
@@ -741,8 +739,10 @@ cm_td_start(struct cm_op *op)
             if (ok) {
                 set_bit(cm->pos_field, piece);
                 set_bit(cm->piece_field, piece);
-            } else
+            } else {
                 bzero(bf, cm->bppbf);
+                cm->ncontent_bytes -= torrent_piece_size(tp, piece);
+            }
         } else if (nblocks_got > 0)
             set_bit(cm->pos_field, piece);
     }
