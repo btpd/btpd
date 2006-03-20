@@ -7,6 +7,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,13 +65,13 @@ print_stat(struct tpstat *ts)
 {
     printf("%c %5.1f%% %6.1fM %7.2fkB/s %6.1fM %7.2fkB/s %4u %5.1f%%",
         state_char(ts),
-        100.0 * ts->content_got / ts->content_size,
+        floor(1000.0 * ts->content_got / ts->content_size) / 10,
         (double)ts->downloaded / (1 << 20),
         (double)ts->rate_down / (20 << 10),
         (double)ts->uploaded / (1 << 20),
         (double)ts->rate_up / (20 << 10),
         ts->peers,
-        100.0 * ts->pieces_seen / ts->torrent_pieces);
+        floor(1000.0 * ts->pieces_seen / ts->torrent_pieces) / 10);
     if (ts->tr_errors > 0)
         printf(" E%u", ts->tr_errors);
     printf("\n");
