@@ -1,3 +1,14 @@
+btpd 0.9:
+---------
+
+Misc:
+- Small changes to 'btcli stat' output.
+
+Bug fixes:
+- Use correct value for '--prealloc' default.
+- Stopped torrents now show correct rates (0kB/s).
+- The test of content that has been modified between runs was broken.
+
 btpd 0.8:
 ---------
 
