@@ -109,7 +109,7 @@ ipc_buf_req(struct ipc *ipc, struct io_buffer *iob)
 {
     int err;
     char *res;
-    size_t reslen;
+    uint32_t reslen;
 
     err = ipc_req_res(ipc, iob->buf, iob->buf_off, &res, &reslen);
     free(iob->buf);
