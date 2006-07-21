@@ -169,7 +169,7 @@ td_init(void)
         btpd_err("Couldn't create mutex (%s).\n", strerror(err));
 
     event_set(&m_td_ev, m_td_rd, EV_READ|EV_PERSIST, td_cb, NULL);
-    event_add(&m_td_ev, NULL);
+    btpd_ev_add(&m_td_ev, NULL);
 }
 
 void ipc_init(void);
@@ -193,7 +193,7 @@ btpd_init(void)
     signal(SIGPIPE, SIG_IGN);
 
     signal_set(&m_sigint, SIGINT, signal_cb, NULL);
-    signal_add(&m_sigint, NULL);
+    btpd_ev_add(&m_sigint, NULL);
     signal_set(&m_sigterm, SIGTERM, signal_cb, NULL);
-    signal_add(&m_sigterm, NULL);
+    btpd_ev_add(&m_sigterm, NULL);
 }

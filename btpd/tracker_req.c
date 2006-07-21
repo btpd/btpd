@@ -119,7 +119,7 @@ static void
 tr_set_stopped(struct torrent *tp)
 {
     struct tracker *tr = tp->tr;
-    event_del(&tr->timer);
+    btpd_ev_del(&tr->timer);
     tr->ttype = TIMER_NONE;
     if (tr->req != NULL) {
         http_cancel(tr->req);
@@ -139,14 +139,14 @@ http_cb(struct http *req, struct http_res *res, void *arg)
             tr->event != TR_EV_STOPPED) == 0) {
         tr->nerrors = 0;
         tr->ttype = TIMER_INTERVAL;
-        event_add(&tr->timer, (& (struct timeval) { tr->interval, 0 }));
+        btpd_ev_add(&tr->timer, (& (struct timeval) { tr->interval, 0 }));
     } else {
         if (res->res == HRES_FAIL)
             btpd_log(BTPD_L_BTPD, "Tracker request for '%s' failed (%s).\n",
                 torrent_name(tp), res->errmsg);
         tr->nerrors++;
         tr->ttype = TIMER_RETRY;
-        event_add(&tr->timer, RETRY_WAIT);
+        btpd_ev_add(&tr->timer, RETRY_WAIT);
     }
     if (tr->event == TR_EV_STOPPED && (tr->nerrors == 0 || tr->nerrors >= 5))
         tr_set_stopped(tp);
@@ -188,7 +188,7 @@ tr_send(struct torrent *tp, enum tr_event event)
     if (tr->ttype == TIMER_TIMEOUT)
         http_cancel(tr->req);
     tr->ttype = TIMER_TIMEOUT;
-    event_add(&tr->timer, REQ_TIMEOUT);
+    btpd_ev_add(&tr->timer, REQ_TIMEOUT);
 
     qc = (strchr(tp->meta.announce, '?') == NULL) ? '?' : '&';
 
@@ -225,7 +225,7 @@ tr_kill(struct torrent *tp)
 {
     struct tracker *tr = tp->tr;
     tp->tr = NULL;
-    event_del(&tr->timer);
+    btpd_ev_del(&tr->timer);
     if (tr->req != NULL)
         http_cancel(tr->req);
     free(tr);

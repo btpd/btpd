@@ -1,5 +1,6 @@
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 #include "btpd.h"
@@ -20,6 +21,20 @@ btpd_calloc(size_t nmemb, size_t size)
     if ((a = calloc(nmemb, size)) == NULL)
         btpd_err("Failed to allocate %d bytes.\n", (int)(nmemb * size));
     return a;
+}
+
+void
+btpd_ev_add(struct event *ev, struct timeval *tv)
+{
+    if (event_add(ev, tv) != 0)
+        btpd_err("Failed to add event (%s).\n", strerror(errno));
+}
+
+void
+btpd_ev_del(struct event *ev)
+{
+    if (event_del(ev) != 0)
+        btpd_err("Failed to remove event (%s).\n", strerror(errno));
 }
 
 static const char *

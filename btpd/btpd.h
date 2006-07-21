@@ -42,11 +42,13 @@
 void btpd_init(void);
 
 void btpd_log(uint32_t type, const char *fmt, ...);
-
 void btpd_err(const char *fmt, ...);
 
 void *btpd_malloc(size_t size);
 void *btpd_calloc(size_t nmemb, size_t size);
+
+void btpd_ev_add(struct event *ev, struct timeval *tv);
+void btpd_ev_del(struct event *ev);
 
 void btpd_shutdown(int grace_seconds);
 int btpd_is_stopping(void);

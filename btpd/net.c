@@ -178,7 +178,7 @@ net_write(struct peer *p, unsigned long wmax)
     nwritten = writev(p->sd, iov, niov);
     if (nwritten < 0) {
         if (errno == EAGAIN) {
-            event_add(&p->out_ev, WRITE_TIMEOUT);
+            btpd_ev_add(&p->out_ev, WRITE_TIMEOUT);
             return 0;
         } else {
             btpd_log(BTPD_L_CONN, "write error: %s\n", strerror(errno));
@@ -218,7 +218,7 @@ net_write(struct peer *p, unsigned long wmax)
         }
     }
     if (!BTPDQ_EMPTY(&p->outq))
-        event_add(&p->out_ev, WRITE_TIMEOUT);
+        btpd_ev_add(&p->out_ev, WRITE_TIMEOUT);
 
     return nwritten;
 }
@@ -458,7 +458,7 @@ net_read(struct peer *p, unsigned long rmax)
     }
 
 out:
-    event_add(&p->in_ev, NULL);
+    btpd_ev_add(&p->in_ev, NULL);
     return nread > 0 ? nread : 0;
 }
 
@@ -575,7 +575,7 @@ net_bw_cb(int sd, short type, void *arg)
 {
     struct peer *p;
 
-    evtimer_add(&m_bw_timer, (& (struct timeval) { 1, 0 }));
+    btpd_ev_add(&m_bw_timer, (& (struct timeval) { 1, 0 }));
 
     compute_rates();
 
@@ -671,8 +671,8 @@ net_init(void)
 
     event_set(&m_net_incoming, sd, EV_READ | EV_PERSIST,
         net_connection_cb, NULL);
-    event_add(&m_net_incoming, NULL);
+    btpd_ev_add(&m_net_incoming, NULL);
 
     evtimer_set(&m_bw_timer, net_bw_cb, NULL);
-    evtimer_add(&m_bw_timer, (& (struct timeval) { 1, 0 }));
+    btpd_ev_add(&m_bw_timer, (& (struct timeval) { 1, 0 }));
 }

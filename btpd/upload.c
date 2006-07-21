@@ -112,7 +112,7 @@ shuffle_optimists(void)
 static void
 choke_cb(int sd, short type, void *arg)
 {
-    evtimer_add(&m_choke_timer, CHOKE_INTERVAL);
+    btpd_ev_add(&m_choke_timer, CHOKE_INTERVAL);
     static int cb_count = 0;
     cb_count++;
     if (cb_count % 3 == 0)
@@ -193,5 +193,5 @@ ul_init(void)
     }
 
     evtimer_set(&m_choke_timer, choke_cb, NULL);
-    evtimer_add(&m_choke_timer, CHOKE_INTERVAL);
+    btpd_ev_add(&m_choke_timer, CHOKE_INTERVAL);
 }
