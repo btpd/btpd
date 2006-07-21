@@ -54,18 +54,24 @@ logtype_str(uint32_t type)
         return "";
 }
 
+static void
+log_common(uint32_t type, const char *fmt, va_list ap)
+{
+    if (type & btpd_logmask) {
+        char tbuf[20];
+        time_t tp = time(NULL);
+        strftime(tbuf, 20, "%b %e %T", localtime(&tp));
+        printf("%s %s: ", tbuf, logtype_str(type));
+        vprintf(fmt, ap);
+    }
+}
+
 void
 btpd_err(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    if (BTPD_L_ERROR & btpd_logmask) {
-        char tbuf[20];
-        time_t tp = time(NULL);
-        strftime(tbuf, 20, "%b %e %T", localtime(&tp));
-        printf("%s %s: ", tbuf, logtype_str(BTPD_L_ERROR));
-        vprintf(fmt, ap);
-    }
+    log_common(BTPD_L_ERROR, fmt, ap);
     va_end(ap);
     exit(1);
 }
@@ -75,12 +81,6 @@ btpd_log(uint32_t type, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    if (type & btpd_logmask) {
-        char tbuf[20];
-        time_t tp = time(NULL);
-        strftime(tbuf, 20, "%b %e %T", localtime(&tp));
-        printf("%s %s: ", tbuf, logtype_str(type));
-        vprintf(fmt, ap);
-    }
+    log_common(type, fmt, ap);
     va_end(ap);
 }
