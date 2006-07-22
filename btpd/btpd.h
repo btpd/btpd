@@ -39,6 +39,8 @@
 #define BTPD_L_BTPD     0x00000010
 #define BTPD_L_POL      0x00000020
 
+extern long btpd_seconds;
+
 void btpd_init(void);
 
 void btpd_log(uint32_t type, const char *fmt, ...);

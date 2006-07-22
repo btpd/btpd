@@ -66,7 +66,8 @@ peer_send(struct peer *p, struct net_buf *nb)
 
     if (BTPDQ_EMPTY(&p->outq)) {
         assert(p->outq_off == 0);
-        btpd_ev_add(&p->out_ev, WRITE_TIMEOUT);
+        btpd_ev_add(&p->out_ev, NULL);
+        p->t_wantwrite = btpd_seconds;
     }
     BTPDQ_INSERT_TAIL(&p->outq, nl, entry);
 }
@@ -263,6 +264,7 @@ peer_create_common(int sd)
 
     p->sd = sd;
     p->flags = PF_I_CHOKE | PF_P_CHOKE;
+    p->t_created = btpd_seconds;
     BTPDQ_INIT(&p->my_reqs);
     BTPDQ_INIT(&p->outq);
 
@@ -505,6 +507,18 @@ peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
                 peer_unsend(p, data);
             break;
         }
+}
+
+void
+peer_on_tick(struct peer *p)
+{
+    if ((p->flags & PF_ATTACHED) == 0 && btpd_seconds - p->t_created >= 60) {
+        btpd_log(BTPD_L_CONN, "hand shake timed out.\n");
+        peer_kill(p);
+    } else if (!BTPDQ_EMPTY(&p->outq) && btpd_seconds - p->t_wantwrite >= 60) {
+        btpd_log(BTPD_L_CONN, "write attempt timed out.\n");
+        peer_kill(p);
+    }
 }
 
 int

@@ -18,7 +18,6 @@
 
 #include "btpd.h"
 
-static struct event m_bw_timer;
 static unsigned long m_bw_bytes_in;
 static unsigned long m_bw_bytes_out;
 
@@ -178,7 +177,8 @@ net_write(struct peer *p, unsigned long wmax)
     nwritten = writev(p->sd, iov, niov);
     if (nwritten < 0) {
         if (errno == EAGAIN) {
-            btpd_ev_add(&p->out_ev, WRITE_TIMEOUT);
+            btpd_ev_add(&p->out_ev, NULL);
+            p->t_wantwrite = btpd_seconds;
             return 0;
         } else {
             btpd_log(BTPD_L_CONN, "write error: %s\n", strerror(errno));
@@ -217,8 +217,10 @@ net_write(struct peer *p, unsigned long wmax)
             bcount = 0;
         }
     }
-    if (!BTPDQ_EMPTY(&p->outq))
-        btpd_ev_add(&p->out_ev, WRITE_TIMEOUT);
+    if (!BTPDQ_EMPTY(&p->outq)) {
+        btpd_ev_add(&p->out_ev, NULL);
+        p->t_wantwrite = btpd_seconds;
+    }
 
     return nwritten;
 }
@@ -570,14 +572,10 @@ compute_rates(void) {
     m_rate_dwn += tot_dwn - compute_rate_sub(m_rate_dwn);
 }
 
-void
-net_bw_cb(int sd, short type, void *arg)
+static void
+net_bw_tick(void)
 {
     struct peer *p;
-
-    btpd_ev_add(&m_bw_timer, (& (struct timeval) { 1, 0 }));
-
-    compute_rates();
 
     m_bw_bytes_out = net_bw_limit_out;
     m_bw_bytes_in = net_bw_limit_in;
@@ -597,7 +595,8 @@ net_bw_cb(int sd, short type, void *arg)
     }
 
     if (net_bw_limit_out) {
-        while ((p = BTPDQ_FIRST(&net_bw_writeq)) != NULL && m_bw_bytes_out > 0) {
+        while (((p = BTPDQ_FIRST(&net_bw_writeq)) != NULL
+                   && m_bw_bytes_out > 0)) {
             BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
             p->flags &= ~PF_ON_WRITEQ;
             m_bw_bytes_out -=  net_write(p, m_bw_bytes_out);
@@ -609,6 +608,28 @@ net_bw_cb(int sd, short type, void *arg)
             net_write(p, 0);
         }
     }
+}
+
+static void
+run_peer_ticks(void)
+{
+    struct net *n;
+    struct peer *p, *next;
+
+    BTPDQ_FOREACH_MUTABLE(p, &net_unattached, p_entry, next)
+        peer_on_tick(p);
+
+    BTPDQ_FOREACH(n, &m_torrents, entry)
+        BTPDQ_FOREACH_MUTABLE(p, &n->peers, p_entry, next)
+            peer_on_tick(p);
+}
+
+void
+net_on_tick(void)
+{
+    run_peer_ticks();
+    compute_rates();
+    net_bw_tick();
 }
 
 void
@@ -629,16 +650,11 @@ void
 net_write_cb(int sd, short type, void *arg)
 {
     struct peer *p = (struct peer *)arg;
-    if (type == EV_TIMEOUT) {
-        btpd_log(BTPD_L_CONN, "Write attempt timed out.\n");
-        peer_kill(p);
-        return;
-    }
-    if (net_bw_limit_out == 0) {
+    if (net_bw_limit_out == 0)
         net_write(p, 0);
-    } else if (m_bw_bytes_out > 0) {
+    else if (m_bw_bytes_out > 0)
         m_bw_bytes_out -= net_write(p, m_bw_bytes_out);
-    } else {
+    else {
         p->flags |= PF_ON_WRITEQ;
         BTPDQ_INSERT_TAIL(&net_bw_writeq, p, wq_entry);
     }
@@ -672,7 +688,4 @@ net_init(void)
     event_set(&m_net_incoming, sd, EV_READ | EV_PERSIST,
         net_connection_cb, NULL);
     btpd_ev_add(&m_net_incoming, NULL);
-
-    evtimer_set(&m_bw_timer, net_bw_cb, NULL);
-    btpd_ev_add(&m_bw_timer, (& (struct timeval) { 1, 0 }));
 }

@@ -32,7 +32,10 @@
 static uint8_t m_peer_id[20];
 static struct event m_sigint;
 static struct event m_sigterm;
+static struct event m_heartbeat;
 static int m_shutdown;
+
+long btpd_seconds;
 
 void
 btpd_exit(int code)
@@ -90,6 +93,14 @@ signal_cb(int signal, short type, void *arg)
 {
     btpd_log(BTPD_L_BTPD, "Got signal %d.\n", signal);
     btpd_shutdown(30);
+}
+
+static void
+heartbeat_cb(int fd, short type, void *arg)
+{
+    btpd_ev_add(&m_heartbeat, (& (struct timeval) { 1, 0 }));
+    btpd_seconds++;
+    net_on_tick();
 }
 
 struct td_cb {
@@ -196,4 +207,6 @@ btpd_init(void)
     btpd_ev_add(&m_sigint, NULL);
     signal_set(&m_sigterm, SIGTERM, signal_cb, NULL);
     btpd_ev_add(&m_sigterm, NULL);
+    evtimer_set(&m_heartbeat, heartbeat_cb, NULL);
+    btpd_ev_add(&m_heartbeat, (& (struct timeval) { 1, 0 }));
 }

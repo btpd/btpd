@@ -52,6 +52,7 @@ void peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length);
 void peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
     uint32_t length);
+void peer_on_tick(struct peer *p);
 
 int peer_active_down(struct peer *p);
 int peer_active_up(struct peer *p);

@@ -11,14 +11,14 @@
 #define MSG_PIECE       7
 #define MSG_CANCEL      8
 
-#define WRITE_TIMEOUT (& (struct timeval) { 60, 0 })
-
 extern struct peer_tq net_unattached;
 extern struct peer_tq net_bw_readq;
 extern struct peer_tq net_bw_writeq;
 extern unsigned net_npeers;
 
 void net_init(void);
+
+void net_on_tick(void);
 
 void net_create(struct torrent *tp);
 void net_kill(struct torrent *tp);

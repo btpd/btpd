@@ -61,6 +61,9 @@ struct peer {
     unsigned long rate_up, rate_dwn;
     unsigned long count_up, count_dwn;
 
+    long t_created;
+    long t_wantwrite;
+
     struct {
         uint32_t msg_len;
         uint8_t msg_num;
