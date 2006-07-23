@@ -49,7 +49,7 @@ setup_daemon(int daemonize, const char *dir, const char *log)
     if (mkdir("torrents", 0777) == -1 && errno != EEXIST)
         err(1, "Couldn't create torrents subdir");
 
-    if ((pidfd = open("pid", O_CREAT|O_WRONLY, 0666)) == -1)
+    if ((pidfd = open("pid", O_CREAT|O_TRUNC|O_WRONLY, 0666)) == -1)
         err(1, "Couldn't open 'pid'");
 
     if (flock(pidfd, LOCK_NB|LOCK_EX) == -1)
