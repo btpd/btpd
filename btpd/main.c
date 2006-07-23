@@ -31,11 +31,14 @@ setup_daemon(int daemonize, const char *dir, const char *log)
     if (log == NULL)
         log = "log";
 
-    if (dir == NULL)
+    if (dir == NULL) {
         if ((dir = find_btpd_dir()) == NULL)
             errx(1, "Cannot find the btpd directory");
-
-    btpd_dir = dir;
+        else if (dir[0] != '/')
+            errx(1, "got non absolute path '%s' from system environment.",
+                dir);
+        btpd_dir = dir;
+    }
 
     if (mkdir(dir, 0777) == -1 && errno != EEXIST)
         err(1, "Couldn't create home '%s'", dir);
@@ -51,6 +54,13 @@ setup_daemon(int daemonize, const char *dir, const char *log)
 
     if (flock(pidfd, LOCK_NB|LOCK_EX) == -1)
         errx(1, "Another instance of btpd is probably running in %s.", dir);
+
+    if (btpd_dir == NULL) {
+        char wd[PATH_MAX];
+        if (getcwd(wd, PATH_MAX) == NULL)
+            err(1, "couldn't get working directory");
+        btpd_dir = strdup(wd);
+    }
 
     if (daemonize) {
         if (daemon(1, 1) != 0)
