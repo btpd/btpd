@@ -9,5 +9,6 @@ extern unsigned net_bw_limit_in;
 extern unsigned net_bw_limit_out;
 extern int net_port;
 extern off_t cm_alloc_size;
+extern int ipcprot;
 
 #endif

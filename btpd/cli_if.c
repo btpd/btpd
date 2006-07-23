@@ -274,7 +274,7 @@ ipc_init(void)
             btpd_err("bind: %s\n", strerror(errno));
     }
 
-    if (chmod(addr.sun_path, 0600) == -1)
+    if (chmod(addr.sun_path, ipcprot) == -1)
         btpd_err("chmod: %s (%s).\n", addr.sun_path, strerror(errno));
     listen(sd, 4);
     set_nonblocking(sd);

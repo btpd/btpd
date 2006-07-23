@@ -89,6 +89,10 @@ usage(void)
         "--help\n"
         "\tShow this text.\n"
         "\n"
+        "--ipcprot prot\n"
+        "\tChange the protection mode on the command socket to prot.\n"
+        "\tThe mode must be specified in octal. Default is 0600.\n"
+        "\n"
         "--logfile file\n"
         "\tWhere to put the logfile. By default it's put in the btpd dir.\n"
         "\n"
@@ -129,6 +133,7 @@ static struct option longopts[] = {
     { "max-peers", required_argument,   &longval,       5 },
     { "no-daemon", no_argument,         &longval,       6 },
     { "logfile", required_argument,     &longval,       7 },
+    { "ipcprot", required_argument,     &longval,       8 },
     { "help",   no_argument,            &longval,       128 },
     { NULL,     0,                      NULL,           0 }
 };
@@ -173,6 +178,9 @@ main(int argc, char **argv)
                 break;
             case 7:
                 log = optarg;
+                break;
+            case 8:
+                ipcprot = strtol(optarg, NULL, 8);
                 break;
             default:
                 usage();
