@@ -1,3 +1,16 @@
+btpd 0.10:
+----------
+
+Misc:
+- The protection mode of the ipc socket can now be specified via the new
+  "--ipcprot" option for btpd.
+
+Bug fixes:
+- The pid file is now written correctly.
+- btpd's "-d" option now works for relative paths too.
+- Add a time out for handshake completion. Prevously btpd could slowly
+  fill with unused incoming connections.
+
 btpd 0.9:
 ---------
 
