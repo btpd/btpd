@@ -30,9 +30,9 @@ peer_kill(struct peer *p)
     if (p->flags & PF_ON_WRITEQ)
         BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
 
-    close(p->sd);
     btpd_ev_del(&p->in_ev);
     btpd_ev_del(&p->out_ev);
+    close(p->sd);
 
     nl = BTPDQ_FIRST(&p->outq);
     while (nl != NULL) {
