@@ -1,3 +1,10 @@
+btpd 0.11:
+----------
+
+Bug fixes:
+- A file descriptor was closed too early, which could cause btpd to exit
+  with an error message on systems using epoll.
+
 btpd 0.10:
 ----------
 
