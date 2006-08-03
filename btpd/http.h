@@ -24,6 +24,8 @@ int http_get(struct http **ret,
 void http_cancel(struct http *http);
 int http_succeeded(struct http_res *res);
 
+long http_server_busy_time(const char *url, long s);
+
 void http_init(void);
 
 #endif

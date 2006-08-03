@@ -19,6 +19,7 @@ enum http_state {
 };
 
 struct http {
+    long t_created;
     enum http_state state;
     char *url;
     CURL *curlh;
@@ -62,6 +63,7 @@ http_get(struct http **ret,
     h->state = HS_ADD;
     h->cb = cb;
     h->cb_arg = arg;
+    h->t_created = btpd_seconds;
     if ((h->curlh = curl_easy_init()) == NULL)
         btpd_err("Fatal error in curl.\n");
 
@@ -86,6 +88,26 @@ http_get(struct http **ret,
         *ret = h;
 
     return 0;
+}
+
+long
+http_server_busy_time(const char *url, long s)
+{
+    struct http *h;
+    size_t len = strlen(url);
+
+    pthread_mutex_lock(&m_httpq_lock);
+    h = BTPDQ_LAST(&m_httpq, http_tq);
+    while (h != NULL &&
+            !((h->state == HS_ACTIVE || h->state == HS_ADD) &&
+                strncmp(url, h->url, len) == 0))
+        h = BTPDQ_PREV(h, http_tq, entry);
+    pthread_mutex_unlock(&m_httpq_lock);
+
+    if (h == NULL || btpd_seconds - h->t_created >= s)
+        return 0;
+    else
+        return s - (btpd_seconds - h->t_created);
 }
 
 void

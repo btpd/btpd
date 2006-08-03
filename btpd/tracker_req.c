@@ -180,6 +180,7 @@ timer_cb(int fd, short type, void *arg)
 static void
 tr_send(struct torrent *tp, enum tr_event event)
 {
+    long busy_secs;
     char e_hash[61], e_id[61], qc;;
     const uint8_t *peer_id = btpd_get_peer_id();
 
@@ -187,6 +188,13 @@ tr_send(struct torrent *tp, enum tr_event event)
     tr->event = event;
     if (tr->ttype == TIMER_TIMEOUT)
         http_cancel(tr->req);
+
+    if ((busy_secs = http_server_busy_time(tp->meta.announce, 3)) > 0) {
+        tr->ttype = TIMER_RETRY;
+        btpd_ev_add(&tr->timer, (& (struct timeval) { busy_secs, 0 }));
+        return;
+    }
+
     tr->ttype = TIMER_TIMEOUT;
     btpd_ev_add(&tr->timer, REQ_TIMEOUT);
 
