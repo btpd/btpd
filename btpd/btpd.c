@@ -28,6 +28,7 @@
 
 #include "btpd.h"
 #include "http.h"
+#include "active.h"
 
 static uint8_t m_peer_id[20];
 static struct event m_sigint;
@@ -209,4 +210,9 @@ btpd_init(void)
     btpd_ev_add(&m_sigterm, NULL);
     evtimer_set(&m_heartbeat, heartbeat_cb, NULL);
     btpd_ev_add(&m_heartbeat, (& (struct timeval) { 1, 0 }));
+
+    if (!empty_start)
+        active_start();
+    else
+        active_clear();
 }

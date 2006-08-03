@@ -96,6 +96,9 @@ usage(void)
         "-d dir\n"
         "\tThe directory in which to run btpd. Default is '$HOME/.btpd'.\n"
         "\n"
+        "--empty-start\n"
+        "\tStart btpd without any active torrents.\n"
+        "\n"
         "--help\n"
         "\tShow this text.\n"
         "\n"
@@ -144,6 +147,7 @@ static struct option longopts[] = {
     { "no-daemon", no_argument,         &longval,       6 },
     { "logfile", required_argument,     &longval,       7 },
     { "ipcprot", required_argument,     &longval,       8 },
+    { "empty-start", no_argument,       &longval,       9 },
     { "help",   no_argument,            &longval,       128 },
     { NULL,     0,                      NULL,           0 }
 };
@@ -191,6 +195,9 @@ main(int argc, char **argv)
                 break;
             case 8:
                 ipcprot = strtol(optarg, NULL, 8);
+                break;
+            case 9:
+                empty_start = 1;
                 break;
             default:
                 usage();

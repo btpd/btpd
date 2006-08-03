@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "btpd.h"
+#include "active.h"
 #include "tracker_req.h"
 
 struct cli {
@@ -121,8 +122,12 @@ cmd_add(struct cli *cli, int argc, const char *args)
         code = IPC_ERROR;
         goto out;
     }
-    if (torrent_start(hash) != 0)
+    if (torrent_start(hash) != 0) {
         code = IPC_ERROR;
+        goto out;
+    }
+
+    active_add(hash);
 
 out:
     if (content != NULL)
@@ -149,8 +154,10 @@ cmd_del(struct cli *cli, int argc, const char *args)
     // Stopping a torrent may trigger exit so we need to reply before.
     int ret = write_code_buffer(cli, IPC_OK);
     struct torrent *tp = torrent_get(hash);
-    if (tp != NULL)
+    if (tp != NULL) {
         torrent_stop(tp);
+        active_del(hash);
+    }
     return ret;
 }
 

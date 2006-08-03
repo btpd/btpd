@@ -1,5 +1,6 @@
 bin_PROGRAMS=btpd
 btpd_SOURCES=\
+        active.c active.h\
 	btpd.c btpd.h\
 	cli_if.c content.c content.h\
 	download.c download_subr.c download.h\
