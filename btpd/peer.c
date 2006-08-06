@@ -106,6 +106,9 @@ void
 peer_sent(struct peer *p, struct net_buf *nb)
 {
     switch (nb->type) {
+    case NB_KEEPALIVE:
+        btpd_log(BTPD_L_MSG, "sent keepalive to %p\n", p);
+        break;
     case NB_CHOKE:
         btpd_log(BTPD_L_MSG, "sent choke to %p\n", p);
         break;
@@ -173,6 +176,12 @@ peer_requested(struct peer *p, uint32_t piece, uint32_t block)
         if (nb_get_index(req->msg) == piece && nb_get_begin(req->msg) == begin)
             return 1;
     return 0;
+}
+
+void
+peer_keepalive(struct peer *p)
+{
+    peer_send(p, nb_create_keepalive());
 }
 
 void
@@ -266,6 +275,7 @@ peer_create_common(int sd)
     p->sd = sd;
     p->flags = PF_I_CHOKE | PF_P_CHOKE;
     p->t_created = btpd_seconds;
+    p->t_lastwrite = btpd_seconds;
     p->t_nointerest = btpd_seconds;
     BTPDQ_INIT(&p->my_reqs);
     BTPDQ_INIT(&p->outq);
@@ -516,7 +526,10 @@ void
 peer_on_tick(struct peer *p)
 {
     if (p->flags & PF_ATTACHED) {
-        if (!BTPDQ_EMPTY(&p->outq) && btpd_seconds - p->t_wantwrite >= 60) {
+        if (BTPDQ_EMPTY(&p->outq)) {
+            if (btpd_seconds - p->t_lastwrite >= 120)
+                peer_keepalive(p);
+        } else if (btpd_seconds - p->t_wantwrite >= 60) {
             btpd_log(BTPD_L_CONN, "write attempt timed out.\n");
             goto kill;
         }

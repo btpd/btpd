@@ -21,6 +21,7 @@ void peer_send(struct peer *p, struct net_buf *nb);
 int peer_unsend(struct peer *p, struct nb_link *nl);
 void peer_sent(struct peer *p, struct net_buf *nb);
 
+void peer_keepalive(struct peer *p);
 void peer_unchoke(struct peer *p);
 void peer_choke(struct peer *p);
 void peer_unwant(struct peer *p, uint32_t index);

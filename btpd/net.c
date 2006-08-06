@@ -221,6 +221,7 @@ net_write(struct peer *p, unsigned long wmax)
         btpd_ev_add(&p->out_ev, NULL);
         p->t_wantwrite = btpd_seconds;
     }
+    p->t_lastwrite = btpd_seconds;
 
     return nwritten;
 }

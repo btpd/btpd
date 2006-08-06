@@ -7,6 +7,7 @@ static struct net_buf *m_choke;
 static struct net_buf *m_unchoke;
 static struct net_buf *m_interest;
 static struct net_buf *m_uninterest;
+static struct net_buf *m_keepalive;
 
 static void
 kill_buf_no(char *buf, size_t len)
@@ -57,11 +58,23 @@ nb_create_onesized(char mtype, int btype)
     return out;
 }
 
-static struct net_buf *nb_singleton(struct net_buf *nb)
+static struct net_buf *
+nb_singleton(struct net_buf *nb)
 {
     nb_hold(nb);
     nb->kill_buf = kill_buf_abort;
     return nb;
+}
+
+struct net_buf *
+nb_create_keepalive(void)
+{
+    if (m_keepalive == NULL) {
+        m_keepalive = nb_create_alloc(NB_KEEPALIVE, 4);
+        net_write32(m_keepalive->buf, 0);
+        nb_singleton(m_keepalive);
+    }
+    return m_keepalive;
 }
 
 struct net_buf *

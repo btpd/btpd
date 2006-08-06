@@ -14,6 +14,7 @@
 #define NB_MULTIHAVE    11
 #define NB_BITDATA      12
 #define NB_SHAKE        13
+#define NB_KEEPALIVE    14
 
 struct net_buf {
     short type;
@@ -33,6 +34,7 @@ BTPDQ_HEAD(nb_tq, nb_link);
 struct torrent;
 struct peer;
 
+struct net_buf *nb_create_keepalive(void);
 struct net_buf *nb_create_piece(uint32_t index, uint32_t begin, size_t blen);
 struct net_buf *nb_create_torrentdata(char *block, size_t blen);
 struct net_buf *nb_create_request(uint32_t index,

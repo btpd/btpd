@@ -62,6 +62,7 @@ struct peer {
     unsigned long count_up, count_dwn;
 
     long t_created;
+    long t_lastwrite;
     long t_wantwrite;
     long t_nointerest;
 
