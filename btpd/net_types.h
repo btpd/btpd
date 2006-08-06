@@ -63,6 +63,7 @@ struct peer {
 
     long t_created;
     long t_wantwrite;
+    long t_nointerest;
 
     struct {
         uint32_t msg_len;

@@ -250,6 +250,7 @@ peer_unwant(struct peer *p, uint32_t index)
     p->nwant--;
     if (p->nwant == 0) {
         p->flags &= ~PF_I_WANT;
+        p->t_nointerest = btpd_seconds;
         if (p->nreqs_out == 0)
             peer_send(p, nb_create_uninterest());
         else
@@ -265,6 +266,7 @@ peer_create_common(int sd)
     p->sd = sd;
     p->flags = PF_I_CHOKE | PF_P_CHOKE;
     p->t_created = btpd_seconds;
+    p->t_nointerest = btpd_seconds;
     BTPDQ_INIT(&p->my_reqs);
     BTPDQ_INIT(&p->outq);
 
@@ -416,6 +418,7 @@ peer_on_uninterest(struct peer *p)
         return;
     else {
         p->flags &= ~PF_P_WANT;
+        p->t_nointerest = btpd_seconds;
         ul_on_uninterest(p);
     }
 }
@@ -512,13 +515,23 @@ peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
 void
 peer_on_tick(struct peer *p)
 {
-    if ((p->flags & PF_ATTACHED) == 0 && btpd_seconds - p->t_created >= 60) {
-        btpd_log(BTPD_L_CONN, "hand shake timed out.\n");
-        peer_kill(p);
-    } else if (!BTPDQ_EMPTY(&p->outq) && btpd_seconds - p->t_wantwrite >= 60) {
-        btpd_log(BTPD_L_CONN, "write attempt timed out.\n");
-        peer_kill(p);
+    if (p->flags & PF_ATTACHED) {
+        if (!BTPDQ_EMPTY(&p->outq) && btpd_seconds - p->t_wantwrite >= 60) {
+            btpd_log(BTPD_L_CONN, "write attempt timed out.\n");
+            goto kill;
+        }
+        if ((cm_full(p->n->tp) && !(p->flags & PF_P_WANT) &&
+                btpd_seconds - p->t_nointerest >= 600)) {
+            btpd_log(BTPD_L_CONN, "no interest for 10 minutes.\n");
+            goto kill;
+        }
+    } else if (btpd_seconds - p->t_created >= 60) {
+            btpd_log(BTPD_L_CONN, "hand shake timed out.\n");
+            goto kill;
     }
+    return;
+kill:
+    peer_kill(p);
 }
 
 int
