@@ -3,18 +3,18 @@
 
 #include "hashtable.h"
 
-#define KEYP(tbl, o) ((o) + (tbl)->keyoff)
-#define CHAINP(tbl, o) *((void **)((o) + (tbl)->chainoff))
-
 struct _htbl {
     int (*eq)(const void *, const void *);
     uint32_t (*hash)(const void *);
-    void **buckets;
+    struct _any **buckets;
     size_t buckcnt;
     size_t size;
     size_t keyoff;
     size_t chainoff;
 };
+
+#define KEYP(tbl, o) ((void *)(o) + (tbl)->keyoff)
+#define CHAINP(tbl, o) *(struct _any **)((void *)(o) + (tbl)->chainoff)
 
 struct _htbl *
 _htbl_create(int (*eq)(const void *, const void *),
@@ -44,11 +44,11 @@ _htbl_free(struct _htbl *tbl)
     free(tbl);
 }
 
-static void *
-bucket_rev(struct _htbl *tbl, void *p, void *n)
+static struct _any *
+bucket_rev(struct _htbl *tbl, struct _any *p, struct _any *n)
 {
     while (n != NULL) {
-        void *s = CHAINP(tbl, n);
+        struct _any *s = CHAINP(tbl, n);
         CHAINP(tbl, n) = p;
         p = n;
         n = s;
@@ -57,7 +57,7 @@ bucket_rev(struct _htbl *tbl, void *p, void *n)
 }
 
 static void
-bucket_insert(struct _htbl *tbl, void *o)
+bucket_insert(struct _htbl *tbl, struct _any *o)
 {
     size_t bi = tbl->hash(KEYP(tbl, o)) % tbl->buckcnt;
     CHAINP(tbl, o) = tbl->buckets[bi];
@@ -69,8 +69,8 @@ _htbl_grow(struct _htbl *tbl)
 {
     size_t ncnt = 2 * tbl->buckcnt + 1;
     size_t ocnt = tbl->buckcnt;
-    void **obuckets = tbl->buckets;
-    void **nbuckets = calloc(ncnt, sizeof(*nbuckets));
+    struct _any **obuckets = tbl->buckets;
+    struct _any **nbuckets = calloc(ncnt, sizeof(*nbuckets));
     if (nbuckets == NULL)
         return;
 
@@ -78,9 +78,9 @@ _htbl_grow(struct _htbl *tbl)
     tbl->buckets = nbuckets;
 
     for (size_t i = 0; i < ocnt; i++) {
-        void *o = bucket_rev(tbl, NULL, obuckets[i]);
+        struct _any *o = bucket_rev(tbl, NULL, obuckets[i]);
         while (o != NULL) {
-            void *s = CHAINP(tbl, o);
+            struct _any *s = CHAINP(tbl, o);
             bucket_insert(tbl, o);
             o = s;
         }
@@ -90,7 +90,7 @@ _htbl_grow(struct _htbl *tbl)
 }
 
 void
-_htbl_insert(struct _htbl *tbl, void *o)
+_htbl_insert(struct _htbl *tbl, struct _any *o)
 {
     bucket_insert(tbl, o);
     tbl->size++;
@@ -98,21 +98,22 @@ _htbl_insert(struct _htbl *tbl, void *o)
         _htbl_grow(tbl);
 }
 
-void *
+struct _any *
 _htbl_find(struct _htbl *tbl, const void *key)
 {
+    struct _any *ret;
     size_t bi = tbl->hash(key) % tbl->buckcnt;
-    for (void *ret = tbl->buckets[bi]; ret != NULL; ret = CHAINP(tbl, ret))
+    for (ret = tbl->buckets[bi]; ret != NULL; ret = CHAINP(tbl, ret))
         if (tbl->eq(KEYP(tbl, ret), key))
             return ret;
     return NULL;
 }
 
-void *
+struct _any *
 _htbl_remove(struct _htbl *tbl, const void *key)
 {
     size_t bi = tbl->hash(key) % tbl->buckcnt;
-    void *p = NULL, *o = tbl->buckets[bi];
+    struct _any *p = NULL, *o = tbl->buckets[bi];
     while (o != NULL && !tbl->eq(KEYP(tbl, o), key)) {
         p = o;
         o = CHAINP(tbl, o);
@@ -128,11 +129,11 @@ _htbl_remove(struct _htbl *tbl, const void *key)
 }
 
 void
-_htbl_tov(struct _htbl *tbl, void **v)
+_htbl_tov(struct _htbl *tbl, struct _any **v)
 {
     size_t vi = 0;
     size_t bi = 0;
-    void *o = tbl->buckets[bi];
+    struct _any *o = tbl->buckets[bi];
     while (vi < tbl->size) {
         while (o == NULL) {
             bi++;
@@ -159,7 +160,7 @@ _htbl_iter_init(struct _htbl *tbl, struct htbl_iter *it)
     it->obj = NULL;
 }
 
-void *
+struct _any *
 _htbl_iter_next(struct htbl_iter *it)
 {
     if (it->cnt == it->tbl->size)
