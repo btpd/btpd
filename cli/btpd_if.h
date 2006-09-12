@@ -1,44 +1,92 @@
-#ifndef BTPD_IF_H
-#define BTPD_IF_H
+#ifndef BTPD_IPC_H
+#define BTPD_IPC_H
+
+enum ipc_err {
+#define ERRDEF(name, msg) IPC_##name,
+#include "ipcdefs.h"
+#undef ERRDEF
+    IPC_ERRCOUNT
+};
+
+enum ipc_type {
+    IPC_TYPE_ERR,
+    IPC_TYPE_BIN,
+    IPC_TYPE_NUM,
+    IPC_TYPE_STR
+};
+
+enum ipc_tval {
+#define TVDEF(val, type, name) IPC_TVAL_##val,
+#include "ipcdefs.h"
+#undef TVDEF
+    IPC_TVALCOUNT
+};
+
+enum ipc_dval {
+    IPC_DVAL_MIN,
+    IPC_DVAL_MAX
+};
+
+enum ipc_twc {
+    IPC_TWC_ALL,
+    IPC_TWC_ACTIVE,
+    IPC_TWC_INACTIVE
+};
+
+enum ipc_tstate {
+    IPC_TSTATE_INACTIVE,
+    IPC_TSTATE_START,
+    IPC_TSTATE_STOP,
+    IPC_TSTATE_LEECH,
+    IPC_TSTATE_SEED
+};
+
+#ifndef DAEMON
 
 struct ipc;
 
-enum torrent_state { //XXX: Same as in btpd/torrent.h
-    T_STARTING,
-    T_ACTIVE,
-    T_STOPPING
+struct ipc_get_res {
+    enum ipc_type type;
+    union {
+        struct {
+            const char *p;
+            size_t l;
+        } str;
+        long long num;
+    } v;
 };
 
-enum ipc_code {
-    IPC_OK,
-    IPC_FAIL,
-    IPC_ERROR,
-    IPC_COMMERR
+struct ipc_torrent {
+    int by_hash;
+    union {
+        unsigned num;
+        uint8_t hash[20];
+    } u;
 };
 
-struct btstat {
-    unsigned ntorrents;
-    struct tpstat {
-        uint8_t *hash;
-        char *name;
-        enum torrent_state state;
-        unsigned tr_errors;
-        unsigned peers;
-        uint32_t pieces_got, pieces_seen, torrent_pieces;
-        off_t content_got, content_size;
-        unsigned long long downloaded, uploaded;
-        unsigned long rate_up, rate_down;
-    } torrents[];
-};
+typedef void (*tget_cb_t)(int obji, enum ipc_err objerr,
+    struct ipc_get_res *res, void *arg);
+
+//typedef void (*dget_cb_t)(struct ipc_get_res *res, size_t nres, void *arg);
 
 int ipc_open(const char *dir, struct ipc **out);
-int ipc_close(struct ipc *ipc);
+void ipc_close(struct ipc *ipc);
 
-enum ipc_code btpd_add(struct ipc *ipc, const uint8_t *hash,
-    const char *torrent, const char *content);
-enum ipc_code btpd_del(struct ipc *ipc, const uint8_t *hash);
-enum ipc_code btpd_die(struct ipc *ipc, int seconds);
-enum ipc_code btpd_stat(struct ipc *ipc, struct btstat **out);
-void free_btstat(struct btstat *stat);
+const char *ipc_strerror(enum ipc_err err);
+
+enum ipc_err btpd_add(struct ipc *ipc, const char *mi, size_t mi_size,
+    const char *content, const char *name);
+enum ipc_err btpd_del(struct ipc *ipc, struct ipc_torrent *tp);
+enum ipc_err btpd_start(struct ipc *ipc, struct ipc_torrent *tp);
+enum ipc_err btpd_stop(struct ipc *ipc, struct ipc_torrent *tp);
+enum ipc_err btpd_die(struct ipc *ipc, int seconds);
+enum ipc_err btpd_get(struct ipc *ipc, enum ipc_dval *keys, size_t nkeys,
+    tget_cb_t cb, void *arg);
+enum ipc_err btpd_tget(struct ipc *ipc, struct ipc_torrent *tps, size_t ntps,
+    enum ipc_tval *keys, size_t nkeys, tget_cb_t cb, void *arg);
+enum ipc_err btpd_tget_wc(struct ipc *ipc, enum ipc_twc, enum ipc_tval *keys,
+    size_t nkeys, tget_cb_t cb, void *arg);
+
+#endif
 
 #endif

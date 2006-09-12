@@ -2,6 +2,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
@@ -19,6 +20,36 @@
 struct ipc {
     int sd;
 };
+
+static const char *errmsgs[] = {
+#define ERRDEF(name, msg) msg,
+#include "ipcdefs.h"
+#undef ERRDEF
+    NULL
+};
+
+static const char *tval_names[] = {
+#define TVDEF(val, type, name) name,
+#include "ipcdefs.h"
+#undef TVDEF
+    NULL
+};
+
+const char *
+ipc_strerror(enum ipc_err err)
+{
+    if (err < 0 || err >= IPC_ERRCOUNT)
+        return "unknown error";
+    return errmsgs[err];
+}
+
+const char *
+tval_name(enum ipc_tval key)
+{
+    if (key < 0 || key >= IPC_TVALCOUNT)
+        return "unknown key";
+    return tval_names[key];
+}
 
 int
 ipc_open(const char *dir, struct ipc **out)
@@ -52,76 +83,76 @@ ipc_open(const char *dir, struct ipc **out)
     return 0;
 }
 
-int
+void
 ipc_close(struct ipc *ipc)
 {
-    int err;
-    err = close(ipc->sd);
+    close(ipc->sd);
     free(ipc);
-    return err;
 }
 
-static int
+static enum ipc_err
 ipc_response(struct ipc *ipc, char **out, uint32_t *len)
 {
     uint32_t size;
     char *buf;
 
-    if ((errno = read_fully(ipc->sd, &size, sizeof(size))) != 0)
-        return errno;
-
+    if (read_fully(ipc->sd, &size, sizeof(size)) != 0)
+        return IPC_COMMERR;
     if (size == 0)
-        return ECONNRESET;
-
+        return IPC_COMMERR;
     if ((buf = malloc(size)) == NULL)
-        return ENOMEM;
-
-    if ((errno = read_fully(ipc->sd, buf, size)) != 0) {
+        return IPC_COMMERR;
+    if (read_fully(ipc->sd, buf, size) != 0) {
         free(buf);
-        return errno;
+        return IPC_COMMERR;
     }
-
     *out = buf;
     *len = size;
-    return 0;
+    return IPC_OK;
 }
 
-static int
+static enum ipc_err
 ipc_req_res(struct ipc *ipc, const char *req, uint32_t qlen, char **res,
     uint32_t *rlen)
 {
-    if ((errno = write_fully(ipc->sd, &qlen, sizeof(qlen))) != 0)
-        goto error;
-    if ((errno = write_fully(ipc->sd, req, qlen)) != 0)
-        goto error;
-    if ((errno = ipc_response(ipc, res, rlen)) != 0)
-        goto error;
-    if ((errno = benc_validate(*res, *rlen)) != 0)
-        goto error;
-    if (!benc_isdct(*res))
-        errno = EINVAL;
-error:
-    return errno;
-}
-
-static enum ipc_code
-ipc_buf_req(struct ipc *ipc, struct io_buffer *iob)
-{
-    int err;
-    char *res;
-    uint32_t reslen;
-
-    err = ipc_req_res(ipc, iob->buf, iob->buf_off, &res, &reslen);
-    free(iob->buf);
-    if (err != 0)
+    assert(benc_validate(req, qlen) == 0);
+    if (write_fully(ipc->sd, &qlen, sizeof(qlen)) != 0)
         return IPC_COMMERR;
-    int code;
-    code = benc_dget_int(res, "code");
-    free(res);
-    return code;
+    if (write_fully(ipc->sd, req, qlen) != 0)
+        return IPC_COMMERR;
+    if (ipc_response(ipc, res, rlen) != 0)
+        return IPC_COMMERR;
+    if (benc_validate(*res, *rlen) != 0)
+        return IPC_COMMERR;
+    if (!benc_isdct(*res))
+        return IPC_COMMERR;
+    return IPC_OK;
 }
 
-enum ipc_code
+static enum ipc_err
+ipc_buf_req_res(struct ipc *ipc, struct io_buffer *iob, char **res,
+    uint32_t *rlen)
+{
+    enum ipc_err err = ipc_req_res(ipc, iob->buf, iob->buf_off, res, rlen);
+    free(iob->buf);
+    return err;
+}
+
+static enum ipc_err
+ipc_buf_req_code(struct ipc *ipc, struct io_buffer *iob)
+{
+    enum ipc_err err;
+    char *res;
+    uint32_t rlen;
+
+    if ((err = ipc_buf_req_res(ipc, iob, &res, &rlen)) == 0) {
+        err = benc_dget_int(res, "code");
+        free(res);
+    }
+    return err;
+}
+
+enum ipc_err
 btpd_die(struct ipc *ipc, int seconds)
 {
     struct io_buffer iob;
@@ -130,99 +161,153 @@ btpd_die(struct ipc *ipc, int seconds)
         buf_print(&iob, "l3:diei%dee", seconds);
     else
         buf_swrite(&iob, "l3:diee");
-    return ipc_buf_req(ipc, &iob);
+    return ipc_buf_req_code(ipc, &iob);
 }
 
-enum ipc_code
-parse_btstat(const uint8_t *res, struct btstat **out)
+static enum ipc_err
+tget_common(char *ans, enum ipc_tval *keys, size_t nkeys, tget_cb_t cb,
+    void *arg)
 {
-    int code;
-    unsigned ntorrents;
-    const char *tlst;
+    int err;
+    const char *res;
+    struct ipc_get_res cbres[IPC_TVALCOUNT];
 
-    code = benc_dget_int(res, "code");
-    if (code != IPC_OK)
-        return code;
+    if ((err = benc_dget_int(ans, "code")) != 0)
+        return err;
 
-    ntorrents = benc_dget_int(res, "ntorrents");
-    tlst = benc_dget_lst(res, "torrents");
-
-    struct btstat *st =
-        malloc(sizeof(struct btstat) + sizeof(struct tpstat) * ntorrents);
-
-    st->ntorrents = ntorrents;
-    int i = 0;
-    for (const char *tp = benc_first(tlst); tp != NULL; tp = benc_next(tp)) {
-        struct tpstat *ts = &st->torrents[i];
-        ts->hash = benc_dget_mema(tp, "info hash", NULL);
-        ts->name = benc_dget_str(tp, "name", NULL);
-        ts->state = benc_dget_int(tp, "state");
-        ts->peers = benc_dget_int(tp, "peers");
-        ts->tr_errors = benc_dget_int(tp, "tracker errors");
-        ts->content_got = benc_dget_int(tp, "content got");
-        ts->content_size = benc_dget_int(tp, "content size");
-        ts->pieces_got = benc_dget_int(tp, "pieces got");
-        ts->pieces_seen = benc_dget_int(tp, "pieces seen");
-        ts->torrent_pieces = benc_dget_int(tp, "torrent pieces");
-        ts->downloaded = benc_dget_int(tp, "downloaded");
-        ts->uploaded = benc_dget_int(tp, "uploaded");
-        ts->rate_down = benc_dget_int(tp, "rate down");
-        ts->rate_up = benc_dget_int(tp, "rate up");
-        i++;
+    res = benc_dget_lst(ans, "result");
+    int obji = 0;
+    for (res = benc_first(res); res != NULL; res = benc_next(res)) {
+        if (benc_isint(res)) {
+            cb(obji, benc_int(res, NULL), NULL, arg);
+            obji++;
+            continue;
+        }
+        const char *t = benc_first(res);
+        const char *v = benc_next(t);
+        for (int j = 0; j < nkeys; j++) {
+            cbres[keys[j]].type = benc_int(t, NULL);
+            switch (cbres[keys[j]].type) {
+            case IPC_TYPE_ERR:
+            case IPC_TYPE_NUM:
+                cbres[keys[j]].v.num = benc_int(v, NULL);
+                break;
+            case IPC_TYPE_STR:
+            case IPC_TYPE_BIN:
+                cbres[keys[j]].v.str.p= benc_mem(v, &cbres[keys[j]].v.str.l,
+                    NULL);
+                break;
+            }
+            t = benc_next(v);
+            if (t != NULL)
+                v = benc_next(t);
+        }
+        cb(obji, IPC_OK, cbres, arg);
+        obji++;
     }
-    *out = st;
+
+    free(ans);
     return IPC_OK;
 }
 
-void
-free_btstat(struct btstat *st)
+enum ipc_err
+btpd_tget(struct ipc *ipc, struct ipc_torrent *tps, size_t ntps,
+    enum ipc_tval *keys, size_t nkeys, tget_cb_t cb, void *arg)
 {
-    for (unsigned i = 0; i < st->ntorrents; i++) {
-        if (st->torrents[i].hash != NULL)
-            free(st->torrents[i].hash);
-        if (st->torrents[i].name != NULL)
-            free(st->torrents[i].name);
-    }
-    free(st);
-}
-
-enum ipc_code
-btpd_stat(struct ipc *ipc, struct btstat **out)
-{
-    int err;
-    const char cmd[] = "l4:state";
-    uint32_t cmdlen = sizeof(cmd) - 1;
     char *res;
-    uint32_t reslen;
+    uint32_t rlen;
+    enum ipc_err err;
+    struct io_buffer iob;
 
-    if ((err = ipc_req_res(ipc, cmd, cmdlen, &res, &reslen)) != 0)
+    if (nkeys == 0 || ntps == 0)
         return IPC_COMMERR;
 
-    err = parse_btstat(res, out);
-    free(res);
+    buf_init(&iob, 1 << 14);
+    buf_swrite(&iob, "l4:tgetd4:froml");
+    for (int i = 0; i < ntps; i++) {
+        if (tps[i].by_hash) {
+            buf_swrite(&iob, "20:");
+            buf_write(&iob, tps[i].u.hash, 20);
+        } else
+            buf_print(&iob, "i%ue", tps[i].u.num);
+    }
+    buf_swrite(&iob, "e4:keysl");
+    for (int k = 0; k < nkeys; k++)
+        buf_print(&iob, "i%de", keys[k]);
+    buf_swrite(&iob, "eee");
+
+    if ((err = ipc_buf_req_res(ipc, &iob, &res, &rlen)) == 0)
+        err = tget_common(res, keys, nkeys, cb, arg);
     return err;
 }
 
-enum ipc_code
-btpd_add(struct ipc *ipc, const uint8_t *hash, const char *torrent,
-    const char *content)
+enum ipc_err
+btpd_tget_wc(struct ipc *ipc, enum ipc_twc twc, enum ipc_tval *keys,
+    size_t nkeys, tget_cb_t cb, void *arg)
+{
+    char *res;
+    uint32_t rlen;
+    struct io_buffer iob;
+    enum ipc_err err;
+
+    if (nkeys == 0)
+        return IPC_COMMERR;
+
+    buf_init(&iob, 1 << 14);
+    buf_print(&iob, "l4:tgetd4:fromi%de4:keysl", twc);
+    for (int i = 0; i < nkeys; i++)
+        buf_print(&iob, "i%de", keys[i]);
+    buf_swrite(&iob, "eee");
+
+    if ((err = ipc_buf_req_res(ipc, &iob, &res, &rlen)) == 0)
+        err = tget_common(res, keys, nkeys, cb, arg);
+    return err;
+}
+
+enum ipc_err
+btpd_add(struct ipc *ipc, const char *mi, size_t mi_size, const char *content,
+    const char *name)
 {
     struct io_buffer iob;
     buf_init(&iob, (1 << 10));
-    buf_print(&iob, "l3:addd7:content%d:%s4:hash20:", (int)strlen(content),
+    buf_print(&iob, "l3:addd7:content%d:%s", (int)strlen(content),
         content);
-    buf_write(&iob, hash, 20);
-    buf_print(&iob, "7:torrent%d:%see", (int)strlen(torrent), torrent);
-    return ipc_buf_req(ipc, &iob);
+    if (name != NULL)
+        buf_print(&iob, "4:name%d:%s", (int)strlen(name), name);
+    buf_print(&iob, "7:torrent%lu:", (unsigned long)mi_size);
+    buf_write(&iob, mi, mi_size);
+    buf_swrite(&iob, "ee");
+    return ipc_buf_req_code(ipc, &iob);
 }
 
-enum ipc_code
-btpd_del(struct ipc *ipc, const uint8_t *hash)
+static enum ipc_err
+simple_treq(struct ipc *ipc, char *cmd, struct ipc_torrent *tp)
 {
     struct io_buffer iob;
     buf_init(&iob, 32);
-    buf_swrite(&iob, "l3:del20:");
-    buf_write(&iob, hash, 20);
-    buf_write(&iob, "e", 1);
-    return ipc_buf_req(ipc, &iob);
+    if (tp->by_hash) {
+        buf_print(&iob, "l%d:%s20:", (int)strlen(cmd), cmd);
+        buf_write(&iob, tp->u.hash, 20);
+        buf_swrite(&iob, "e");
+    } else
+        buf_print(&iob, "l%d:%si%uee", (int)strlen(cmd), cmd, tp->u.num);
+    return ipc_buf_req_code(ipc, &iob);
+}
+
+enum ipc_err
+btpd_del(struct ipc *ipc, struct ipc_torrent *tp)
+{
+    return simple_treq(ipc, "del", tp);
+}
+
+enum ipc_err
+btpd_start(struct ipc *ipc, struct ipc_torrent *tp)
+{
+    return simple_treq(ipc, "start", tp);
+}
+
+enum ipc_err
+btpd_stop(struct ipc *ipc, struct ipc_torrent *tp)
+{
+    return simple_treq(ipc, "stop", tp);
 }
