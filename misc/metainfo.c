@@ -1,14 +1,7 @@
-#include <sys/types.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-
 #include <errno.h>
-#include <fcntl.h>
 #include <inttypes.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include <openssl/sha.h>
 
@@ -19,6 +12,7 @@
 /*
  * d
  * announce = url
+ * announce-list = l l url ... e ... e
  * info = d
  *   name = advisory file/dir save name
  *   piece length = power of two length of each block
@@ -30,30 +24,236 @@
  *
  */
 
-void
-print_metainfo(struct metainfo *tp)
+uint8_t *
+mi_hashes(const char *p)
 {
-    unsigned i;
+    return benc_dget_mema(benc_dget_dct(p, "info"), "pieces", NULL);
+}
 
-    printf("Info hash: ");
-    for (i = 0; i < 20; i++)
-        printf("%.2x", tp->info_hash[i]);
-    printf("\n");
-    printf("Tracker URL: %s\n", tp->announce);
-    printf("Piece length: %lld\n", (long long)tp->piece_length);
-    printf("Number of pieces: %u\n", tp->npieces);
-    printf("Number of files: %u\n", tp->nfiles);
-    printf("Advisory name: %s\n", tp->name);
-    printf("Files:\n");
-    for (i = 0; i < tp->nfiles; i++) {
-        printf("%s (%lld)\n",
-            tp->files[i].path, (long long)tp->files[i].length);
+size_t
+mi_npieces(const char *p)
+{
+    size_t plen;
+    benc_dget_mem(benc_dget_dct(p, "info"), "pieces", &plen);
+    return plen / 20;
+}
+
+int
+mi_simple(const char *p)
+{
+    return benc_dget_lst(benc_dget_dct(p, "info"), "files") == NULL;
+}
+
+void
+mi_free_announce(struct mi_announce *ann)
+{
+    if (ann->tiers != NULL) {
+        for (int ti = 0; ti < ann->ntiers; ti++)
+            if (ann->tiers[ti].urls != NULL) {
+                for (int ui = 0; ui < ann->tiers[ti].nurls; ui++)
+                    if (ann->tiers[ti].urls[ui] != NULL)
+                        free(ann->tiers[ti].urls[ui]);
+                free(ann->tiers[ti].urls);
+            }
+        free(ann->tiers);
     }
-    printf("Total length: %lld\n\n", (long long)tp->total_length);
+    free(ann);
+}
+
+static void
+mi_shuffle_announce(struct mi_announce *ann)
+{
+    for (int i = 0; i < ann->ntiers; i++) {
+        for (int j = 0; j < ann->tiers[i].nurls - 1; j++) {
+            char *tmp = ann->tiers[i].urls[j];
+            int ri = rand_between(j, ann->tiers[i].nurls - 1);
+            ann->tiers[i].urls[j] = ann->tiers[i].urls[ri];
+            ann->tiers[i].urls[ri] = tmp;
+        }
+    }
+}
+
+struct mi_announce *
+mi_announce(const char *p)
+{
+    int ti, ui;
+    const char *alst, *ulst, *url;
+    struct mi_announce *res;
+
+    if ((res = calloc(1, sizeof(*res))) == NULL)
+        return NULL;
+
+    if ((alst = benc_dget_lst(p, "announce-list")) != NULL) {
+        res->ntiers = benc_nelems(alst);
+        if ((res->tiers = calloc(res->ntiers, sizeof(*res->tiers))) == NULL)
+            goto error;
+        ti = 0; ulst = benc_first(alst);
+        while (ulst != NULL) {
+            res->tiers[ti].nurls = benc_nelems(ulst);
+            res->tiers[ti].urls =
+                calloc(res->tiers[ti].nurls, sizeof(*res->tiers[ti].urls));
+            if (res->tiers[ti].urls == NULL)
+                goto error;
+
+            ui = 0; url = benc_first(ulst);
+            while (url != NULL) {
+                if ((res->tiers[ti].urls[ui] =
+                        benc_str(url, NULL, NULL)) == NULL)
+                    goto error;
+                ui++; url = benc_next(url);
+            }
+
+            ti++; ulst = benc_next(ulst);
+        }
+    } else {
+        res->ntiers = 1;
+        if ((res->tiers = calloc(1, sizeof(*res->tiers))) == NULL)
+            goto error;
+        res->tiers[0].nurls = 1;
+        if ((res->tiers[0].urls =
+                calloc(1, sizeof(*res->tiers[0].urls))) == NULL)
+            goto error;
+        if ((res->tiers[0].urls[0] =
+                benc_dget_str(p, "announce", NULL)) == NULL)
+            goto error;
+    }
+    mi_shuffle_announce(res);
+    return res;
+
+error:
+    if (res != NULL)
+        mi_free_announce(res);
+    return NULL;
+}
+
+off_t
+mi_piece_length(const char *p)
+{
+    return benc_dget_int(benc_dget_dct(p, "info"), "piece length");
+}
+
+off_t
+mi_total_length(const char *p)
+{
+    const char *info = benc_dget_dct(p, "info");
+    const char *files = benc_dget_lst(info, "files");
+    if (files != NULL) {
+        off_t length = 0;
+        const char *fdct = benc_first(files);
+        while (fdct != NULL) {
+            length += benc_dget_int(fdct, "length");
+            fdct = benc_next(fdct);
+        }
+        return length;
+    } else
+        return benc_dget_int(info, "length");
+}
+
+uint8_t *
+mi_info_hash(const char *p, uint8_t *hash)
+{
+    const char *info = benc_dget_dct(p, "info");
+    if (hash == NULL)
+        if ((hash = malloc(20)) == NULL)
+            return NULL;
+    return SHA1(info, benc_length(info), hash);
+}
+
+char *
+mi_name(const char *p)
+{
+    return benc_dget_str(benc_dget_dct(p, "info"), "name", NULL);
+}
+
+size_t
+mi_nfiles(const char *p)
+{
+    const char *files = benc_dget_lst(benc_dget_dct(p, "info"), "files");
+    if (files != NULL)
+        return benc_nelems(files);
+    else
+        return 1;
+}
+
+static char *
+mi_filepath(const char *plst)
+{
+    char *res = NULL;
+    const char *str;
+    size_t npaths = 0, plen = 0, len;
+    const char *iter = benc_first(plst);
+
+    while (iter != NULL) {
+        benc_mem(iter, &len, &iter);
+        npaths++;
+        plen += len;
+    }
+
+    if ((res = malloc(plen + (npaths - 1) + 1)) == NULL)
+        return NULL;
+
+    iter = benc_first(plst);
+    str = benc_mem(iter, &len, &iter);
+    bcopy(str, res, len);
+    plen = len;
+    npaths--;
+    while (npaths > 0) {
+        res[plen] = '/';
+        plen++;
+        str = benc_mem(iter, &len, &iter);
+        bcopy(str, res + plen, len);
+        plen += len;
+        npaths--;
+    }
+    res[plen] = '\0';
+    return res;
+}
+
+void
+mi_free_files(unsigned nfiles, struct mi_file *files)
+{
+    for (unsigned i = 0; i < nfiles; i++)
+        if (files[i].path != NULL)
+            free(files[i].path);
+    free(files);
+}
+
+struct mi_file *
+mi_files(const char *p)
+{
+    struct mi_file *fi;
+    const char *info = benc_dget_dct(p, "info");
+    const char *files = benc_dget_lst(info, "files");
+    if (files != NULL) {
+        int i = 0;
+        unsigned nfiles = benc_nelems(files);
+        const char *fdct = benc_first(files);
+        if ((fi = calloc(nfiles, sizeof(*fi))) == NULL)
+            return NULL;
+        for (fdct = benc_first(files); fdct != NULL; fdct = benc_next(fdct)) {
+            fi[i].length = benc_dget_int(fdct, "length");
+            fi[i].path = mi_filepath(benc_dget_lst(fdct, "path"));
+            if (fi[i].path == NULL) {
+                mi_free_files(nfiles, fi);
+                return NULL;
+            }
+            i++;
+        }
+    } else {
+        if ((fi = calloc(1, sizeof(*fi))) == NULL)
+            return NULL;
+        fi[0].length = benc_dget_int(info, "length");
+        fi[0].path = benc_dget_str(info, "name", NULL);
+        if (fi[0].path == NULL) {
+            free(fi);
+            return NULL;
+        }
+    }
+    return fi;
 }
 
 static int
-check_path(const char *path, size_t len)
+mi_test_path(const char *path, size_t len)
 {
     if (len == 0)
         return 0;
@@ -66,189 +266,125 @@ check_path(const char *path, size_t len)
     return 1;
 }
 
-int
-fill_fileinfo(const char *fdct, struct fileinfo *tfp)
+static int
+mi_test_files(const char *files)
 {
-    size_t npath, plen, len;
-    const char *plst, *iter, *str;
-
-    if (!benc_dct_chk(fdct, 2, BE_INT, 1, "length", BE_LST, 1, "path"))
-        return EINVAL;
-
-    tfp->length = benc_dget_int(fdct, "length");
-    plst = benc_dget_lst(fdct, "path");
-
-    npath = plen = 0;
-    iter = benc_first(plst);
-    while (iter != NULL) {
-        if (!benc_isstr(iter))
-            return EINVAL;
-        str = benc_mem(iter, &len, &iter);
-        if (!check_path(str, len))
-            return EINVAL;
-        npath++;
-        plen += len;
+    int fcount = 0;
+    const char *fdct = benc_first(files);
+    while (fdct != NULL) {
+        const char *plst;
+        const char *path;
+        int pcount = 0;
+        if (!benc_isdct(fdct))
+            return 0;
+        if (benc_dget_int(fdct, "length") <= 0)
+            return 0;
+        if ((plst = benc_dget_lst(fdct, "path")) == NULL)
+            return 0;
+        path = benc_first(plst);
+        while (path != NULL) {
+            size_t plen;
+            const char *pstr = benc_mem(path, &plen, &path);
+            if (pstr == NULL || !mi_test_path(pstr, plen))
+                return 0;
+            pcount++;
+        }
+        if (pcount == 0)
+            return 0;
+        fcount++;
+        fdct = benc_next(fdct);
     }
-    if (npath == 0)
-        return EINVAL;
-
-    if ((tfp->path = malloc(plen + (npath - 1) + 1)) == NULL)
-        return ENOMEM;
-
-    iter = benc_first(plst);
-    str = benc_mem(iter, &len, &iter);
-    memcpy(tfp->path, str, len);
-    plen = len;
-    npath--;
-    while (npath > 0) {
-        tfp->path[plen++] = '/';
-        str = benc_mem(iter, &len, &iter);
-        memcpy(tfp->path + plen, str, len);
-        plen += len;
-        npath--;
-    }
-    tfp->path[plen] = '\0';
-    return 0;
+    return fcount > 0 ? 1 : 0;
 }
 
-void
-clear_metainfo(struct metainfo *mip)
+static int
+mi_test_announce_list(const char *alst)
 {
-    int i;
-    if (mip->piece_hash != NULL)
-        free(mip->piece_hash);
-    if (mip->announce != NULL)
-        free(mip->announce);
-    if (mip->files != NULL) {
-        for (i = 0; i < mip->nfiles; i++) {
-            if (mip->files[i].path != NULL)
-                free(mip->files[i].path);
+    int lstcount = 0;
+    const char *t = benc_first(alst);
+    while (t != NULL && benc_islst(t)) {
+        int strcount = 0;
+        const char *s = benc_first(t);
+        while (s != NULL && benc_isstr(s)) {
+            strcount++;
+            s = benc_next(s);
         }
-        free(mip->files);
+        if (strcount == 0)
+            return 0;
+        lstcount++;
+        t = benc_next(t);
     }
-    if (mip->name != NULL)
-        free(mip->name);
+    return lstcount > 0 ? 1 : 0;
 }
 
 int
-fill_metainfo(const char *bep, struct metainfo *tp, int mem_hashes)
+mi_test(const char *p, size_t size)
 {
-    size_t len;
-    int err = 0;
-    const char *base_addr = bep;
-    const char *hash_addr;
+    const char *info;
+    const char *alst;
+    const char *pieces;
+    const char *files;
+    const char *fdct;
+    const char *name;
+    size_t slen, npieces;
+    off_t length = 0, piece_length;
 
-    if (!benc_dct_chk(bep, 5,
-            BE_STR, 1, "announce",
-            BE_DCT, 1, "info",
-            BE_INT, 2, "info", "piece length",
-            BE_STR, 2, "info", "pieces",
-            BE_STR, 2, "info", "name"))
-        return EINVAL;
+    if (benc_validate(p, size) != 0 || !benc_isdct(p))
+        return 0;
 
-    if ((tp->announce = benc_dget_str(bep, "announce", NULL)) == NULL) {
-        err = ENOMEM;
-        goto out;
-    }
-    bep = benc_dget_dct(bep, "info");
-    SHA1(bep, benc_length(bep), tp->info_hash);
-    tp->piece_length = benc_dget_int(bep, "piece length");
-    hash_addr = benc_dget_mem(bep, "pieces", &len);
-    tp->npieces = len / 20;
-    tp->pieces_off = hash_addr - base_addr;
-    if (mem_hashes) {
-        tp->piece_hash = (uint8_t (*)[20])benc_dget_mema(bep, "pieces", NULL);
-        if (tp->piece_hash == NULL) {
-            err = ENOMEM;
-            goto out;
+    if ((alst = benc_dget_any(p, "announce-list")) != NULL) {
+        if (!benc_islst(alst))
+            return 0;
+        if (!mi_test_announce_list(alst))
+            return 0;
+    } else if (benc_dget_mem(p, "announce", NULL) == NULL)
+        return 0;
+
+    if ((info = benc_dget_dct(p, "info")) == NULL)
+        return 0;
+    if ((name = benc_dget_mem(info, "name", &slen)) != NULL)
+        if (!mi_test_path(name, slen))
+            return 0;
+    if ((piece_length = benc_dget_int(info, "piece length")) <= 0)
+        return 0;
+    if ((pieces = benc_dget_mem(info, "pieces", &slen)) == NULL ||
+            slen % 20 != 0)
+        return 0;
+    npieces = slen / 20;
+    if ((length = benc_dget_int(info, "length")) != 0) {
+        if (length < 0 || benc_dget_any(info, "files") != NULL)
+            return 0;
+    } else {
+        if ((files = benc_dget_lst(info, "files")) == NULL)
+            return 0;
+        if (!mi_test_files(files))
+            return 0;
+        fdct = benc_first(files);
+        while (fdct != NULL) {
+            length += benc_dget_int(fdct, "length");
+            fdct = benc_next(fdct);
         }
     }
-    tp->name = benc_dget_str(bep, "name", NULL);
-
-    if (benc_dct_chk(bep, 1, BE_INT, 1, "length")) {
-        tp->total_length = benc_dget_int(bep, "length");
-        tp->nfiles = 1;
-        tp->files = calloc(1, sizeof(struct fileinfo));
-        if (tp->files != NULL) {
-            tp->files[0].length = tp->total_length;
-            tp->files[0].path = strdup(tp->name);
-            if (tp->files[0].path == NULL) {
-                err = ENOMEM;
-                goto out;
-            }
-        } else {
-            err = ENOMEM;
-            goto out;
-        }
-    } else if (benc_dct_chk(bep, 1, BE_LST, 1, "files")) {
-        int i;
-        const char *flst, *fdct;
-
-        flst = benc_dget_lst(bep, "files");
-        tp->nfiles = benc_nelems(flst);
-        if (tp->nfiles < 1) {
-            err = EINVAL;
-            goto out;
-        }
-        tp->files = calloc(tp->nfiles, sizeof(struct fileinfo));
-
-        tp->total_length = 0;
-        i = 0;
-        for (fdct = benc_first(flst); fdct != NULL; fdct = benc_next(fdct)) {
-            if (!benc_isdct(fdct)) {
-                err = EINVAL;
-                goto out;
-            }
-
-            if ((err = fill_fileinfo(fdct, &tp->files[i])) != 0)
-                goto out;
-
-            tp->total_length += tp->files[i].length;
-            i++;
-        }
-    }
-    else
-        goto out;
-out:
-    if (err != 0)
-        clear_metainfo(tp);
-
-    return err;
+    if (length < (npieces - 1) * piece_length ||
+            length > npieces * piece_length)
+        return 0;
+    return 1;
 }
 
-int
-load_metainfo(const char *path, off_t size, int mem_hashes,
-              struct metainfo **res)
+char *
+mi_load(const char *path, size_t *size)
 {
-    char *buf;
-    int fd, err = 0;
+    void *res = NULL;
+    size_t mi_size = (1 << 21);
 
-    if ((fd = open(path, O_RDONLY)) == -1)
-        return errno;
-
-    if (size <= 0) {
-        struct stat sb;
-        if (fstat(fd, &sb) == -1) {
-            close(fd);
-            return errno;
-        } else
-            size = sb.st_size;
+    if ((errno = read_whole_file(&res, &mi_size, path)) != 0)
+        return NULL;
+    if (!mi_test(res, mi_size)) {
+        free(res);
+        errno = EINVAL;
+        return NULL;
     }
-
-    if ((buf = mmap(0, size, PROT_READ, MAP_PRIVATE, fd, 0)) == MAP_FAILED)
-        err = errno;
-    close(fd);
-
-    if (err == 0)
-        err = benc_validate(buf, size);
-
-    if (err == 0)
-        if ((*res = calloc(1, sizeof(**res))) == NULL)
-            err = ENOMEM;
-    if (err == 0)
-        if ((err = fill_metainfo(buf, *res, mem_hashes)) != 0)
-            free(*res);
-
-    munmap(buf, size);
-    return err;
+    if (size != NULL)
+        *size = mi_size;
+    return res;
 }
