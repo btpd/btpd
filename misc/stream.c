@@ -179,35 +179,3 @@ bts_sha(struct bt_stream *bts, off_t start, off_t length, uint8_t *hash)
     SHA1_Final(hash, &ctx);
     return err;
 }
-
-int
-bts_hashes(struct metainfo *meta, fdcb_t fd_cb, hashcb_t cb, void *arg)
-{
-    int err = 0;
-    uint8_t hash[SHA_DIGEST_LENGTH];
-    uint32_t piece;
-    struct bt_stream *bts;
-    off_t plen = meta->piece_length;
-    off_t llen = meta->total_length % plen;
-
-    if ((err = bts_open(&bts, meta, fd_cb, arg)) != 0)
-        return err;
-
-    for (piece = 0; piece < meta->npieces; piece++) {
-        off_t start = piece * plen;
-        if (piece < meta->npieces - 1)
-            err = bts_sha(bts, start, plen, hash);
-        else
-            err = bts_sha(bts, start, llen, hash);
-
-        if (err == 0)
-            cb(piece, hash, arg);
-        else if (err == ENOENT) {
-            cb(piece, NULL, arg);
-            err = 0;
-        } else
-            break;
-    }
-    bts_close(bts);
-    return err;
-}

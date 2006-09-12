@@ -18,12 +18,9 @@ struct bt_stream {
 
 int bts_open(struct bt_stream **res, unsigned nfiles, struct mi_file *files,
     fdcb_t fd_cb, void *fd_arg);
+int bts_close(struct bt_stream *bts);
 int bts_get(struct bt_stream *bts, off_t off, uint8_t *buf, size_t len);
 int bts_put(struct bt_stream *bts, off_t off, const uint8_t *buf, size_t len);
-int bts_close(struct bt_stream *bts);
-
 int bts_sha(struct bt_stream *bts, off_t start, off_t length, uint8_t *hash);
-int bts_hashes(struct metainfo *meta, fdcb_t fd_cb, hashcb_t hash_cb,
-    void *arg);
 
 #endif
