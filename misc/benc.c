@@ -79,6 +79,13 @@ benc_validate_aux(const char *p, const char *end)
 }
 
 size_t
+benc_strlen(const char *p)
+{
+    char *endptr;
+    return strtoul(p, &endptr, 10);
+}
+
+size_t
 benc_length(const char *p)
 {
     size_t blen;

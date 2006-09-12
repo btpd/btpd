@@ -17,6 +17,7 @@ int benc_isdct(const char *p);
 int benc_isint(const char *p);
 int benc_isstr(const char *p);
 
+size_t benc_strlen(const char *p);
 size_t benc_length(const char *p);
 size_t benc_nelems(const char *p);
 
