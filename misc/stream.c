@@ -12,17 +12,21 @@
 #include "stream.h"
 
 int
-bts_open(struct bt_stream **res, struct metainfo *meta, fdcb_t fd_cb,
-    void *fd_arg)
+bts_open(struct bt_stream **res, unsigned nfiles, struct mi_file *files,
+    fdcb_t fd_cb, void *fd_arg)
 {
     struct bt_stream *bts = calloc(1, sizeof(*bts));
     if (bts == NULL)
         return ENOMEM;
 
-    bts->meta = meta;
+    bts->nfiles = nfiles;
+    bts->files = files;
     bts->fd_cb = fd_cb;
     bts->fd_arg = fd_arg;
     bts->fd = -1;
+
+    for (unsigned i = 0; i < bts->nfiles; i++)
+        bts->totlen += bts->files[i].length;
 
     *res = bts;
     return 0;
@@ -46,10 +50,9 @@ bts_seek(struct bt_stream *bts, off_t off)
 
     bts->t_off = off;
 
-    struct fileinfo *files = bts->meta->files;
     unsigned i;
-    for (i = 0; off >= files[i].length; i++)
-        off -= files[i].length;
+    for (i = 0; off >= bts->files[i].length; i++)
+        off -= bts->files[i].length;
 
     if (i != bts->index) {
         if (bts->fd != -1) {
@@ -69,26 +72,26 @@ bts_seek(struct bt_stream *bts, off_t off)
 int
 bts_get(struct bt_stream *bts, off_t off, uint8_t *buf, size_t len)
 {
-    struct fileinfo *files = bts->meta->files;
     size_t boff, wantread;
     ssize_t didread;
     int err;
 
-    assert(off + len <= bts->meta->total_length);
+    assert(off + len <= bts->totlen);
     if ((err = bts_seek(bts, off)) != 0)
         return err;
 
     boff = 0;
     while (boff < len) {
         if (bts->fd == -1) {
-            err = bts->fd_cb(files[bts->index].path, &bts->fd, bts->fd_arg);
+            err = bts->fd_cb(bts->files[bts->index].path,
+                &bts->fd, bts->fd_arg);
             if (err != 0)
                 return err;
             if (bts->f_off != 0)
                 lseek(bts->fd, bts->f_off, SEEK_SET);
         }
 
-        wantread = min(len - boff, files[bts->index].length - bts->f_off);
+        wantread = min(len - boff, bts->files[bts->index].length - bts->f_off);
         didread = read(bts->fd, buf + boff, wantread);
         if (didread == -1)
             return errno;
@@ -96,7 +99,7 @@ bts_get(struct bt_stream *bts, off_t off, uint8_t *buf, size_t len)
         boff += didread;
         bts->f_off += didread;
         bts->t_off += didread;
-        if (bts->f_off == files[bts->index].length) {
+        if (bts->f_off == bts->files[bts->index].length) {
             close(bts->fd);
             bts->fd = -1;
             bts->f_off = 0;
@@ -111,26 +114,26 @@ bts_get(struct bt_stream *bts, off_t off, uint8_t *buf, size_t len)
 int
 bts_put(struct bt_stream *bts, off_t off, const uint8_t *buf, size_t len)
 {
-    struct fileinfo *files = bts->meta->files;
     size_t boff, wantwrite;
     ssize_t didwrite;
     int err;
 
-    assert(off + len <= bts->meta->total_length);
+    assert(off + len <= bts->totlen);
     if ((err = bts_seek(bts, off)) != 0)
         return err;
 
     boff = 0;
     while (boff < len) {
         if (bts->fd == -1) {
-            err = bts->fd_cb(files[bts->index].path, &bts->fd, bts->fd_arg);
+            err = bts->fd_cb(bts->files[bts->index].path,
+                &bts->fd, bts->fd_arg);
             if (err != 0)
                 return err;
             if (bts->f_off != 0)
                 lseek(bts->fd, bts->f_off, SEEK_SET);
         }
 
-        wantwrite = min(len - boff, files[bts->index].length - bts->f_off);
+        wantwrite = min(len - boff, bts->files[bts->index].length - bts->f_off);
         didwrite = write(bts->fd, buf + boff, wantwrite);
         if (didwrite == -1)
             return errno;
@@ -138,7 +141,7 @@ bts_put(struct bt_stream *bts, off_t off, const uint8_t *buf, size_t len)
         boff += didwrite;
         bts->f_off += didwrite;
         bts->t_off += didwrite;
-        if (bts->f_off == files[bts->index].length) {
+        if (bts->f_off == bts->files[bts->index].length) {
             if (fsync(bts->fd) == -1) {
                 int err = errno;
                 close(bts->fd);
