@@ -17,6 +17,7 @@ struct http_res {
     size_t length;
 };
 
+__attribute__((format (printf, 4, 5)))
 int http_get(struct http **ret,
     void (*cb)(struct http *, struct http_res *, void *),
     void *arg,
