@@ -31,21 +31,29 @@ print_metainfo(const char *mi)
     unsigned nfiles = mi_nfiles(mi);
     struct mi_file *files = mi_files(mi);
     struct mi_announce *ann = mi_announce(mi);
-    for (int i = 0; i < ann->ntiers; i++)
+    printf("Name: %s\n", name);
+    printf("Info hash: %s\n", bin2hex(mi_info_hash(mi, hash), hex, 20));
+    printf("Tracker URLs: [ ");
+    for (int i = 0; i < ann->ntiers; i++) {
+        printf("[ ");
         for (int j = 0; j < ann->tiers[i].nurls; j++)
-            printf("%d: %s\n", i, ann->tiers[i].urls[j]);
+            printf("%s ", ann->tiers[i].urls[j]);
+        printf("] ");
+    }
+    printf("]\n");
+    printf("Number of pieces: %lu\n", (unsigned long)mi_npieces(mi));
+    printf("Piece size: %lld\n", (long long)mi_piece_length(mi));
+    printf("Total size: %lld\n", (long long)mi_total_length(mi));
+    printf("Number of files: %u\n", nfiles);
+    printf("Files:\n");
+    for (int i = 0; i < nfiles; i++) {
+        printf("%s (%lld)\n",
+            files[i].path, (long long)files[i].length);
+    }
     printf("\n");
-    mi_free_announce(ann);
-    mi_info_hash(mi, hash);
-    bin2hex(hash, hex, 20);
-    printf("name: %s\n", name);
-    printf("info hash: %s\n", hex);
-    printf("length: %jd\n", (intmax_t)mi_total_length(mi));
-    printf("piece length: %jd\n", (intmax_t)mi_piece_length(mi));
-    printf("files: %u\n", nfiles);
-    for (unsigned i = 0; i < nfiles; i++)
-        printf("%s(%jd)\n", files[i].path, (intmax_t)files[i].length);
     free(name);
+    mi_free_files(nfiles, files);
+    mi_free_announce(ann);
 }
 
 int
