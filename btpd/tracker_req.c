@@ -17,6 +17,7 @@ enum tr_event {
     TR_EV_EMPTY
 };
 
+static long m_key;
 static const char *m_events[] = { "started", "stopped", "completed", "" };
 
 enum timer_type {
@@ -237,9 +238,9 @@ tr_send(struct torrent *tp, enum tr_event event)
         snprintf(e_id + i * 3, 4, "%%%.2x", peer_id[i]);
 
     http_get(&tr->req, http_cb, tp,
-        "%s%cinfo_hash=%s&peer_id=%s&port=%d&uploaded=%llu"
+        "%s%cinfo_hash=%s&peer_id=%s&key=%ld&port=%d&uploaded=%llu"
         "&downloaded=%llu&left=%llu&compact=1%s%s",
-        get_url(tr), qc, e_hash, e_id, net_port,
+        get_url(tr), qc, e_hash, e_id, m_key, net_port,
         tp->net->uploaded, tp->net->downloaded,
         (long long)tp->total_length - cm_content(tp),
         event == TR_EV_EMPTY ? "" : "&event=", m_events[event]);
@@ -304,4 +305,10 @@ unsigned
 tr_errors(struct torrent *tp)
 {
     return tp->tr->nerrors;
+}
+
+void
+tr_init(void)
+{
+    m_key = random();
 }

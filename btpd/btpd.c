@@ -184,6 +184,7 @@ td_init(void)
     btpd_ev_add(&m_td_ev, NULL);
 }
 
+void tr_init(void);
 void ipc_init(void);
 
 void
@@ -201,6 +202,7 @@ btpd_init(void)
     ipc_init();
     ul_init();
     cm_init();
+    tr_init();
     tlib_init();
 
     signal(SIGPIPE, SIG_IGN);
