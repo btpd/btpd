@@ -70,7 +70,7 @@ cmd_add(int argc, char **argv)
     if ((mi = mi_load(argv[0], &mi_size)) == NULL)
         err(1, "error loading '%s'", argv[0]);
 
-    buf_init(&iob, PATH_MAX);
+    iob = buf_init(PATH_MAX);
     buf_write(&iob, dir, dirlen);
     if (topdir) {
         size_t tdlen;

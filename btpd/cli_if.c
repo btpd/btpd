@@ -27,21 +27,19 @@ write_buffer(struct cli *cli, struct io_buffer *iob)
 {
     int err = 0;
     if (!iob->error) {
-        uint32_t len = iob->buf_off;
+        uint32_t len = iob->off;
         write_fully(cli->sd, &len, sizeof(len));
-        err = write_fully(cli->sd, iob->buf, iob->buf_off);
+        err = write_fully(cli->sd, iob->buf, iob->off);
     } else
         btpd_err("Out of memory.\n");
-    if (iob->buf != NULL)
-        free(iob->buf);
+    buf_free(iob);
     return err;
 }
 
 static int
 write_code_buffer(struct cli *cli, enum ipc_err code)
 {
-    struct io_buffer iob;
-    buf_init(&iob, 16);
+    struct io_buffer iob = buf_init(16);
     buf_print(&iob, "d4:codei%uee", code);
     return write_buffer(cli, &iob);
 }
@@ -49,8 +47,7 @@ write_code_buffer(struct cli *cli, enum ipc_err code)
 static int
 write_add_buffer(struct cli *cli, unsigned num)
 {
-    struct io_buffer iob;
-    buf_init(&iob, 32);
+    struct io_buffer iob = buf_init(32);
     buf_print(&iob, "d4:codei%ue3:numi%uee", IPC_OK, num);
     return write_buffer(cli, &iob);
 }
@@ -200,7 +197,7 @@ cmd_tget(struct cli *cli, int argc, const char *args)
     for (int i = 0; i < nkeys; i++)
         opts[i] = benc_int(p, &p);
 
-    buf_init(&iob, (1 << 15));
+    iob = buf_init(1 << 15);
     buf_swrite(&iob, "d4:codei0e6:resultl");
     p = benc_dget_any(args, "from");
     if (benc_isint(p)) {
@@ -225,7 +222,7 @@ cmd_tget(struct cli *cli, int argc, const char *args)
             else if (benc_isstr(p) && benc_strlen(p) == 20)
                 tl = tlib_by_hash(benc_mem(p, NULL, NULL));
             else {
-                free(iob.buf);
+                buf_free(&iob);
                 free(opts);
                 return IPC_COMMERR;
             }

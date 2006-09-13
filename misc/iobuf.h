@@ -2,13 +2,14 @@
 #define BTPD_IOBUF_H
 
 struct io_buffer {
-    size_t buf_off;
-    size_t buf_len;
+    size_t off;
+    size_t len;
     char *buf;
     int error;
 };
 
-int buf_init(struct io_buffer *iob, size_t size);
+struct io_buffer buf_init(size_t size);
+void buf_free(struct io_buffer *iob);
 int buf_grow(struct io_buffer *iob, size_t size);
 int buf_write(struct io_buffer *iob, const void *data, size_t size);
 __attribute__((format (printf, 2, 3)))

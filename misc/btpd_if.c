@@ -115,7 +115,6 @@ static enum ipc_err
 ipc_req_res(struct ipc *ipc, const char *req, uint32_t qlen, char **res,
     uint32_t *rlen)
 {
-    assert(benc_validate(req, qlen) == 0);
     if (write_fully(ipc->sd, &qlen, sizeof(qlen)) != 0)
         return IPC_COMMERR;
     if (write_fully(ipc->sd, req, qlen) != 0)
@@ -133,8 +132,12 @@ static enum ipc_err
 ipc_buf_req_res(struct ipc *ipc, struct io_buffer *iob, char **res,
     uint32_t *rlen)
 {
-    enum ipc_err err = ipc_req_res(ipc, iob->buf, iob->buf_off, res, rlen);
-    free(iob->buf);
+    enum ipc_err err;
+    if (iob->error)
+        err = IPC_COMMERR;
+    else 
+        err = ipc_req_res(ipc, iob->buf, iob->off, res, rlen);
+    buf_free(iob);
     return err;
 }
 
@@ -155,8 +158,7 @@ ipc_buf_req_code(struct ipc *ipc, struct io_buffer *iob)
 enum ipc_err
 btpd_die(struct ipc *ipc, int seconds)
 {
-    struct io_buffer iob;
-    buf_init(&iob, 16);
+    struct io_buffer iob = buf_init(16);
     if (seconds >= 0)
         buf_print(&iob, "l3:diei%dee", seconds);
     else
@@ -222,7 +224,7 @@ btpd_tget(struct ipc *ipc, struct ipc_torrent *tps, size_t ntps,
     if (nkeys == 0 || ntps == 0)
         return IPC_COMMERR;
 
-    buf_init(&iob, 1 << 14);
+    iob = buf_init(1 << 14);
     buf_swrite(&iob, "l4:tgetd4:froml");
     for (int i = 0; i < ntps; i++) {
         if (tps[i].by_hash) {
@@ -253,7 +255,7 @@ btpd_tget_wc(struct ipc *ipc, enum ipc_twc twc, enum ipc_tval *keys,
     if (nkeys == 0)
         return IPC_COMMERR;
 
-    buf_init(&iob, 1 << 14);
+    iob = buf_init(1 << 14);
     buf_print(&iob, "l4:tgetd4:fromi%de4:keysl", twc);
     for (int i = 0; i < nkeys; i++)
         buf_print(&iob, "i%de", keys[i]);
@@ -268,8 +270,7 @@ enum ipc_err
 btpd_add(struct ipc *ipc, const char *mi, size_t mi_size, const char *content,
     const char *name)
 {
-    struct io_buffer iob;
-    buf_init(&iob, (1 << 10));
+    struct io_buffer iob = buf_init(1 << 10);
     buf_print(&iob, "l3:addd7:content%d:%s", (int)strlen(content),
         content);
     if (name != NULL)
@@ -283,8 +284,7 @@ btpd_add(struct ipc *ipc, const char *mi, size_t mi_size, const char *content,
 static enum ipc_err
 simple_treq(struct ipc *ipc, char *cmd, struct ipc_torrent *tp)
 {
-    struct io_buffer iob;
-    buf_init(&iob, 32);
+    struct io_buffer iob = buf_init(32);
     if (tp->by_hash) {
         buf_print(&iob, "l%d:%s20:", (int)strlen(cmd), cmd);
         buf_write(&iob, tp->u.hash, 20);
