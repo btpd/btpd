@@ -27,11 +27,12 @@ enum timer_type {
 };
 
 struct tracker {
-    struct mi_announce *ann;
     enum timer_type ttype;
     enum tr_event event;
     int interval;
     unsigned nerrors;
+    int tier, url;
+    struct mi_announce *ann;
     struct http *req;
     struct event timer;
 };
@@ -129,6 +130,33 @@ tr_set_stopped(struct torrent *tp)
     torrent_on_tr_stopped(tp);
 }
 
+static char *
+get_url(struct tracker *tr)
+{
+    return tr->ann->tiers[tr->tier].urls[tr->url];
+}
+
+static void
+good_url(struct tracker *tr)
+{
+    char *set = tr->ann->tiers[tr->tier].urls[tr->url], *hold;
+    for (int i = 0; i <= tr->url; i++) {
+        hold = tr->ann->tiers[tr->tier].urls[i];
+        tr->ann->tiers[tr->tier].urls[i] = set;
+        set = hold;
+    }
+    tr->tier = 0;
+    tr->url = 0;
+}
+
+static void
+next_url(struct tracker *tr)
+{
+    tr->url = (tr->url + 1) % tr->ann->tiers[tr->tier].nurls;
+    if (tr->url == 0)
+        tr->tier = (tr->tier + 1) % tr->ann->ntiers;
+}
+
 static void
 http_cb(struct http *req, struct http_res *res, void *arg)
 {
@@ -138,6 +166,7 @@ http_cb(struct http *req, struct http_res *res, void *arg)
     tr->req = NULL;
     if (res->res == HRES_OK && parse_reply(tp, res->content, res->length,
             tr->event != TR_EV_STOPPED) == 0) {
+        good_url(tr);
         tr->nerrors = 0;
         tr->ttype = TIMER_INTERVAL;
         btpd_ev_add(&tr->timer, (& (struct timeval) { tr->interval, 0 }));
@@ -168,6 +197,7 @@ timer_cb(int fd, short type, void *arg)
             break;
         }
     case TIMER_RETRY:
+        next_url(tr);
         tr_send(tp, tr->event);
         break;
     case TIMER_INTERVAL:
@@ -190,7 +220,7 @@ tr_send(struct torrent *tp, enum tr_event event)
     if (tr->ttype == TIMER_TIMEOUT)
         http_cancel(tr->req);
 
-    if ((busy_secs = http_server_busy_time(tr->ann->tiers[0].urls[0], 3)) > 0) {
+    if ((busy_secs = http_server_busy_time(get_url(tr), 3)) > 0) {
         tr->ttype = TIMER_RETRY;
         btpd_ev_add(&tr->timer, (& (struct timeval) { busy_secs, 0 }));
         return;
@@ -199,7 +229,7 @@ tr_send(struct torrent *tp, enum tr_event event)
     tr->ttype = TIMER_TIMEOUT;
     btpd_ev_add(&tr->timer, REQ_TIMEOUT);
 
-    qc = (strchr(tr->ann->tiers[0].urls[0], '?') == NULL) ? '?' : '&';
+    qc = (strchr(get_url(tr), '?') == NULL) ? '?' : '&';
 
     for (int i = 0; i < 20; i++)
         snprintf(e_hash + i * 3, 4, "%%%.2x", tp->tl->hash[i]);
@@ -209,7 +239,7 @@ tr_send(struct torrent *tp, enum tr_event event)
     http_get(&tr->req, http_cb, tp,
         "%s%cinfo_hash=%s&peer_id=%s&port=%d&uploaded=%llu"
         "&downloaded=%llu&left=%llu&compact=1%s%s",
-        tr->ann->tiers[0].urls[0], qc, e_hash, e_id, net_port,
+        get_url(tr), qc, e_hash, e_id, net_port,
         tp->net->uploaded, tp->net->downloaded,
         (long long)tp->total_length - cm_content(tp),
         event == TR_EV_EMPTY ? "" : "&event=", m_events[event]);
@@ -218,18 +248,9 @@ tr_send(struct torrent *tp, enum tr_event event)
 int
 tr_create(struct torrent *tp, const char *mi)
 {
-    struct mi_announce *ann = mi_announce(mi);
-    if (ann == NULL)
-        btpd_err("out of memory.\n");
-    if (strncmp(ann->tiers[0].urls[0],
-            "http://", sizeof("http://") - 1) != 0) {
-        btpd_log(BTPD_L_ERROR,
-            "btpd currently has no support for the protocol specified in "
-            "'%s'.\n", ann->tiers[0].urls[0]);
-        return EINVAL;
-    }
     tp->tr = btpd_calloc(1, sizeof(*tp->tr));
-    tp->tr->ann = ann;
+    if ((tp->tr->ann = mi_announce(mi)) == NULL)
+        btpd_err("Out of memory.\n");
     evtimer_set(&tp->tr->timer, timer_cb, tp);
     return 0;
 }
