@@ -357,10 +357,10 @@ peer_on_shake(struct peer *p)
         printid[i] = p->id[i];
     printid[i] = '\0';
     btpd_log(BTPD_L_MSG, "received shake(%s) from %p\n", printid, p);
-    p->piece_field = btpd_calloc(1, (int)ceil(p->n->tp->meta.npieces / 8.0));
+    p->piece_field = btpd_calloc(1, (int)ceil(p->n->tp->npieces / 8.0));
     if (cm_pieces(p->n->tp) > 0) {
         if ((cm_pieces(p->n->tp) * 9 < 5 +
-                ceil(p->n->tp->meta.npieces / 8.0)))
+                ceil(p->n->tp->npieces / 8.0)))
             peer_send(p, nb_create_multihave(p->n->tp));
         else {
             peer_send(p, nb_create_bitfield(p->n->tp));
@@ -449,8 +449,8 @@ peer_on_bitfield(struct peer *p, const uint8_t *field)
 {
     btpd_log(BTPD_L_MSG, "received bitfield from %p\n", p);
     assert(p->npieces == 0);
-    bcopy(field, p->piece_field, (size_t)ceil(p->n->tp->meta.npieces / 8.0));
-    for (uint32_t i = 0; i < p->n->tp->meta.npieces; i++) {
+    bcopy(field, p->piece_field, (size_t)ceil(p->n->tp->npieces / 8.0));
+    for (uint32_t i = 0; i < p->n->tp->npieces; i++) {
         if (has_bit(p->piece_field, i)) {
             p->npieces++;
             dl_on_piece_ann(p, i);
@@ -593,5 +593,5 @@ peer_active_up(struct peer *p)
 int
 peer_full(struct peer *p)
 {
-    return p->npieces == p->n->tp->meta.npieces;
+    return p->npieces == p->n->tp->npieces;
 }

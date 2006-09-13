@@ -148,7 +148,7 @@ dl_on_lost_peer(struct peer *p)
 {
     struct net *n = p->n;
 
-    for (uint32_t i = 0; i < n->tp->meta.npieces; i++)
+    for (uint32_t i = 0; i < n->tp->npieces; i++)
         if (peer_has(p, i))
             n->piece_count[i]--;
 

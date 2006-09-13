@@ -201,6 +201,7 @@ btpd_init(void)
     ipc_init();
     ul_init();
     cm_init();
+    tlib_init();
 
     signal(SIGPIPE, SIG_IGN);
 

@@ -22,13 +22,6 @@ struct cli {
 
 static struct event m_cli_incoming;
 
-enum ipc_code { // XXX: Same as in cli/btpd_if.h
-    IPC_OK,
-    IPC_FAIL,
-    IPC_ERROR,
-    IPC_COMMERR
-};
-
 static int
 write_buffer(struct cli *cli, struct io_buffer *iob)
 {
@@ -45,7 +38,7 @@ write_buffer(struct cli *cli, struct io_buffer *iob)
 }
 
 static int
-write_code_buffer(struct cli *cli, enum ipc_code code)
+write_code_buffer(struct cli *cli, enum ipc_err code)
 {
     struct io_buffer iob;
     buf_init(&iob, 16);
@@ -54,111 +47,314 @@ write_code_buffer(struct cli *cli, enum ipc_code code)
 }
 
 static int
-cmd_stat(struct cli *cli, int argc, const char *args)
+write_add_buffer(struct cli *cli, unsigned num)
 {
-    struct torrent *tp;
     struct io_buffer iob;
-    buf_init(&iob, (1 << 14));
+    buf_init(&iob, 32);
+    buf_print(&iob, "d4:codei%ue3:numi%uee", IPC_OK, num);
+    return write_buffer(cli, &iob);
+}
 
-    buf_swrite(&iob, "d");
-    buf_swrite(&iob, "4:codei0e");
-    buf_print(&iob, "6:npeersi%ue", net_npeers);
-    buf_print(&iob, "9:ntorrentsi%ue", torrent_count());
-    buf_swrite(&iob, "8:torrentsl");
-    BTPDQ_FOREACH(tp, torrent_get_all(), entry) {
-        const char *name = torrent_name(tp);
-        uint32_t seen_npieces = 0;
-        for (uint32_t i = 0; i < tp->meta.npieces; i++)
-            if (tp->net->piece_count[i] > 0)
-                seen_npieces++;
+static void
+write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
+{
+    enum ipc_tstate ts = IPC_TSTATE_INACTIVE;
+    switch (val) {
+    case IPC_TVAL_CGOT:
+        if (tl->tp == NULL)
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+        else
+            buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+                (long long)cm_content(tl->tp));
+        return;
+    case IPC_TVAL_CSIZE:
+        if (tl->tp == NULL)
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+        else
+            buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+                (long long)tl->tp->total_length);
+        return;
+    case IPC_TVAL_PCCOUNT:
+        if (tl->tp == NULL)
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+        else
+            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
+                (unsigned long)tl->tp->npieces);
+        return;
+    case IPC_TVAL_PCGOT:
+        if (tl->tp == NULL)
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+        else
+            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
+                (unsigned long)cm_pieces(tl->tp));
+        return;
+    case IPC_TVAL_PCSEEN:
+        if (tl->tp == NULL)
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+        else {
+            unsigned long pcseen = 0;
+            for (unsigned long i = 0; i < tl->tp->npieces; i++)
+                if (tl->tp->net->piece_count[i] > 0)
+                    pcseen++;
+            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM, pcseen);
+        }
+        return;
+    case IPC_TVAL_RATEDWN:
+        if (tl->tp == NULL)
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+        else
+            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM, tl->tp->net->rate_dwn);
+        return;
+    case IPC_TVAL_RATEUP:
+        if (tl->tp == NULL)
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+        else
+            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM, tl->tp->net->rate_up);
+        return;
+    case IPC_TVAL_SESSDWN:
+        if (tl->tp == NULL)
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+        else
+            buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+                tl->tp->net->downloaded);
+        return;
+    case IPC_TVAL_SESSUP:
+        if (tl->tp == NULL)
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+        else
+            buf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->tp->net->uploaded);
+        return;
+    case IPC_TVAL_DIR:
+        if (tl->dir != NULL)
+            buf_print(iob, "i%de%d:%s", IPC_TYPE_STR, (int)strlen(tl->dir),
+                tl->dir);
+        else
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_EBADTENT);
+        return;
+    case IPC_TVAL_NAME:
+        if (tl->name != NULL)
+            buf_print(iob, "i%de%d:%s", IPC_TYPE_STR, (int)strlen(tl->name),
+                tl->name);
+        else
+            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_EBADTENT);
+        return;
+    case IPC_TVAL_IHASH:
+        buf_print(iob, "i%de20:", IPC_TYPE_BIN);
+        buf_write(iob, tl->hash, 20);
+        return;
+    case IPC_TVAL_NUM:
+        buf_print(iob, "i%dei%ue", IPC_TYPE_NUM, tl->num);
+        return;
+    case IPC_TVAL_PCOUNT:
+        buf_print(iob, "i%dei%ue", IPC_TYPE_NUM,
+            tl->tp == NULL ? 0 : tl->tp->net->npeers);
+        return;
+    case IPC_TVAL_STATE:
+        buf_print(iob, "i%de", IPC_TYPE_NUM);
+        if (tl->tp != NULL) {
+            switch (tl->tp->state) {
+            case T_STARTING:
+                ts = IPC_TSTATE_START;
+                break;
+            case T_STOPPING:
+                ts= IPC_TSTATE_STOP;
+                break;
+            case T_ACTIVE:
+                if (cm_full(tl->tp))
+                    ts = IPC_TSTATE_SEED;
+                else
+                    ts = IPC_TSTATE_LEECH;
+                break;
+            }
+        }
+        buf_print(iob, "i%de", ts);
+        return;
+    case IPC_TVAL_TRERR:
+        buf_print(iob, "i%dei%ue", IPC_TYPE_NUM,
+            tl->tp == NULL ? 0 : tr_errors(tl->tp));
+        return;
+    case IPC_TVALCOUNT:
+        break;
+    }
+    buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ENOKEY);
+}
 
-        buf_swrite(&iob, "d");
-        buf_print(&iob, "11:content goti%llde", (long long)cm_content(tp));
-        buf_print(&iob, "12:content sizei%llde",
-            (long long)tp->meta.total_length);
-        buf_print(&iob, "10:downloadedi%llde", tp->net->downloaded);
-        buf_swrite(&iob, "9:info hash20:");
-        buf_write(&iob, tp->meta.info_hash, 20);
-        buf_print(&iob, "4:name%d:%s", (int)strlen(name), name);
-        buf_print(&iob, "5:peersi%ue", tp->net->npeers);
-        buf_print(&iob, "10:pieces goti%ue", cm_pieces(tp));
-        buf_print(&iob, "11:pieces seeni%ue", seen_npieces);
-        buf_print(&iob, "9:rate downi%lue", tp->net->rate_dwn);
-        buf_print(&iob, "7:rate upi%lue", tp->net->rate_up);
-        buf_print(&iob, "5:statei%ue", tp->state);
-        buf_print(&iob, "14:torrent piecesi%ue", tp->meta.npieces);
-        buf_print(&iob, "14:tracker errorsi%ue", tr_errors(tp));
-        buf_print(&iob, "8:uploadedi%llde", tp->net->uploaded);
-        buf_swrite(&iob, "e");
+static int
+cmd_tget(struct cli *cli, int argc, const char *args)
+{
+    if (argc != 1 || !benc_isdct(args))
+        return IPC_COMMERR;
+
+    size_t nkeys;
+    const char *keys, *p;
+    enum ipc_tval *opts;
+    struct io_buffer iob;
+
+    if ((keys = benc_dget_lst(args, "keys")) == NULL)
+        return IPC_COMMERR;
+
+    nkeys = benc_nelems(keys);
+    opts = btpd_calloc(nkeys, sizeof(*opts));
+
+    p = benc_first(keys);
+    for (int i = 0; i < nkeys; i++)
+        opts[i] = benc_int(p, &p);
+
+    buf_init(&iob, (1 << 15));
+    buf_swrite(&iob, "d4:codei0e6:resultl");
+    p = benc_dget_any(args, "from");
+    if (benc_isint(p)) {
+        enum ipc_twc from = benc_int(p, NULL);
+        struct tlib *tlv[tlib_count()];
+        tlib_put_all(tlv);
+        for (int i = 0; i < sizeof(tlv) / sizeof(tlv[0]); i++) {
+            if ((from == IPC_TWC_ALL ||
+                    (tlv[i]->tp == NULL && from == IPC_TWC_INACTIVE) ||
+                    (tlv[i]->tp != NULL && from == IPC_TWC_ACTIVE))) {
+                buf_swrite(&iob, "l");
+                for (int k = 0; k < nkeys; k++)
+                    write_ans(&iob, tlv[i], opts[k]);
+                buf_swrite(&iob, "e");
+            }
+        }
+    } else if (benc_islst(p)) {
+        for (p = benc_first(p); p != NULL; p = benc_next(p)) {
+            struct tlib *tl = NULL;
+            if (benc_isint(p))
+                tl = tlib_by_num(benc_int(p, NULL));
+            else if (benc_isstr(p) && benc_strlen(p) == 20)
+                tl = tlib_by_hash(benc_mem(p, NULL, NULL));
+            else {
+                free(iob.buf);
+                free(opts);
+                return IPC_COMMERR;
+            }
+            if (tl != NULL) {
+                buf_swrite(&iob, "l");
+                for (int i = 0; i < nkeys; i++)
+                    write_ans(&iob, tl, opts[i]);
+                buf_swrite(&iob, "e");
+            } else
+                buf_print(&iob, "i%de", IPC_ENOTENT);
+        }
     }
     buf_swrite(&iob, "ee");
+    free(opts);
     return write_buffer(cli, &iob);
 }
 
 static int
 cmd_add(struct cli *cli, int argc, const char *args)
 {
-    if (argc != 1)
-        return EINVAL;
-    if (btpd_is_stopping())
-        return write_code_buffer(cli, IPC_FAIL);
+    if (argc != 1 || !benc_isdct(args))
+        return IPC_COMMERR;
 
-    size_t hlen;
-    struct torrent *tp;
-    enum ipc_code code = IPC_OK;
-    const uint8_t *hash = benc_dget_mem(args, "hash", &hlen);
-    char *content = benc_dget_str(args, "content", NULL);
-    char *torrent = benc_dget_str(args, "torrent", NULL);
+    struct tlib *tl;
+    size_t mi_size = 0, csize = 0;
+    const char *mi, *cp;
+    char content[PATH_MAX];
+    uint8_t hash[20];
 
-    if (!(hlen == 20 && content != NULL && torrent != NULL)) {
-        code = IPC_COMMERR;
-        goto out;
-    }
-    if ((tp = torrent_get(hash)) != NULL) {
-        code = tp->state == T_STOPPING ? IPC_FAIL : IPC_OK;
-        goto out;
-    }
-    if (torrent_set_links(hash, torrent, content) != 0) {
-        code = IPC_ERROR;
-        goto out;
-    }
-    if (torrent_start(hash) != 0) {
-        code = IPC_ERROR;
-        goto out;
-    }
+    if ((mi = benc_dget_mem(args, "torrent", &mi_size)) == NULL)
+        return IPC_COMMERR;
 
-    active_add(hash);
+    if (!mi_test(mi, mi_size))
+        return write_code_buffer(cli, IPC_EBADT);
 
-out:
-    if (content != NULL)
-        free(content);
-    if (torrent != NULL)
-        free(torrent);
+    if ((cp = benc_dget_mem(args, "content", &csize)) == NULL ||
+            csize >= PATH_MAX || csize == 0)
+        return write_code_buffer(cli, IPC_EBADCDIR);
 
-    if (code == IPC_COMMERR)
-        return EINVAL;
-    else
-        return write_code_buffer(cli, code);
+    if (cp[0] != '/')
+        return write_code_buffer(cli, IPC_EBADCDIR);
+    bcopy(cp, content, csize);
+    content[csize] = '\0';
+
+    tl = tlib_by_hash(mi_info_hash(mi, hash));
+    if (tl != NULL)
+        return write_code_buffer(cli, IPC_ETENTEXIST);
+    tl = tlib_add(hash, mi, mi_size, content,
+        benc_dget_str(args, "name", NULL));
+    return write_add_buffer(cli, tl->num);
 }
 
 static int
 cmd_del(struct cli *cli, int argc, const char *args)
 {
-    if (argc != 1 || !benc_isstr(args))
-        return EINVAL;
+    if (argc != 1)
+        return IPC_COMMERR;
 
-    size_t hlen;
-    uint8_t *hash = (uint8_t *)benc_mem(args, &hlen, NULL);
-    if (hlen != 20)
-        return EINVAL;
-    // Stopping a torrent may trigger exit so we need to reply before.
-    int ret = write_code_buffer(cli, IPC_OK);
-    struct torrent *tp = torrent_get(hash);
-    if (tp != NULL) {
-        torrent_stop(tp);
-        active_del(hash);
+    struct tlib *tl;
+    enum ipc_err code = IPC_OK;
+    if (benc_isstr(args) && benc_strlen(args) == 20)
+        tl = tlib_by_hash(benc_mem(args, NULL, NULL));
+    else if (benc_isint(args))
+        tl = tlib_by_num(benc_int(args, NULL));
+    else
+        return IPC_COMMERR;
+
+    if (tl == NULL)
+        code = IPC_ENOTENT;
+    else if (tl->tp != NULL)
+        code = IPC_ETACTIVE;
+    else
+        tlib_del(tl);
+
+    return write_code_buffer(cli, code);
+}
+
+static int
+cmd_start(struct cli *cli, int argc, const char *args)
+{
+    if (argc != 1)
+        return IPC_COMMERR;
+    if (btpd_is_stopping())
+        return write_code_buffer(cli, IPC_ESHUTDOWN);
+
+    struct tlib *tl;
+    enum ipc_err code = IPC_OK;
+    if (benc_isstr(args) && benc_strlen(args) == 20)
+        tl = tlib_by_hash(benc_mem(args, NULL, NULL));
+    else if (benc_isint(args))
+        tl = tlib_by_num(benc_int(args, NULL));
+    else
+        return IPC_COMMERR;
+
+    if (tl == NULL)
+        code = IPC_ENOTENT;
+    else if (tl->tp != NULL)
+        code = IPC_ETACTIVE;
+    else
+        if ((code = torrent_start(tl)) == IPC_OK)
+            active_add(tl->hash);
+    return write_code_buffer(cli, code);
+}
+
+static int
+cmd_stop(struct cli *cli, int argc, const char *args)
+{
+    if (argc != 1)
+        return IPC_COMMERR;
+
+    struct tlib *tl;
+    if (benc_isstr(args) && benc_strlen(args) == 20)
+        tl = tlib_by_hash(benc_mem(args, NULL, NULL));
+    else if (benc_isint(args))
+        tl = tlib_by_num(benc_int(args, NULL));
+    else
+        return IPC_COMMERR;
+
+    if (tl == NULL)
+        return write_code_buffer(cli, IPC_ENOTENT);
+    else if (tl->tp == NULL)
+        return write_code_buffer(cli, IPC_ETINACTIVE);
+    else  {
+        // Stopping a torrent may trigger exit so we need to reply before.
+        int ret = write_code_buffer(cli, IPC_OK);
+        active_del(tl->hash);
+        torrent_stop(tl->tp);
+        return ret;
     }
-    return ret;
 }
 
 static int
@@ -183,7 +379,9 @@ static struct {
     { "add",    3, cmd_add },
     { "del",    3, cmd_del },
     { "die",    3, cmd_die },
-    { "stat",   4, cmd_stat }
+    { "start",  5, cmd_start },
+    { "stop",   4, cmd_stop },
+    { "tget",   4, cmd_tget }
 };
 
 static int ncmds = sizeof(cmd_table) / sizeof(cmd_table[0]);

@@ -2,7 +2,7 @@
 #define BTPD_TORRENT_H
 
 #define PIECE_BLOCKLEN (1 << 14)
-#define RELPATH_SIZE 41
+#define RELPATH_SIZE SHAHEXSIZE
 
 enum torrent_state {
     T_STARTING,
@@ -11,14 +11,21 @@ enum torrent_state {
 };
 
 struct torrent {
-    char relpath[RELPATH_SIZE];
-    struct metainfo meta;
+    struct tlib *tl;
 
+    char relpath[RELPATH_SIZE];
     enum torrent_state state;
 
     struct content *cm;
     struct tracker *tr;
     struct net *net;
+
+    off_t total_length;
+    off_t piece_length;
+    uint32_t npieces;
+    unsigned nfiles;
+    struct mi_file *files;
+    size_t pieces_off;
 
     BTPDQ_ENTRY(torrent) entry;
 };
@@ -27,12 +34,11 @@ BTPDQ_HEAD(torrent_tq, torrent);
 
 unsigned torrent_count(void);
 const struct torrent_tq *torrent_get_all(void);
-struct torrent *torrent_get(const uint8_t *hash);
+struct torrent *torrent_by_num(unsigned num);
+struct torrent *torrent_by_hash(const uint8_t *hash);
 
-int torrent_start(const uint8_t *hash);
+enum ipc_err torrent_start(struct tlib *tl);
 void torrent_stop(struct torrent *tp);
-int torrent_set_links(const uint8_t *hash, const char *torrent,
-    const char *content);
 
 off_t torrent_piece_size(struct torrent *tp, uint32_t piece);
 uint32_t torrent_piece_blocks(struct torrent *tp, uint32_t piece);

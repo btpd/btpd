@@ -53,9 +53,9 @@ net_torrent_has_peer(struct net *n, const uint8_t *id)
 void
 net_create(struct torrent *tp)
 {
-    size_t field_size = ceil(tp->meta.npieces / 8.0);
+    size_t field_size = ceil(tp->npieces / 8.0);
     size_t mem = sizeof(*(tp->net)) + field_size +
-        tp->meta.npieces * sizeof(*(tp->net->piece_count));
+        tp->npieces * sizeof(*(tp->net->piece_count));
 
     struct net *n = btpd_calloc(1, mem);
     n->tp = tp;
@@ -260,7 +260,7 @@ net_dispatch_msg(struct peer *p, const char *buf)
             begin = net_read32(buf + 4);
             length = net_read32(buf + 8);
             if ((length > PIECE_BLOCKLEN
-                    || index >= p->n->tp->meta.npieces
+                    || index >= p->n->tp->npieces
                     || !cm_has_piece(p->n->tp, index)
                     || begin + length > torrent_piece_size(p->n->tp, index))) {
                 btpd_log(BTPD_L_MSG, "bad request: (%u, %u, %u) from %p\n",
@@ -300,7 +300,7 @@ net_mh_ok(struct peer *p)
     case MSG_HAVE:
         return mlen == 5;
     case MSG_BITFIELD:
-        return mlen == (uint32_t)ceil(p->n->tp->meta.npieces / 8.0) + 1;
+        return mlen == (uint32_t)ceil(p->n->tp->npieces / 8.0) + 1;
     case MSG_REQUEST:
     case MSG_CANCEL:
         return mlen == 13;
@@ -331,15 +331,12 @@ net_state(struct peer *p, const char *buf)
         break;
     case SHAKE_INFO:
         if (p->flags & PF_INCOMING) {
-            struct net *n;
-            BTPDQ_FOREACH(n, &m_torrents, entry)
-                if (bcmp(buf, n->tp->meta.info_hash, 20) == 0)
-                    break;
-            if (n == NULL)
+            struct torrent *tp = torrent_by_hash(buf);
+            if (tp == NULL || tp->net == NULL)
                 goto bad;
-            p->n = n;
+            p->n = tp->net;
             peer_send(p, nb_create_shake(p->n->tp));
-        } else if (bcmp(buf, p->n->tp->meta.info_hash, 20) != 0)
+        } else if (bcmp(buf, p->n->tp->tl->hash, 20) != 0)
             goto bad;
         peer_set_in_state(p, SHAKE_ID, 20);
         break;

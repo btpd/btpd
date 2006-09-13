@@ -1,7 +1,7 @@
 #ifndef TRACKER_REQ_H
 #define TRACKER_REQ_H
 
-int tr_create(struct torrent *tp);
+int tr_create(struct torrent *tp, const char *mi);
 void tr_kill(struct torrent *tp);
 void tr_start(struct torrent *tp);
 void tr_stop(struct torrent *tp);

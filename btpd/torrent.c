@@ -35,28 +35,33 @@ torrent_count(void)
 }
 
 struct torrent *
-torrent_get(const uint8_t *hash)
+torrent_by_num(unsigned num)
 {
-    struct torrent *tp = BTPDQ_FIRST(&m_torrents);
-    while (tp != NULL && bcmp(hash, tp->meta.info_hash, 20) != 0)
-        tp = BTPDQ_NEXT(tp, entry);
-    return tp;
+    struct tlib *tl = tlib_by_num(num);
+    return tl != NULL ? tl->tp : NULL;
+}
+
+struct torrent *
+torrent_by_hash(const uint8_t *hash)
+{
+    struct tlib *tl = tlib_by_hash(hash);
+    return tl != NULL ? tl->tp : NULL;
 }
 
 const char *
 torrent_name(struct torrent *tp)
 {
-    return tp->meta.name;
+    return tp->tl->name;
 }
 
 off_t
 torrent_piece_size(struct torrent *tp, uint32_t index)
 {
-    if (index < tp->meta.npieces - 1)
-        return tp->meta.piece_length;
+    if (index < tp->npieces - 1)
+        return tp->piece_length;
     else {
-        off_t allbutlast = tp->meta.piece_length * (tp->meta.npieces - 1);
-        return tp->meta.total_length - allbutlast;
+        off_t allbutlast = tp->piece_length * (tp->npieces - 1);
+        return tp->total_length - allbutlast;
     }
 }
 
@@ -78,85 +83,84 @@ torrent_block_size(struct torrent *tp, uint32_t piece, uint32_t nblocks,
     }
 }
 
-static void
-torrent_relpath(const uint8_t *hash, char *buf)
+enum ipc_err
+torrent_start(struct tlib *tl)
 {
-    for (int i = 0; i < 20; i++)
-        snprintf(buf + i * 2, 3, "%.2x", hash[i]);
-}
-
-int
-torrent_set_links(const uint8_t *hash, const char *torrent,
-    const char *content)
-{
-    char relpath[RELPATH_SIZE];
-    char file[PATH_MAX];
-    torrent_relpath(hash, relpath);
-    snprintf(file, PATH_MAX, "torrents/%s", relpath);
-    if (mkdir(file, 0777) == -1 && errno != EEXIST)
-        return errno;
-    snprintf(file, PATH_MAX, "torrents/%s/torrent", relpath);
-    if (unlink(file) == -1 && errno != ENOENT)
-        return errno;
-    if (symlink(torrent, file) == -1)
-        return errno;
-    snprintf(file, PATH_MAX, "torrents/%s/content", relpath);
-    if (unlink(file) == -1 && errno != ENOENT)
-        return errno;
-    if (symlink(content, file) == -1)
-        return errno;
-    return 0;
-}
-
-int
-torrent_start(const uint8_t *hash)
-{
+    struct stat sb;
     struct torrent *tp;
-    struct metainfo *mi;
-    int error;
+    char *mi;
     char relpath[RELPATH_SIZE];
     char file[PATH_MAX];
 
-    torrent_relpath(hash, relpath);
-    snprintf(file, PATH_MAX, "torrents/%s/torrent", relpath);
+    if (tl->dir == NULL)
+        return IPC_EBADTENT;
 
-    if ((error = load_metainfo(file, -1, 0, &mi)) != 0) {
-        btpd_log(BTPD_L_ERROR, "Couldn't load torrent file %s: %s.\n",
-            file, strerror(error));
-        return error;
+    if (mkdir(tl->dir, 0777) != 0 && errno != EEXIST) {
+        btpd_log(BTPD_L_ERROR, "torrent '%s': "
+            "failed to create content dir '%s' (%s).\n",
+            tl->name, tl->dir, strerror(errno));
+        return IPC_ECREATECDIR;
+    } else if (stat(tl->dir, &sb) == -1 ||
+            ((sb.st_mode & S_IFMT) != S_IFDIR)) {
+        btpd_log(BTPD_L_ERROR,
+            "torrent '%s': content dir '%s' is either not a directory or"
+            " cannot be accessed.\n", tl->name, tl->dir);
+        return IPC_EBADCDIR;
+    }
+
+    bin2hex(tl->hash, relpath, 20);
+    snprintf(file, PATH_MAX, "torrents/%s/torrent", relpath);
+    if ((mi = mi_load(file, NULL)) == NULL) {
+        btpd_log(BTPD_L_ERROR,
+            "torrent '%s': failed to load metainfo (%s).\n",
+            tl->name, strerror(errno));
+        return IPC_EBADTENT;
     }
 
     tp = btpd_calloc(1, sizeof(*tp));
+    tp->tl = tl;
     bcopy(relpath, tp->relpath, RELPATH_SIZE);
-    tp->meta = *mi;
-    free(mi);
+    tp->files = mi_files(mi);
+    tp->nfiles = mi_nfiles(mi);
+    if (tp->files == NULL)
+        btpd_err("out of memory.\n");
+    tp->total_length = mi_total_length(mi);
+    tp->piece_length = mi_piece_length(mi);
+    tp->npieces = mi_npieces(mi);
+    tp->pieces_off =
+        benc_dget_mem(benc_dget_dct(mi, "info"), "pieces", NULL) - mi;
 
     btpd_log(BTPD_L_BTPD, "Starting torrent '%s'.\n", torrent_name(tp));
-    if ((error = tr_create(tp)) == 0) {
+    if (tr_create(tp, mi) == 0) {
         net_create(tp);
         cm_create(tp);
         BTPDQ_INSERT_TAIL(&m_torrents, tp, entry);
         m_ntorrents++;
         cm_start(tp);
+        tl->tp = tp;
+        free(mi);
+        return IPC_OK;
     } else {
-        clear_metainfo(&tp->meta);
+        mi_free_files(tp->nfiles, tp->files);
         free(tp);
+        free(mi);
+        return IPC_EBADTRACKER;
     }
-    return error;
 }
 
 static void
 torrent_kill(struct torrent *tp)
 {
-    btpd_log(BTPD_L_BTPD, "Removed torrent '%s'.\n", torrent_name(tp));
+    btpd_log(BTPD_L_BTPD, "Stopped torrent '%s'.\n", torrent_name(tp));
     assert(m_ntorrents > 0);
     assert(!(tr_active(tp) || net_active(tp) || cm_active(tp)));
     m_ntorrents--;
     BTPDQ_REMOVE(&m_torrents, tp, entry);
-    clear_metainfo(&tp->meta);
     tr_kill(tp);
     net_kill(tp);
     cm_kill(tp);
+    tp->tl->tp = NULL;
+    mi_free_files(tp->nfiles, tp->files);
     free(tp);
     if (m_ntorrents == 0)
         btpd_on_no_torrents();

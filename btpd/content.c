@@ -99,15 +99,14 @@ static int
 fd_cb_rd(const char *path, int *fd, void *arg)
 {
     struct torrent *tp = arg;
-    return vopen(fd, O_RDONLY, "torrents/%s/content/%s", tp->relpath, path);
+    return vopen(fd, O_RDONLY, "%s/%s", tp->tl->dir, path);
 }
 
 static int
 fd_cb_wr(const char *path, int *fd, void *arg)
 {
     struct torrent *tp = arg;
-    return vopen(fd, O_RDWR|O_CREAT, "torrents/%s/content/%s", tp->relpath,
-        path);
+    return vopen(fd, O_RDWR|O_CREAT, "%s/%s", tp->tl->dir, path);
 }
 
 static void
@@ -255,7 +254,8 @@ cm_td_cb(void *arg)
         if (cm->active) {
             assert(!op->u.start.cancel);
             if (!cm_full(tp)) {
-                if ((err = bts_open(&cm->wrs, &tp->meta, fd_cb_wr, tp)) != 0)
+                if ((err = bts_open(&cm->wrs, tp->nfiles, tp->files,
+                        fd_cb_wr, tp)) != 0)
                     btpd_err("Couldn't open write stream for '%s' (%s).\n",
                         torrent_name(tp), strerror(err));
                 btpd_ev_add(&cm->save_timer, SAVE_INTERVAL);
@@ -265,7 +265,7 @@ cm_td_cb(void *arg)
         break;
     case CM_TEST:
         if (op->u.test.ok) {
-            assert(cm->npieces_got < tp->meta.npieces);
+            assert(cm->npieces_got < tp->npieces);
             cm->npieces_got++;
             set_bit(cm->piece_field, op->u.test.piece);
             if (net_active(tp))
@@ -294,13 +294,13 @@ cm_td_cb(void *arg)
 void
 cm_create(struct torrent *tp)
 {
-    size_t pfield_size = ceil(tp->meta.npieces / 8.0);
+    size_t pfield_size = ceil(tp->npieces / 8.0);
     struct content *cm = btpd_calloc(1, sizeof(*cm));
-    cm->bppbf = ceil((double)tp->meta.piece_length / (1 << 17));
+    cm->bppbf = ceil((double)tp->piece_length / (1 << 17));
     cm->piece_field = btpd_calloc(pfield_size, 1);
     cm->hold_field = btpd_calloc(pfield_size, 1);
     cm->pos_field = btpd_calloc(pfield_size, 1);
-    cm->block_field = btpd_calloc(tp->meta.npieces * cm->bppbf, 1);
+    cm->block_field = btpd_calloc(tp->npieces * cm->bppbf, 1);
 
     BTPDQ_INIT(&cm->todoq);
     evtimer_set(&cm->save_timer, save_timer_cb, tp);
@@ -313,7 +313,7 @@ cm_start(struct torrent *tp)
 {
     struct content *cm = tp->cm;
 
-    if ((errno = bts_open(&cm->rds, &tp->meta, fd_cb_rd, tp)) != 0)
+    if ((errno = bts_open(&cm->rds, tp->nfiles, tp->files, fd_cb_rd, tp)) != 0)
         btpd_err("Error opening stream (%s).\n", strerror(errno));
 
     cm->active = 1;
@@ -329,7 +329,7 @@ cm_get_bytes(struct torrent *tp, uint32_t piece, uint32_t begin, size_t len,
 {
     *buf = btpd_malloc(len);
     int err =
-        bts_get(tp->cm->rds, piece * tp->meta.piece_length + begin, *buf, len);
+        bts_get(tp->cm->rds, piece * tp->piece_length + begin, *buf, len);
     if (err != 0)
         btpd_err("Io error (%s)\n", strerror(err));
     return 0;
@@ -365,9 +365,9 @@ cm_prealloc(struct torrent *tp, uint32_t piece)
     if (cm_alloc_size <= 0)
         set_bit(cm->pos_field, piece);
     else {
-        unsigned npieces = ceil((double)cm_alloc_size / tp->meta.piece_length);
+        unsigned npieces = ceil((double)cm_alloc_size / tp->piece_length);
         uint32_t start = piece - piece % npieces;
-        uint32_t end = min(start + npieces, tp->meta.npieces);
+        uint32_t end = min(start + npieces, tp->npieces);
 
         while (start < end) {
             if ((!has_bit(cm->pos_field, start)
@@ -416,7 +416,7 @@ cm_put_bytes(struct torrent *tp, uint32_t piece, uint32_t begin,
         if (it == NULL)
             BTPDQ_INSERT_TAIL(&op->u.write.q, d, entry);
     } else {
-        err = bts_put(cm->wrs, piece * tp->meta.piece_length + begin, buf,
+        err = bts_put(cm->wrs, piece * tp->piece_length + begin, buf,
             len);
         if (err != 0)
             btpd_err("Io error (%s)\n", strerror(err));
@@ -432,7 +432,7 @@ cm_put_bytes(struct torrent *tp, uint32_t piece, uint32_t begin,
 int
 cm_full(struct torrent *tp)
 {
-    return tp->cm->npieces_got == tp->meta.npieces;
+    return tp->cm->npieces_got == tp->npieces;
 }
 
 off_t
@@ -468,23 +468,19 @@ cm_has_piece(struct torrent *tp, uint32_t piece)
 static int
 test_hash(struct torrent *tp, uint8_t *hash, uint32_t piece)
 {
-    if (tp->meta.piece_hash != NULL)
-        return bcmp(hash, tp->meta.piece_hash[piece], SHA_DIGEST_LENGTH);
-    else {
-        char piece_hash[SHA_DIGEST_LENGTH];
-        int fd;
-        int err;
+    char piece_hash[SHA_DIGEST_LENGTH];
+    int fd;
+    int err;
 
-        err = vopen(&fd, O_RDONLY, "torrents/%s/torrent", tp->relpath);
-        if (err != 0)
-            btpd_err("test_hash: %s\n", strerror(err));
+    err = vopen(&fd, O_RDONLY, "torrents/%s/torrent", tp->relpath);
+    if (err != 0)
+        btpd_err("test_hash: %s\n", strerror(err));
 
-        lseek(fd, tp->meta.pieces_off + piece * SHA_DIGEST_LENGTH, SEEK_SET);
-        read(fd, piece_hash, SHA_DIGEST_LENGTH);
-        close(fd);
+    lseek(fd, tp->pieces_off + piece * SHA_DIGEST_LENGTH, SEEK_SET);
+    read(fd, piece_hash, SHA_DIGEST_LENGTH);
+    close(fd);
 
-        return bcmp(hash, piece_hash, SHA_DIGEST_LENGTH);
-    }
+    return bcmp(hash, piece_hash, SHA_DIGEST_LENGTH);
 }
 
 static int
@@ -493,9 +489,9 @@ test_piece(struct torrent *tp, uint32_t pos, uint32_t piece, int *ok)
     int err;
     uint8_t hash[SHA_DIGEST_LENGTH];
     struct bt_stream *bts;
-    if ((err = bts_open(&bts, &tp->meta, fd_cb_rd, tp)) != 0)
+    if ((err = bts_open(&bts, tp->nfiles, tp->files, fd_cb_rd, tp)) != 0)
         return err;
-    if ((err = bts_sha(bts, pos * tp->meta.piece_length,
+    if ((err = bts_sha(bts, pos * tp->piece_length,
              torrent_piece_size(tp, piece), hash)) != 0)
         return err;;
     bts_close(bts);
@@ -514,11 +510,11 @@ cm_td_alloc(struct cm_op *op)
 
     assert(!has_bit(cm->pos_field, pos));
 
-    if ((err = bts_open(&bts, &tp->meta, fd_cb_wr, tp)) != 0)
+    if ((err = bts_open(&bts, tp->nfiles, tp->files, fd_cb_wr, tp)) != 0)
         goto out;
 
     off_t len = torrent_piece_size(tp, pos);
-    off_t off = tp->meta.piece_length * pos;
+    off_t off = tp->piece_length * pos;
     while (len > 0) {
         size_t wlen = min(ZEROBUFLEN, len);
         if ((err = bts_put(bts, off, m_zerobuf, wlen)) != 0) {
@@ -545,22 +541,20 @@ test_torrent(struct torrent *tp, volatile sig_atomic_t *cancel)
     if ((err = vfopen(&fp, "r", "torrents/%s/torrent", tp->relpath)) != 0)
         return err;
 
-    hashes = btpd_malloc(tp->meta.npieces * SHA_DIGEST_LENGTH);
-    fseek(fp, tp->meta.pieces_off, SEEK_SET);
-    fread(hashes, SHA_DIGEST_LENGTH, tp->meta.npieces, fp);
+    hashes = btpd_malloc(tp->npieces * SHA_DIGEST_LENGTH);
+    fseek(fp, tp->pieces_off, SEEK_SET);
+    fread(hashes, SHA_DIGEST_LENGTH, tp->npieces, fp);
     fclose(fp);
 
-    tp->meta.piece_hash = hashes;
-
     struct content *cm = tp->cm;
-    for (uint32_t piece = 0; piece < tp->meta.npieces; piece++) {
+    for (uint32_t piece = 0; piece < tp->npieces; piece++) {
         if (!has_bit(cm->pos_field, piece))
             continue;
-        err = bts_sha(cm->rds, piece * tp->meta.piece_length,
+        err = bts_sha(cm->rds, piece * tp->piece_length,
             torrent_piece_size(tp, piece), hash);
         if (err != 0)
             break;
-        if (test_hash(tp, hash, piece) == 0)
+        if (bcmp(hashes[piece], hash, SHA_DIGEST_LENGTH) == 0)
             set_bit(tp->cm->piece_field, piece);
         else
             clear_bit(tp->cm->piece_field, piece);
@@ -570,7 +564,6 @@ test_torrent(struct torrent *tp, volatile sig_atomic_t *cancel)
         }
     }
 
-    tp->meta.piece_hash = NULL;
     free(hashes);
     return err;
 }
@@ -585,9 +578,8 @@ stat_and_adjust(struct torrent *tp, struct rstat ret[])
 {
     char path[PATH_MAX];
     struct stat sb;
-    for (int i = 0; i < tp->meta.nfiles; i++) {
-        snprintf(path, PATH_MAX, "torrents/%s/content/%s", tp->relpath,
-            tp->meta.files[i].path);
+    for (int i = 0; i < tp->nfiles; i++) {
+        snprintf(path, PATH_MAX, "%s/%s", tp->tl->dir, tp->files[i].path);
 again:
         if (stat(path, &sb) == -1) {
             if (errno == ENOENT) {
@@ -599,8 +591,8 @@ again:
             ret[i].mtime = sb.st_mtime;
             ret[i].size = sb.st_size;
         }
-        if (ret[i].size > tp->meta.files[i].length) {
-            if (truncate(path, tp->meta.files[i].length) != 0)
+        if (ret[i].size > tp->files[i].length) {
+            if (truncate(path, tp->files[i].length) != 0)
                 return errno;
             goto again;
         }
@@ -613,8 +605,8 @@ load_resume(struct torrent *tp, struct rstat sbs[])
 {
     int err, ver;
     FILE *fp;
-    size_t pfsiz = ceil(tp->meta.npieces / 8.0);
-    size_t bfsiz = tp->meta.npieces * tp->cm->bppbf;
+    size_t pfsiz = ceil(tp->npieces / 8.0);
+    size_t bfsiz = tp->npieces * tp->cm->bppbf;
 
     if ((err = vfopen(&fp, "r" , "torrents/%s/resume", tp->relpath)) != 0)
         return err;
@@ -623,7 +615,7 @@ load_resume(struct torrent *tp, struct rstat sbs[])
         goto invalid;
     if (ver != 1)
         goto invalid;
-    for (int i = 0; i < tp->meta.nfiles; i++) {
+    for (int i = 0; i < tp->nfiles; i++) {
         quad_t size;
         long time;
         if (fscanf(fp, "%qd %ld\n", &size, &time) != 2)
@@ -652,10 +644,10 @@ save_resume(struct torrent *tp, struct rstat sbs[])
     if ((err = vfopen(&fp, "wb", "torrents/%s/resume", tp->relpath)) != 0)
         return err;
     fprintf(fp, "%d\n", 1);
-    for (int i = 0; i < tp->meta.nfiles; i++)
+    for (int i = 0; i < tp->nfiles; i++)
         fprintf(fp, "%lld %ld\n", (long long)sbs[i].size, (long)sbs[i].mtime);
-    fwrite(tp->cm->piece_field, 1, ceil(tp->meta.npieces / 8.0), fp);
-    fwrite(tp->cm->block_field, 1, tp->meta.npieces * tp->cm->bppbf, fp);
+    fwrite(tp->cm->piece_field, 1, ceil(tp->npieces / 8.0), fp);
+    fwrite(tp->cm->block_field, 1, tp->npieces * tp->cm->bppbf, fp);
     if (fclose(fp) != 0)
         err = errno;
     return err;
@@ -665,7 +657,7 @@ static void
 cm_td_save(struct cm_op *op)
 {
     struct torrent *tp = op->tp;
-    struct rstat sbs[tp->meta.nfiles];
+    struct rstat sbs[tp->nfiles];
     if (stat_and_adjust(tp, sbs) == 0)
         save_resume(tp, sbs);
 }
@@ -674,7 +666,7 @@ static void
 cm_td_start(struct cm_op *op)
 {
     int err, resume_clean = 0, tested_torrent = 0;
-    struct rstat sbs[op->tp->meta.nfiles];
+    struct rstat sbs[op->tp->nfiles];
     struct torrent *tp = op->tp;
     struct content *cm = tp->cm;
 
@@ -683,17 +675,17 @@ cm_td_start(struct cm_op *op)
 
     resume_clean = load_resume(tp, sbs) == 0;
     if (!resume_clean) {
-        memset(cm->pos_field, 0xff, ceil(tp->meta.npieces / 8.0));
+        memset(cm->pos_field, 0xff, ceil(tp->npieces / 8.0));
         off_t off = 0;
-        for (int i = 0; i < tp->meta.nfiles; i++) {
-            if (sbs[i].size != tp->meta.files[i].length) {
+        for (int i = 0; i < tp->nfiles; i++) {
+            if (sbs[i].size != tp->files[i].length) {
                 uint32_t start, end;
-                end = (off + tp->meta.files[i].length - 1)
-                    / tp->meta.piece_length;
+                end = (off + tp->files[i].length - 1)
+                    / tp->piece_length;
                 if (sbs[i].size == -1)
-                    start = off / tp->meta.piece_length;
+                    start = off / tp->piece_length;
                 else
-                    start = (off + sbs[i].size) / tp->meta.piece_length;
+                    start = (off + sbs[i].size) / tp->piece_length;
                 while (start <= end) {
                     clear_bit(cm->pos_field, start);
                     clear_bit(cm->piece_field, start);
@@ -701,7 +693,7 @@ cm_td_start(struct cm_op *op)
                     start++;
                 }
             }
-            off += tp->meta.files[i].length;
+            off += tp->files[i].length;
         }
         if (op->u.start.cancel)
             goto out;
@@ -710,8 +702,8 @@ cm_td_start(struct cm_op *op)
         tested_torrent = 1;
     }
 
-    bzero(cm->pos_field, ceil(tp->meta.npieces / 8.0));
-    for (uint32_t piece = 0; piece < tp->meta.npieces; piece++) {
+    bzero(cm->pos_field, ceil(tp->npieces / 8.0));
+    for (uint32_t piece = 0; piece < tp->npieces; piece++) {
         if (cm_has_piece(tp, piece)) {
             cm->ncontent_bytes += torrent_piece_size(tp, piece);
             cm->npieces_got++;
@@ -768,9 +760,10 @@ cm_td_write(struct cm_op *op)
 {
     int err;
     struct cm_write_data *d, *next;
-    off_t base = op->tp->meta.piece_length * op->u.write.pos;
+    off_t base = op->tp->piece_length * op->u.write.pos;
     struct bt_stream *bts;
-    if ((err = bts_open(&bts, &op->tp->meta, fd_cb_wr, op->tp)) != 0)
+    if ((err = bts_open(&bts, op->tp->nfiles, op->tp->files,
+            fd_cb_wr, op->tp)) != 0)
         goto out;
     BTPDQ_FOREACH(d, &op->u.write.q, entry)
         if ((err = bts_put(bts, base + d->begin, d->buf, d->len)) != 0) {

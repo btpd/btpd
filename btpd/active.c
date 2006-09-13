@@ -83,8 +83,9 @@ active_start(void)
 
     pos = 0;
     while (fread(hash, sizeof(hash), 1, fp) == 1) {
-        if (torrent_get(hash) == NULL)
-            if (torrent_start(hash) != 0) {
+        struct tlib *tl = tlib_by_hash(hash);
+        if (tl != NULL && tl->tp == NULL)
+            if (torrent_start(tl) != 0) {
                 active_del_pos(fp, pos, &sb.st_size);
                 fseek(fp, pos, SEEK_SET);
             }

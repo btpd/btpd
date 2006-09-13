@@ -184,7 +184,7 @@ nb_create_interest(void)
 struct net_buf *
 nb_create_bitfield(struct torrent *tp)
 {
-    uint32_t plen = ceil(tp->meta.npieces / 8.0);
+    uint32_t plen = ceil(tp->npieces / 8.0);
 
     struct net_buf *out = nb_create_alloc(NB_BITFIELD, 5);
     net_write32(out->buf, plen + 1);
@@ -195,7 +195,7 @@ nb_create_bitfield(struct torrent *tp)
 struct net_buf *
 nb_create_bitdata(struct torrent *tp)
 {
-    uint32_t plen = ceil(tp->meta.npieces / 8.0);
+    uint32_t plen = ceil(tp->npieces / 8.0);
     struct net_buf *out =
         nb_create_set(NB_BITDATA, cm_get_piece_field(tp), plen, kill_buf_no);
     return out;
@@ -206,7 +206,7 @@ nb_create_shake(struct torrent *tp)
 {
     struct net_buf *out = nb_create_alloc(NB_SHAKE, 68);
     bcopy("\x13""BitTorrent protocol\0\0\0\0\0\0\0\0", out->buf, 28);
-    bcopy(tp->meta.info_hash, out->buf + 28, 20);
+    bcopy(tp->tl->hash, out->buf + 28, 20);
     bcopy(btpd_get_peer_id(), out->buf + 48, 20);
     return out;
 }

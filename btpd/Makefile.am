@@ -10,8 +10,7 @@ btpd_SOURCES=\
 	net_buf.c net_buf.h\
 	opts.c opts.h\
 	peer.c peer.h\
-	queue.h\
-	torrent.c torrent.h\
+	tlib.c tlib.h torrent.c torrent.h\
 	tracker_req.c tracker_req.h\
 	upload.c upload.h\
 	util.c

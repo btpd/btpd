@@ -27,6 +27,7 @@ enum timer_type {
 };
 
 struct tracker {
+    struct mi_announce *ann;
     enum timer_type ttype;
     enum tr_event event;
     int interval;
@@ -189,7 +190,7 @@ tr_send(struct torrent *tp, enum tr_event event)
     if (tr->ttype == TIMER_TIMEOUT)
         http_cancel(tr->req);
 
-    if ((busy_secs = http_server_busy_time(tp->meta.announce, 3)) > 0) {
+    if ((busy_secs = http_server_busy_time(tr->ann->tiers[0].urls[0], 3)) > 0) {
         tr->ttype = TIMER_RETRY;
         btpd_ev_add(&tr->timer, (& (struct timeval) { busy_secs, 0 }));
         return;
@@ -198,32 +199,37 @@ tr_send(struct torrent *tp, enum tr_event event)
     tr->ttype = TIMER_TIMEOUT;
     btpd_ev_add(&tr->timer, REQ_TIMEOUT);
 
-    qc = (strchr(tp->meta.announce, '?') == NULL) ? '?' : '&';
+    qc = (strchr(tr->ann->tiers[0].urls[0], '?') == NULL) ? '?' : '&';
 
     for (int i = 0; i < 20; i++)
-        snprintf(e_hash + i * 3, 4, "%%%.2x", tp->meta.info_hash[i]);
+        snprintf(e_hash + i * 3, 4, "%%%.2x", tp->tl->hash[i]);
     for (int i = 0; i < 20; i++)
         snprintf(e_id + i * 3, 4, "%%%.2x", peer_id[i]);
 
     http_get(&tr->req, http_cb, tp,
         "%s%cinfo_hash=%s&peer_id=%s&port=%d&uploaded=%llu"
         "&downloaded=%llu&left=%llu&compact=1%s%s",
-        tp->meta.announce, qc, e_hash, e_id, net_port,
+        tr->ann->tiers[0].urls[0], qc, e_hash, e_id, net_port,
         tp->net->uploaded, tp->net->downloaded,
-        (long long)tp->meta.total_length - cm_content(tp),
+        (long long)tp->total_length - cm_content(tp),
         event == TR_EV_EMPTY ? "" : "&event=", m_events[event]);
 }
 
 int
-tr_create(struct torrent *tp)
+tr_create(struct torrent *tp, const char *mi)
 {
-    if (strncmp(tp->meta.announce, "http://", sizeof("http://") - 1) != 0) {
+    struct mi_announce *ann = mi_announce(mi);
+    if (ann == NULL)
+        btpd_err("out of memory.\n");
+    if (strncmp(ann->tiers[0].urls[0],
+            "http://", sizeof("http://") - 1) != 0) {
         btpd_log(BTPD_L_ERROR,
             "btpd currently has no support for the protocol specified in "
-            "'%s'.\n", tp->meta.announce);
+            "'%s'.\n", ann->tiers[0].urls[0]);
         return EINVAL;
     }
     tp->tr = btpd_calloc(1, sizeof(*tp->tr));
+    tp->tr->ann = ann;
     evtimer_set(&tp->tr->timer, timer_cb, tp);
     return 0;
 }
@@ -236,6 +242,7 @@ tr_kill(struct torrent *tp)
     btpd_ev_del(&tr->timer);
     if (tr->req != NULL)
         http_cancel(tr->req);
+    mi_free_announce(tr->ann);
     free(tr);
 }
 

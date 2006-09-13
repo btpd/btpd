@@ -33,7 +33,7 @@ static struct piece *
 piece_alloc(struct net *n, uint32_t index)
 {
     assert(!has_bit(n->busy_field, index)
-        && n->npcs_busy < n->tp->meta.npieces);
+        && n->npcs_busy < n->tp->npieces);
     struct piece *pc;
     size_t mem, field;
     unsigned nblocks;
@@ -98,7 +98,7 @@ static int
 dl_should_enter_endgame(struct net *n)
 {
     int should;
-    if (cm_pieces(n->tp) + n->npcs_busy == n->tp->meta.npieces) {
+    if (cm_pieces(n->tp) + n->npcs_busy == n->tp->npieces) {
         should = 1;
         struct piece *pc;
         BTPDQ_FOREACH(pc, &n->getlst, entry) {
@@ -216,15 +216,15 @@ dl_choose_rarest(struct peer *p, uint32_t *res)
 
     assert(n->endgame == 0);
 
-    for (i = 0; i < n->tp->meta.npieces && !dl_piece_startable(p, i); i++)
+    for (i = 0; i < n->tp->npieces && !dl_piece_startable(p, i); i++)
         ;
 
-    if (i == n->tp->meta.npieces)
+    if (i == n->tp->npieces)
         return ENOENT;
 
     uint32_t min_i = i;
     uint32_t min_c = 1;
-    for(i++; i < n->tp->meta.npieces; i++) {
+    for(i++; i < n->tp->npieces; i++) {
         if (dl_piece_startable(p, i)) {
             if (n->piece_count[i] == n->piece_count[min_i])
                 min_c++;

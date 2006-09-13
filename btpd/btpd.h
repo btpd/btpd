@@ -17,17 +17,22 @@
 
 #include "benc.h"
 #include "metainfo.h"
+#include "subr.h"
 #include "iobuf.h"
+#include "hashtable.h"
 #include "net_buf.h"
 #include "net_types.h"
 #include "net.h"
 #include "peer.h"
+#include "tlib.h"
 #include "torrent.h"
 #include "download.h"
 #include "upload.h"
-#include "subr.h"
 #include "content.h"
 #include "opts.h"
+#define DAEMON
+#include "btpd_if.h"
+#undef DAEMON
 
 #define BTPD_VERSION (PACKAGE_NAME "/" PACKAGE_VERSION)
 
@@ -43,10 +48,15 @@ extern long btpd_seconds;
 
 void btpd_init(void);
 
+__attribute__((format (printf, 2, 3)))
 void btpd_log(uint32_t type, const char *fmt, ...);
+
+__attribute__((format (printf, 1, 2), noreturn))
 void btpd_err(const char *fmt, ...);
 
+__attribute__((malloc))
 void *btpd_malloc(size_t size);
+__attribute__((malloc))
 void *btpd_calloc(size_t nmemb, size_t size);
 
 void btpd_ev_add(struct event *ev, struct timeval *tv);
