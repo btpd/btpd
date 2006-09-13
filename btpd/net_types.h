@@ -1,7 +1,6 @@
 #ifndef BTPD_NET_TYPES_H
 #define BTPD_NET_TYPES_H
 
-BTPDQ_HEAD(net_tq, net);
 BTPDQ_HEAD(peer_tq, peer);
 BTPDQ_HEAD(piece_tq, piece);
 BTPDQ_HEAD(block_request_tq, block_request);
@@ -22,8 +21,6 @@ struct net {
 
     unsigned npeers;
     struct peer_tq peers;
-
-    BTPDQ_ENTRY(net) entry;
 };
 
 enum input_state {

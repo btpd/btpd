@@ -26,9 +26,6 @@ static unsigned long m_rate_dwn;
 
 static struct event m_net_incoming;
 
-static unsigned m_ntorrents;
-static struct net_tq m_torrents = BTPDQ_HEAD_INITIALIZER(m_torrents);
-
 unsigned net_npeers;
 
 struct peer_tq net_bw_readq = BTPDQ_HEAD_INITIALIZER(net_bw_readq);
@@ -78,8 +75,6 @@ void
 net_start(struct torrent *tp)
 {
     struct net *n = tp->net;
-    BTPDQ_INSERT_HEAD(&m_torrents, n, entry);
-    m_ntorrents++;
     n->active = 1;
 }
 
@@ -87,10 +82,6 @@ void
 net_stop(struct torrent *tp)
 {
     struct net *n = tp->net;
-
-    assert(m_ntorrents > 0);
-    m_ntorrents--;
-    BTPDQ_REMOVE(&m_torrents, n, entry);
 
     n->active = 0;
     n->rate_up = 0;
@@ -101,6 +92,7 @@ net_stop(struct torrent *tp)
     struct piece *pc;
     while ((pc = BTPDQ_FIRST(&n->getlst)) != NULL)
         piece_free(pc);
+    BTPDQ_INIT(&n->getlst);
 
     struct peer *p = BTPDQ_FIRST(&net_unattached);
     while (p != NULL) {
@@ -332,10 +324,10 @@ net_state(struct peer *p, const char *buf)
     case SHAKE_INFO:
         if (p->flags & PF_INCOMING) {
             struct torrent *tp = torrent_by_hash(buf);
-            if (tp == NULL || tp->net == NULL)
+            if (tp == NULL || !net_active(tp))
                 goto bad;
             p->n = tp->net;
-            peer_send(p, nb_create_shake(p->n->tp));
+            peer_send(p, nb_create_shake(tp));
         } else if (bcmp(buf, p->n->tp->tl->hash, 20) != 0)
             goto bad;
         peer_set_in_state(p, SHAKE_ID, 20);
@@ -545,9 +537,10 @@ compute_rate_sub(unsigned long rate)
 static void
 compute_rates(void) {
     unsigned long tot_up = 0, tot_dwn = 0;
-    struct net *n;
-    BTPDQ_FOREACH(n, &m_torrents, entry) {
+    struct torrent *tp;
+    BTPDQ_FOREACH(tp, torrent_get_all(), entry) {
         unsigned long tp_up = 0, tp_dwn = 0;
+        struct net *n = tp->net;
         struct peer *p;
         BTPDQ_FOREACH(p, &n->peers, p_entry) {
             if (p->count_up > 0 || peer_active_up(p)) {
@@ -611,15 +604,15 @@ net_bw_tick(void)
 static void
 run_peer_ticks(void)
 {
-    struct net *n;
+    struct torrent *tp;
     struct peer *p, *next;
 
     BTPDQ_FOREACH_MUTABLE(p, &net_unattached, p_entry, next)
         peer_on_tick(p);
 
-    BTPDQ_FOREACH(n, &m_torrents, entry)
-        BTPDQ_FOREACH_MUTABLE(p, &n->peers, p_entry, next)
-            peer_on_tick(p);
+    BTPDQ_FOREACH(tp, torrent_get_all(), entry)
+        BTPDQ_FOREACH_MUTABLE(p, &tp->net->peers, p_entry, next)
+        peer_on_tick(p);
 }
 
 void
