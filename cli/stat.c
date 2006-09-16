@@ -88,9 +88,9 @@ print_stat(struct btstat *st)
 {
     print_percent(st->content_got, st->content_size);
     print_size(st->downloaded);
-    print_rate(st->rate_down / 20);
+    print_rate(st->rate_down);
     print_size(st->uploaded);
-    print_rate(st->rate_up / 20);
+    print_rate(st->rate_up);
     printf("%5u ", st->peers);
     print_percent(st->pieces_seen, st->torrent_pieces);
     if (st->tr_errors > 0)

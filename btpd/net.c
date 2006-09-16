@@ -523,8 +523,6 @@ net_connection_cb(int sd, short type, void *arg)
     btpd_log(BTPD_L_CONN, "got connection.\n");
 }
 
-#define RATEHISTORY 20
-
 static unsigned long
 compute_rate_sub(unsigned long rate)
 {

@@ -11,6 +11,8 @@
 #define MSG_PIECE       7
 #define MSG_CANCEL      8
 
+#define RATEHISTORY 20
+
 extern struct peer_tq net_unattached;
 extern struct peer_tq net_bw_readq;
 extern struct peer_tq net_bw_writeq;

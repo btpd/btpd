@@ -100,13 +100,15 @@ write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
         if (tl->tp == NULL)
             buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
         else
-            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM, tl->tp->net->rate_dwn);
+            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
+                tl->tp->net->rate_dwn / RATEHISTORY);
         return;
     case IPC_TVAL_RATEUP:
         if (tl->tp == NULL)
             buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
         else
-            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM, tl->tp->net->rate_up);
+            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
+                tl->tp->net->rate_up / RATEHISTORY);
         return;
     case IPC_TVAL_SESSDWN:
         if (tl->tp == NULL)
