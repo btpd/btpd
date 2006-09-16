@@ -68,17 +68,16 @@ print_percent(long long part, long long whole)
 static void
 print_rate(long long rate)
 {
-    if (rate >= (1000 << 10))
+    if (rate >= 999.995 * (1 << 10))
         printf("%6.2fMB/s ", (double)rate / (1 << 20));
     else
         printf("%6.2fkB/s ", (double)rate / (1 << 10));
-
 }
 
 static void
 print_size(long long size)
 {
-    if (size >= (1000 << 20))
+    if (size >= 999.995 * (1 << 20))
         printf("%6.2fG ", (double)size / (1 << 30));
     else
         printf("%6.2fM ", (double)size / (1 << 20));
