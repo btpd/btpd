@@ -60,22 +60,46 @@ static enum ipc_tval stkeys[] = {
 static size_t nstkeys = sizeof(stkeys) / sizeof(stkeys[0]);
 
 static void
+print_percent(long long part, long long whole)
+{
+    printf("%5.1f%% ", floor(1000.0 * part / whole) / 10);
+}
+
+static void
+print_rate(long long rate)
+{
+    if (rate >= (1000 << 10))
+        printf("%6.2fMB/s ", (double)rate / (1 << 20));
+    else
+        printf("%6.2fkB/s ", (double)rate / (1 << 10));
+
+}
+
+static void
+print_size(long long size)
+{
+    if (size >= (1000 << 20))
+        printf("%6.2fG ", (double)size / (1 << 30));
+    else
+        printf("%6.2fM ", (double)size / (1 << 20));
+}
+
+static void
 print_stat(struct btstat *st)
 {
-    printf("%5.1f%% %6.1fM %7.2fkB/s %6.1fM %7.2fkB/s %5u %5.1f%%",
-        floor(1000.0 * st->content_got / st->content_size) / 10,
-        (double)st->downloaded / (1 << 20),
-        (double)st->rate_down / (20 << 10),
-        (double)st->uploaded / (1 << 20),
-        (double)st->rate_up / (20 << 10),
-        st->peers,
-        floor(1000.0 * st->pieces_seen / st->torrent_pieces) / 10);
+    print_percent(st->content_got, st->content_size);
+    print_size(st->downloaded);
+    print_rate(st->rate_down / 20);
+    print_size(st->uploaded);
+    print_rate(st->rate_up / 20);
+    printf("%5u ", st->peers);
+    print_percent(st->pieces_seen, st->torrent_pieces);
     if (st->tr_errors > 0)
-        printf(" E%u", st->tr_errors);
+        printf("E%u", st->tr_errors);
     printf("\n");
 }
 
-void
+static void
 stat_cb(int obji, enum ipc_err objerr, struct ipc_get_res *res, void *arg)
 {
     struct cbarg *cba = arg;
@@ -116,14 +140,22 @@ do_stat(int individual, int names, int seconds, struct ipc_torrent *tps,
 {
     enum ipc_err err;
     struct cbarg cba;
+    int header = 1;
     if (names)
         individual = 1;
-    if (individual)
-        printf("NUM    ST ");
-    printf("  HAVE   DLOAD       RTDWN   ULOAD        RTUP PEERS  AVAIL\n");
     cba.individual = individual;
     cba.names = names;
 again:
+    header--;
+    if (header == 0) {
+        if (individual) {
+            header = 1;
+            printf("NUM    ST ");
+        } else
+            header = 20;
+        printf("  HAVE   DLOAD      RTDWN   ULOAD       RTUP PEERS  AVAIL\n");
+    }
+
     bzero(&cba.tot, sizeof(cba.tot));
     cba.tot.state = IPC_TSTATE_INACTIVE;
     if (tps == NULL)
