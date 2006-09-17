@@ -135,7 +135,7 @@ ipc_buf_req_res(struct ipc *ipc, struct io_buffer *iob, char **res,
     enum ipc_err err;
     if (iob->error)
         err = IPC_COMMERR;
-    else 
+    else
         err = ipc_req_res(ipc, iob->buf, iob->off, res, rlen);
     buf_free(iob);
     return err;
