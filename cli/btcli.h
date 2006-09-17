@@ -21,8 +21,8 @@ extern const char *btpd_dir;
 extern struct ipc *ipc;
 
 void btpd_connect(void);
-enum ipc_err handle_ipc_res(enum ipc_err err, const char *target);
-
+enum ipc_err handle_ipc_res(enum ipc_err err, const char *cmd,
+    const char *target);
 char tstate_char(enum ipc_tstate ts);
 int torrent_spec(char *arg, struct ipc_torrent *tp);
 

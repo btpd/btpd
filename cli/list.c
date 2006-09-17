@@ -30,9 +30,6 @@ itm_insert(struct items *itms, struct item *itm)
     struct item *p;
     BTPDQ_FOREACH(p, &itms->hd, entry)
         if (itm->num < p->num)
-#if 0
-        if (strcmp(itm->name, p->name) < 0)
-#endif
             break;
     if (p != NULL)
         BTPDQ_INSERT_BEFORE(p, itm, entry);
@@ -54,17 +51,6 @@ list_cb(int obji, enum ipc_err objerr, struct ipc_get_res *res, void *arg)
         asprintf(&itm->name, "%.*s", (int)res[IPC_TVAL_NAME].v.str.l,
             res[IPC_TVAL_NAME].v.str.p);
     itm_insert(itms, itm);
-#if 0
-    int *count = arg;
-    (*count)++;
-    printf("%4u %c.", (unsigned)res[IPC_TVAL_NUM].v.num,
-        tstate_char(res[IPC_TVAL_STATE].v.num));
-    if (res[IPC_TVAL_NAME].type == IPC_TYPE_ERR)
-        printf(" %s\n", ipc_strerror(res[IPC_TVAL_NAME].v.num));
-    else
-        printf(" %.*s\n", (int)res[IPC_TVAL_NAME].v.str.l,
-            res[IPC_TVAL_NAME].v.str.p);
-#endif
 }
 
 void
@@ -90,7 +76,8 @@ static struct option list_opts [] = {
 void
 cmd_list(int argc, char **argv)
 {
-    int ch, /*count = 0,*/ inactive = 0, active = 0;
+    int ch, inactive = 0, active = 0;
+    enum ipc_err code;
     enum ipc_twc twc;
     enum ipc_tval keys[] = { IPC_TVAL_NUM, IPC_TVAL_STATE, IPC_TVAL_NAME };
     struct items itms;
@@ -118,7 +105,8 @@ cmd_list(int argc, char **argv)
     printf("NUM    ST NAME\n");
     itms.count = 0;
     BTPDQ_INIT(&itms.hd);
-    handle_ipc_res(btpd_tget_wc(ipc, twc, keys, 3, list_cb, &itms), "tget");
+    if ((code = btpd_tget_wc(ipc, twc, keys, 3, list_cb, &itms)) != IPC_OK)
+        errx(1, "%s", ipc_strerror(code));
     print_items(&itms);
     printf("Listed %d torrent%s.\n", itms.count, itms.count == 1 ? "" : "s");
 }

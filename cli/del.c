@@ -26,5 +26,5 @@ cmd_del(int argc, char **argv)
     btpd_connect();
     for (int i = 1; i < argc; i++)
         if (torrent_spec(argv[i], &t))
-            handle_ipc_res(btpd_del(ipc, &t), argv[i]);
+            handle_ipc_res(btpd_del(ipc, &t), "del", argv[i]);
 }

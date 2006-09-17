@@ -162,8 +162,8 @@ again:
             stat_cb, &cba);
     else
         err = btpd_tget(ipc, tps, ntps, stkeys, nstkeys, stat_cb, &cba);
-    if (handle_ipc_res(err, "stat") != IPC_OK)
-        exit(1);
+    if (err != IPC_OK)
+        errx(1, ipc_strerror(err));
     if (names)
         printf("-----\n");
     if (individual)

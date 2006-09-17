@@ -11,15 +11,15 @@ btpd_connect(void)
 }
 
 enum ipc_err
-handle_ipc_res(enum ipc_err code, const char *target)
+handle_ipc_res(enum ipc_err code, const char *cmd, const char *target)
 {
     switch (code) {
     case IPC_OK:
         break;
     case IPC_COMMERR:
-        errx(1, "fatal error in communication with btpd");
+        errx(1, "%s", ipc_strerror(code));
     default:
-        warnx("btpd response for '%s': %s", target, ipc_strerror(code));
+        warnx("%s '%s': %s", cmd, target, ipc_strerror(code));
     }
     return code;
 }
@@ -61,7 +61,7 @@ torrent_spec(char *arg, struct ipc_torrent *tp)
     return 1;
 }
 
-struct {
+static struct {
     const char *name;
     void (*fun)(int, char **);
     void (*help)(void);
@@ -77,7 +77,7 @@ struct {
 
 int ncmds = sizeof(cmd_table) / sizeof(cmd_table[0]);
 
-void
+static void
 usage(void)
 {
     printf(
@@ -104,7 +104,7 @@ usage(void)
     exit(1);
 }
 
-struct option base_opts [] = {
+static struct option base_opts [] = {
     { "help", no_argument, NULL, 'H' },
     {NULL, 0, NULL, 0}
 };

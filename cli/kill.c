@@ -21,6 +21,7 @@ void
 cmd_kill(int argc, char **argv)
 {
     int seconds = -1;
+    enum ipc_err code;
     char *endptr;
 
     if (argc == 2) {
@@ -31,5 +32,6 @@ cmd_kill(int argc, char **argv)
         usage_kill();
 
     btpd_connect();
-    handle_ipc_res(btpd_die(ipc, seconds), "kill");
+    if ((code = btpd_die(ipc, seconds)) != 0)
+        errx(1, "%s", ipc_strerror(code));
 }

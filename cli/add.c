@@ -27,6 +27,7 @@ usage_add(void)
 
 static struct option add_opts [] = {
     { "help", no_argument, NULL, 'H' },
+    { "nostart", no_argument, NULL, 'N'},
     { "topdir", no_argument, NULL, 'T'},
     {NULL, 0, NULL, 0}
 };
@@ -34,12 +35,15 @@ static struct option add_opts [] = {
 void
 cmd_add(int argc, char **argv)
 {
-    int ch, topdir = 0;
+    int ch, topdir = 0, start = 1;
     size_t dirlen = 0;
     char *dir = NULL, *name = NULL;
 
-    while ((ch = getopt_long(argc, argv, "d:n:", add_opts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "Nd:n:", add_opts, NULL)) != -1) {
         switch (ch) {
+        case 'N':
+            start = 0;
+            break;
         case 'T':
             topdir = 1;
             break;
@@ -64,6 +68,7 @@ cmd_add(int argc, char **argv)
     btpd_connect();
     char *mi;
     size_t mi_size;
+    enum ipc_err code;
     char dpath[PATH_MAX];
     struct io_buffer iob;
 
@@ -82,6 +87,14 @@ cmd_add(int argc, char **argv)
     buf_swrite(&iob, "");
     if (realpath(iob.buf, dpath) == NULL)
         err(1, "realpath '%s'", dpath);
-    handle_ipc_res(btpd_add(ipc, mi, mi_size, dpath, name), argv[0]);
+    code = btpd_add(ipc, mi, mi_size, dpath, name);
+    if (code == 0 && start) {
+        struct ipc_torrent tspec;
+        tspec.by_hash = 1;
+        mi_info_hash(mi, tspec.u.hash);
+        code = btpd_start(ipc, &tspec);
+    }
+    if (code != IPC_OK)
+        errx(1, "%s", ipc_strerror(code));
     return;
 }
