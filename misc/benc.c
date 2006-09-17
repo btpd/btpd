@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "benc.h"
+#include "subr.h"
 
 #define benc_safeset(out, val) if ((out) != NULL) *(out) = (val)
 
@@ -76,6 +77,24 @@ benc_validate_aux(const char *p, const char *end)
         break;
     }
     return p;
+}
+
+int
+benc_strcmp(const char *str1, const char *str2)
+{
+    size_t len1, len2;
+    const char *cs1 = benc_mem(str1, &len1, NULL);
+    const char *cs2 = benc_mem(str2, &len2, NULL);
+    int test = strncmp(cs1, cs2, min(len1, len2));
+    if (test == 0) {
+        if (len1 == len2)
+            return 0;
+        else if (len1 < len2)
+            return -1;
+        else
+            return 1;
+    } else
+        return test;
 }
 
 size_t
