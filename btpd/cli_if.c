@@ -363,9 +363,8 @@ cmd_stop_all(struct cli *cli, int argc, const char *args)
     int ret = write_code_buffer(cli, IPC_OK);
     active_clear();
     BTPDQ_FOREACH(tp, torrent_get_all(), entry)
-        if (tp->state != T_STOPPING) {
+        if (tp->state != T_STOPPING)
             torrent_stop(tp);
-        }
     return ret;
 }
 
