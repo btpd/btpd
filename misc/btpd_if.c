@@ -311,3 +311,11 @@ btpd_stop(struct ipc *ipc, struct ipc_torrent *tp)
 {
     return simple_treq(ipc, "stop", tp);
 }
+
+enum ipc_err
+btpd_stop_all(struct ipc *ipc)
+{
+    struct io_buffer iob = buf_init(16);
+    buf_swrite(&iob, "l8:stop-alle");
+    return ipc_buf_req_code(ipc, &iob);
+}

@@ -357,6 +357,19 @@ cmd_stop(struct cli *cli, int argc, const char *args)
 }
 
 static int
+cmd_stop_all(struct cli *cli, int argc, const char *args)
+{
+    struct torrent *tp;
+    int ret = write_code_buffer(cli, IPC_OK);
+    active_clear();
+    BTPDQ_FOREACH(tp, torrent_get_all(), entry)
+        if (tp->state != T_STOPPING) {
+            torrent_stop(tp);
+        }
+    return ret;
+}
+
+static int
 cmd_die(struct cli *cli, int argc, const char *args)
 {
     int err = write_code_buffer(cli, IPC_OK);
@@ -380,6 +393,7 @@ static struct {
     { "die",    3, cmd_die },
     { "start",  5, cmd_start },
     { "stop",   4, cmd_stop },
+    { "stop-all", 8, cmd_stop_all},
     { "tget",   4, cmd_tget }
 };
 
