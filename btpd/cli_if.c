@@ -59,14 +59,14 @@ write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
     switch (val) {
     case IPC_TVAL_CGOT:
         if (tl->tp == NULL)
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+            buf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->content_have);
         else
             buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
                 (long long)cm_content(tl->tp));
         return;
     case IPC_TVAL_CSIZE:
         if (tl->tp == NULL)
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+            buf_print(iob, "i%dei%llde", IPC_TYPE_ERR, tl->content_size);
         else
             buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
                 (long long)tl->tp->total_length);
@@ -167,6 +167,14 @@ write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
             }
         }
         buf_print(iob, "i%de", ts);
+        return;
+    case IPC_TVAL_TOTDWN:
+        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->tot_down +
+            (tl->tp == NULL ? 0 : tl->tp->net->downloaded));
+        return;
+    case IPC_TVAL_TOTUP:
+        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->tot_up +
+            (tl->tp == NULL ? 0 : tl->tp->net->uploaded));
         return;
     case IPC_TVAL_TRERR:
         buf_print(iob, "i%dei%ue", IPC_TYPE_NUM,

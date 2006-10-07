@@ -38,6 +38,8 @@ TVDEF(RATEUP,   NUM,            "rate_up")
 TVDEF(SESSDWN,  NUM,            "sess_down")
 TVDEF(SESSUP,   NUM,            "sess_up")
 TVDEF(STATE,    TSTATE,         "state")
+TVDEF(TOTDWN,   NUM,            "total_down")
+TVDEF(TOTUP,    NUM,            "total_up")
 TVDEF(TRERR,    NUM,            "tr_errors")
 #ifdef __IPCTV
 #undef __IPCTV
