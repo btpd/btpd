@@ -6,6 +6,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,11 @@ enum ipc_err handle_ipc_res(enum ipc_err err, const char *cmd,
     const char *target);
 char tstate_char(enum ipc_tstate ts);
 int torrent_spec(char *arg, struct ipc_torrent *tp);
+
+void print_rate(long long rate);
+void print_size(long long size);
+void print_ratio(long long part, long long whole);
+void print_percent(long long part, long long whole);
 
 void usage_add(void);
 void cmd_add(int argc, char **argv);

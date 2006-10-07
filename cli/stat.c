@@ -1,5 +1,3 @@
-#include <math.h>
-
 #include "btcli.h"
 
 void
@@ -8,11 +6,11 @@ usage_stat(void)
     printf(
         "Display stats for active torrents.\n"
         "\n"
-        "Usage: stat [-i] [-w seconds] [file ...]\n"
+        "Usage: stat [-i] [-w seconds] [torrent ...]\n"
         "\n"
         "Arguments:\n"
-        "file ...\n"
-        "\tOnly display stats for the given torrent(s).\n"
+        "torrent ...\n"
+        "\tOnly display stats for the given torrents.\n"
         "\n"
         "Options:\n"
         "-i\n"
@@ -32,7 +30,7 @@ struct btstat {
     enum ipc_tstate state;
     unsigned peers, tr_errors;
     long long content_got, content_size, downloaded, uploaded, rate_up,
-        rate_down;
+        rate_down, tot_up;
     uint32_t pieces_seen, torrent_pieces;
 };
 
@@ -51,6 +49,7 @@ static enum ipc_tval stkeys[] = {
     IPC_TVAL_PCSEEN,
     IPC_TVAL_SESSUP,
     IPC_TVAL_SESSDWN,
+    IPC_TVAL_TOTUP,
     IPC_TVAL_RATEUP,
     IPC_TVAL_RATEDWN,
     IPC_TVAL_CGOT,
@@ -60,30 +59,6 @@ static enum ipc_tval stkeys[] = {
 static size_t nstkeys = sizeof(stkeys) / sizeof(stkeys[0]);
 
 static void
-print_percent(long long part, long long whole)
-{
-    printf("%5.1f%% ", floor(1000.0 * part / whole) / 10);
-}
-
-static void
-print_rate(long long rate)
-{
-    if (rate >= 999.995 * (1 << 10))
-        printf("%6.2fMB/s ", (double)rate / (1 << 20));
-    else
-        printf("%6.2fkB/s ", (double)rate / (1 << 10));
-}
-
-static void
-print_size(long long size)
-{
-    if (size >= 999.995 * (1 << 20))
-        printf("%6.2fG ", (double)size / (1 << 30));
-    else
-        printf("%6.2fM ", (double)size / (1 << 20));
-}
-
-static void
 print_stat(struct btstat *st)
 {
     print_percent(st->content_got, st->content_size);
@@ -91,7 +66,8 @@ print_stat(struct btstat *st)
     print_rate(st->rate_down);
     print_size(st->uploaded);
     print_rate(st->rate_up);
-    printf("%5u ", st->peers);
+    print_ratio(st->tot_up, st->content_size);
+    printf("%4u ", st->peers);
     print_percent(st->pieces_seen, st->torrent_pieces);
     if (st->tr_errors > 0)
         printf("E%u", st->tr_errors);
@@ -117,18 +93,14 @@ stat_cb(int obji, enum ipc_err objerr, struct ipc_get_res *res, void *arg)
     tot->rate_down += (st.rate_down = res[IPC_TVAL_RATEDWN].v.num);
     tot->rate_up += (st.rate_up = res[IPC_TVAL_RATEUP].v.num);
     tot->peers += (st.peers = res[IPC_TVAL_PCOUNT].v.num);
+    tot->tot_up += (st.tot_up = res[IPC_TVAL_TOTUP].v.num);
     if ((st.tr_errors = res[IPC_TVAL_TRERR].v.num) > 0)
         tot->tr_errors++;
     if (cba->individual) {
         if (cba->names)
             printf("%.*s\n", (int)res[IPC_TVAL_NAME].v.str.l,
                 res[IPC_TVAL_NAME].v.str.p);
-        int n = printf("%u:", st.num);
-        while (n < 7) {
-            putchar(' ');
-            n++;
-        }
-        printf("%c. ", tstate_char(st.state));
+        printf("%4u %c. ", st.num, tstate_char(st.state));
         print_stat(&st);
     }
 }
@@ -149,10 +121,11 @@ again:
     if (header == 0) {
         if (individual) {
             header = 1;
-            printf("NUM    ST ");
+            printf(" NUM ST ");
         } else
             header = 20;
-        printf("  HAVE   DLOAD      RTDWN   ULOAD       RTUP PEERS  AVAIL\n");
+        printf("  HAVE   DLOAD      RTDWN   ULOAD       RTUP   RATIO CONN"
+            "  AVAIL\n");
     }
 
     bzero(&cba.tot, sizeof(cba.tot));
@@ -165,9 +138,9 @@ again:
     if (err != IPC_OK)
         errx(1, ipc_strerror(err));
     if (names)
-        printf("-----\n");
+        printf("-------\n");
     if (individual)
-        printf("Total:    ");
+        printf("        ");
     print_stat(&cba.tot);
     if (seconds > 0) {
         sleep(seconds);
