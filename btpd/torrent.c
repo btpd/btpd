@@ -171,8 +171,9 @@ torrent_stop(struct torrent *tp)
 {
     int tra, cma;
     switch (tp->state) {
-    case T_STARTING:
     case T_ACTIVE:
+        tlib_update_info(tp->tl);
+    case T_STARTING:
         tp->state = T_STOPPING;
         if (net_active(tp))
             net_stop(tp);

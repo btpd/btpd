@@ -70,15 +70,52 @@ tlib_del(struct tlib *tl)
     return 0;
 }
 
+static void
+dct_subst_save(FILE *fp, const char *dct1, const char *dct2)
+{
+    fprintf(fp, "d");
+    const char *k1 = benc_first(dct1), *k2 = benc_first(dct2);
+    const char *val, *str, *rest;
+    size_t len;
+
+    while (k1 != NULL && k2 != NULL) {
+        int test = benc_strcmp(k1, k2);
+        if (test < 0) {
+            str = benc_mem(k1, &len, &val);
+            fprintf(fp, "%d:%.*s", (int)len, (int)len, str);
+            fwrite(val, 1, benc_length(val), fp);
+            k1 = benc_next(val);
+        } else {
+            str = benc_mem(k2, &len, &val);
+            fprintf(fp, "%d:%.*s", (int)len, (int)len, str);
+            fwrite(val, 1, benc_length(val), fp);
+            k2 = benc_next(val);
+            if (test == 0)
+                k1 = benc_next(benc_next(k1));
+        }
+    }
+    rest = k1 != NULL ? k1 : k2;
+    while (rest != NULL) {
+        str = benc_mem(rest, &len, &val);
+        fprintf(fp, "%d:%.*s", (int)len, (int)len, str);
+        fwrite(val, 1, benc_length(val), fp);
+        rest = benc_next(val);
+    }
+    fprintf(fp, "e");
+}
+
 static int
 valid_info(char *buf, size_t len)
 {
     size_t slen;
+    const char *info;
     if (benc_validate(buf, len) != 0)
         return 0;
-    if (benc_dget_mem(buf, "name", &slen) == NULL || slen == 0)
+    if ((info = benc_dget_dct(buf, "info")) == NULL)
         return 0;
-    if ((benc_dget_mem(buf, "dir", &slen) == NULL ||
+    if (benc_dget_mem(info, "name", &slen) == NULL || slen == 0)
+        return 0;
+    if ((benc_dget_mem(info, "dir", &slen) == NULL ||
             (slen == 0 || slen >= PATH_MAX)))
         return 0;
     return 1;
@@ -89,6 +126,7 @@ load_info(struct tlib *tl, const char *path)
 {
     size_t size = 1 << 14;
     char buf[size], *p = buf;
+    const char *info;
 
     if ((errno = read_whole_file((void **)&p, &size, path)) != 0) {
         btpd_log(BTPD_L_ERROR, "couldn't load '%s' (%s).\n", path,
@@ -98,44 +136,73 @@ load_info(struct tlib *tl, const char *path)
 
     if (!valid_info(buf, size)) {
         btpd_log(BTPD_L_ERROR, "bad info file '%s'.\n", path);
-        return ;
+        return;
     }
 
-    tl->name = benc_dget_str(buf, "name", NULL);
-    tl->dir = benc_dget_str(buf, "dir", NULL);
-#if 0
-    tl->t_added = benc_dget_int(buf, "time added");
-    tl->t_active = benc_dget_int(buf, "time active");
-    tl->tot_up = benc_dget_int(buf, "total upload");
-    tl->tot_down = benc_dget_int(buf, "total download");
-#endif
+    info = benc_dget_dct(buf, "info");
+    tl->name = benc_dget_str(info, "name", NULL);
+    tl->dir = benc_dget_str(info, "dir", NULL);
+    tl->tot_up = benc_dget_int(info, "total upload");
+    tl->tot_down = benc_dget_int(info, "total download");
+    tl->content_size = benc_dget_int(info, "content size");
+    tl->content_have = benc_dget_int(info, "content have");
     if (tl->name == NULL || tl->dir == NULL)
-        btpd_err("out of memory.\n");
+        btpd_err("Out of memory.\n");
 }
 
 static void
-save_info(struct tlib *tl, const char *path)
+save_info(struct tlib *tl)
 {
     FILE *fp;
-    char wpath[PATH_MAX];
+    char relpath[SHAHEXSIZE], path[PATH_MAX], wpath[PATH_MAX];
+    char *old = NULL;
+    size_t size = 1 << 14;
+    struct io_buffer iob = buf_init(1 << 10);
+
+    buf_print(&iob,
+        "d4:infod"
+        "12:content havei%llde12:content sizei%llde"
+        "3:dir%d:%s4:name%d:%s"
+        "14:total downloadi%llde12:total uploadi%llde"
+        "ee",
+        tl->content_have, tl->content_size,
+        (int)strlen(tl->dir), tl->dir, (int)strlen(tl->name), tl->name,
+        tl->tot_down, tl->tot_up);
+    if (iob.error)
+        btpd_err("Out of memory.\n");
+
+    if ((errno = read_whole_file((void **)&old, &size, path)) != 0
+            && errno != ENOENT)
+        btpd_log(BTPD_L_ERROR, "couldn't load '%s' (%s).\n", path,
+            strerror(errno));
+
+    bin2hex(tl->hash, relpath, 20);
+    snprintf(path, PATH_MAX, "torrents/%s/info", relpath);
     snprintf(wpath, PATH_MAX, "%s.write", path);
     if ((fp = fopen(wpath, "w")) == NULL)
         btpd_err("failed to open '%s' (%s).\n", wpath, strerror(errno));
-    fprintf(fp, "d3:dir%d:%s4:name%d:%s", (int)strlen(tl->dir), tl->dir,
-        (int)strlen(tl->name), tl->name);
-#if 0
-    fprintf(fp, "11:time activei%lde10:time addedi%lde", tl->t_active,
-        tl->t_added);
-    fprintf(fp, "14:total downloadi%llde12:total uploadi%lldee", tl->tot_down,
-        tl->tot_up);
-#else
-    fprintf(fp, "e");
-#endif
+    if (old != NULL) {
+        dct_subst_save(fp, old, iob.buf);
+        free(old);
+    } else
+        dct_subst_save(fp, "de", iob.buf);
+    buf_free(&iob);
     if (ferror(fp) || fclose(fp) != 0)
         btpd_err("failed to write '%s'.\n", wpath);
     if (rename(wpath, path) != 0)
         btpd_err("failed to rename: '%s' -> '%s' (%s).\n", wpath, path,
             strerror(errno));
+}
+
+void
+tlib_update_info(struct tlib *tl)
+{
+    assert(tl->tp != NULL);
+    tl->tot_down += tl->tp->net->downloaded;
+    tl->tot_up += tl->tp->net->uploaded;
+    tl->content_have = cm_content(tl->tp);
+    tl->content_size = tl->tp->total_length;
+    save_info(tl);
 }
 
 static void
@@ -160,9 +227,6 @@ tlib_add(const uint8_t *hash, const char *mi, size_t mi_size,
     const char *content, char *name)
 {
     struct tlib *tl = tlib_create(hash);
-#if 0
-    struct timeval tv;
-#endif
     char relpath[RELPATH_SIZE], file[PATH_MAX];
     bin2hex(hash, relpath, 20);
 
@@ -170,23 +234,18 @@ tlib_add(const uint8_t *hash, const char *mi, size_t mi_size,
         if ((name = mi_name(mi)) == NULL)
             btpd_err("out of memory.\n");
 
+    tl->content_size = mi_total_length(mi);
     tl->name = name;
     tl->dir = strdup(content);
     if (tl->name == NULL || tl->dir == NULL)
         btpd_err("out of memory.\n");
-
-#if 0
-    gettimeofday(&tv, NULL);
-    tl->t_added = tv.tv_sec;
-#endif
 
     snprintf(file, PATH_MAX, "torrents/%s", relpath);
     if (mkdir(file, 0777) != 0)
         btpd_err("failed to create dir '%s' (%s).\n", file, strerror(errno));
     snprintf(file, PATH_MAX, "torrents/%s/torrent", relpath);
     write_torrent(mi, mi_size, file);
-    snprintf(file, PATH_MAX, "torrents/%s/info", relpath);
-    save_info(tl, file);
+    save_info(tl);
     return tl;
 }
 

@@ -8,10 +8,10 @@ struct tlib {
 
     char *name;
     char *dir;
-#if 0
+
     unsigned long long tot_up, tot_down;
-    long t_added, t_active;
-#endif
+    off_t content_size, content_have;
+
     HTBL_ENTRY(nchain);
     HTBL_ENTRY(hchain);
 };
@@ -22,6 +22,8 @@ void tlib_put_all(struct tlib **v);
 struct tlib *tlib_add(const uint8_t *hash, const char *mi, size_t mi_size,
     const char *content, char *name);
 int tlib_del(struct tlib *tl);
+
+void tlib_update_info(struct tlib *tl);
 
 struct tlib *tlib_by_hash(const uint8_t *hash);
 struct tlib *tlib_by_num(unsigned num);
