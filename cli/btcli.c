@@ -122,14 +122,18 @@ usage(void)
         "\tShow this text or help for the specified command.\n"
         "\n"
         "Commands:\n"
-        "add\n"
-        "del\n"
-        "kill\n"
-        "list\n"
-        "start\n"
-        "stat\n"
-        "stop\n"
-        "\n");
+        "add\t-\tAdd torrents to btpd.\n"
+        "del\t-\tRemove torrents from btpd.\n"
+        "kill\t-\tShut down btpd.\n"
+        "list\t-\tList torrents.\n"
+        "start\t-\tActivate torrents.\n"
+        "stat\t-\tDisplay stats for active torrents.\n"
+        "stop\t-\tDeactivate torrents.\n"
+        "\n"
+        "Note:\n"
+        "Torrents can be specified either with its number or its file.\n"
+        "\n"
+        );
     exit(1);
 }
 

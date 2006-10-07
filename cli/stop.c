@@ -4,14 +4,18 @@ void
 usage_stop(void)
 {
     printf(
-        "Stop torrents.\n"
+        "Deactivate torrents.\n"
         "\n"
         "Usage: stop -a\n"
         "       stop torrent ...\n"
         "\n"
+        "Arguments:\n"
+        "torrent ...\n"
+        "\tThe torrents to deactivate.\n"
+        "\n"
         "Options:\n"
         "-a\n"
-        "\tStop all active torrents.\n"
+        "\tDeactivate all active torrents.\n"
         "\n"
         );
     exit(1);
