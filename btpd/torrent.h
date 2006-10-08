@@ -15,6 +15,7 @@ struct torrent {
 
     char relpath[RELPATH_SIZE];
     enum torrent_state state;
+    int delete;
 
     struct content *cm;
     struct tracker *tr;

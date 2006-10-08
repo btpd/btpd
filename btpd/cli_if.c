@@ -291,8 +291,8 @@ cmd_del(struct cli *cli, int argc, const char *args)
     if (argc != 1)
         return IPC_COMMERR;
 
+    int ret;
     struct tlib *tl;
-    enum ipc_err code = IPC_OK;
     if (benc_isstr(args) && benc_strlen(args) == 20)
         tl = tlib_by_hash(benc_mem(args, NULL, NULL));
     else if (benc_isint(args))
@@ -301,13 +301,17 @@ cmd_del(struct cli *cli, int argc, const char *args)
         return IPC_COMMERR;
 
     if (tl == NULL)
-        code = IPC_ENOTENT;
-    else if (tl->tp != NULL)
-        code = IPC_ETACTIVE;
-    else
-        tlib_del(tl);
+        ret = write_code_buffer(cli, IPC_ENOTENT);
+    else {
+        ret = write_code_buffer(cli, IPC_OK);
+        if (tl->tp != NULL) {
+            tl->tp->delete = 1;
+            torrent_stop(tl->tp);
+        } else
+            tlib_del(tl);
+    }
 
-    return write_code_buffer(cli, code);
+    return ret;
 }
 
 static int

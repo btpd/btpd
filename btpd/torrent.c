@@ -160,6 +160,8 @@ torrent_kill(struct torrent *tp)
     net_kill(tp);
     cm_kill(tp);
     tp->tl->tp = NULL;
+    if (tp->delete)
+        tlib_del(tp->tl);
     mi_free_files(tp->nfiles, tp->files);
     free(tp);
     if (m_ntorrents == 0)
