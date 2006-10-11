@@ -88,7 +88,7 @@ cmd_add(int argc, char **argv)
         buf_swrite(&iob, "/");
         buf_write(&iob, td, tdlen);
     }
-    buf_swrite(&iob, "");
+    buf_swrite(&iob, "\0");
     if (realpath(iob.buf, dpath) == NULL)
         err(1, "realpath '%s'", dpath);
     code = btpd_add(ipc, mi, mi_size, dpath, name);
