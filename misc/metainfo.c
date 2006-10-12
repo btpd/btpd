@@ -279,7 +279,7 @@ mi_test_files(const char *files)
         int pcount = 0;
         if (!benc_isdct(fdct))
             return 0;
-        if (benc_dget_int(fdct, "length") <= 0)
+        if (benc_dget_int(fdct, "length") < 0)
             return 0;
         if ((plst = benc_dget_lst(fdct, "path")) == NULL)
             return 0;

@@ -595,6 +595,12 @@ again:
             if (truncate(path, tp->files[i].length) != 0)
                 return errno;
             goto again;
+        } else if (ret[i].size == -1 && tp->files[i].length == 0) {
+            int fd;
+            errno = vopen(&fd, O_CREAT|O_RDWR, "%s", path);
+            if (errno != 0 || close(fd) != 0)
+                return errno;
+            goto again;
         }
     }
     return 0;

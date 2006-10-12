@@ -83,6 +83,8 @@ bts_get(struct bt_stream *bts, off_t off, uint8_t *buf, size_t len)
     boff = 0;
     while (boff < len) {
         if (bts->fd == -1) {
+            while (bts->files[bts->index].length == 0)
+                bts->index++;
             err = bts->fd_cb(bts->files[bts->index].path,
                 &bts->fd, bts->fd_arg);
             if (err != 0)
@@ -125,6 +127,8 @@ bts_put(struct bt_stream *bts, off_t off, const uint8_t *buf, size_t len)
     boff = 0;
     while (boff < len) {
         if (bts->fd == -1) {
+            while (bts->files[bts->index].length == 0)
+                bts->index++;
             err = bts->fd_cb(bts->files[bts->index].path,
                 &bts->fd, bts->fd_arg);
             if (err != 0)
