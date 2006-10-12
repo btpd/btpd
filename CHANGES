@@ -1,3 +1,26 @@
+btpd 0.12:
+----------
+
+Misc:
+- btpd now starts with the same set of active torrents as it had when it was
+  last shut down. The new '--empty-start' option disables this feature.
+- btpd now supports the key tracker extension.
+- btpd now supports the multi tracker extension.
+- btcli list and stat print headers for the presented data. Both commands
+  displays more data than before.
+- Torrent management has changed, with changes to the add and del commands
+  and two new commands, start and stop, as a result. Operation on torrents
+  can now be done by number as well as torrent file.
+- A small delay has been added for contacting the same announce URL.
+- btpd sends keepalive messages.
+- The number of have messages sent has been reduced by not sending them to
+  peers that already have the piece.
+- The structure of the torrents directory in the btpd directory has changed.
+  It is best to remove it before running btpd 0.12.
+
+Bug fixes:
+- Zero sized files in a torrent were not always created.
+
 btpd 0.11:
 ----------
 
