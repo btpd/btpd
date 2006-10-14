@@ -225,46 +225,38 @@ read_fully(int fd, void *buf, size_t len)
     return 0;
 }
 
-int
-read_whole_file(void **out, size_t *size, const char *fmt, ...)
+void *
+read_file(const char *path, void *buf, size_t *size)
 {
-    int err, fd;
-    int didmalloc = 0;
+    int fd, esave;
+    void *mem = NULL;
     struct stat sb;
-    va_list ap;
 
-    va_start(ap, fmt);
-    err = vaopen(&fd, O_RDONLY, fmt, ap);
-    va_end(ap);
-    if (err != 0)
-        return err;
-    if (fstat(fd, &sb) != 0) {
-        err = errno;
+    if ((fd = open(path, O_RDONLY)) == -1)
+        return NULL;
+    if (fstat(fd, &sb) == -1)
         goto error;
-    }
     if (*size != 0 && *size < sb.st_size) {
-        err = EFBIG;
+        errno = EFBIG;
         goto error;
     }
     *size = sb.st_size;
-    if (*out == NULL) {
-        if ((*out = malloc(*size)) == NULL) {
-            err = errno;
-            goto error;
-        }
-        didmalloc = 1;
-    }
-    if ((err = read_fully(fd, *out, *size)) != 0)
+    if (buf == NULL && (mem = malloc(sb.st_size)) == NULL)
         goto error;
-
+    if (buf == NULL)
+        buf = mem;
+    if ((errno = read_fully(fd, buf, *size)) != 0)
+        goto error;
     close(fd);
-    return 0;
+    return buf;
 
 error:
-    if (didmalloc)
-        free(*out);
+    esave = errno;
+    if (mem != NULL)
+        free(mem);
     close(fd);
-    return err;
+    errno = esave;
+    return NULL;
 }
 
 char *

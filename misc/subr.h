@@ -33,8 +33,7 @@ long rand_between(long min, long max);
 
 int read_fully(int fd, void *buf, size_t len);
 int write_fully(int fd, const void *buf, size_t len);
-__attribute__((format (printf, 3, 4)))
-int read_whole_file(void **out, size_t *size, const char *fmt, ...);
+void *read_file(const char *path, void *buf, size_t *size);
 
 char *find_btpd_dir(void);
 
