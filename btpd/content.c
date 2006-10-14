@@ -106,7 +106,7 @@ static int
 fd_cb_wr(const char *path, int *fd, void *arg)
 {
     struct torrent *tp = arg;
-    return vopen(fd, O_RDWR|O_CREAT, "%s/%s", tp->tl->dir, path);
+    return vopen(fd, O_RDWR, "%s/%s", tp->tl->dir, path);
 }
 
 static void
@@ -576,6 +576,7 @@ struct rstat {
 int
 stat_and_adjust(struct torrent *tp, struct rstat ret[])
 {
+    int fd;
     char path[PATH_MAX];
     struct stat sb;
     for (int i = 0; i < tp->nfiles; i++) {
@@ -583,24 +584,19 @@ stat_and_adjust(struct torrent *tp, struct rstat ret[])
 again:
         if (stat(path, &sb) == -1) {
             if (errno == ENOENT) {
-                ret[i].mtime = -1;
-                ret[i].size = -1;
+                errno = vopen(&fd, O_CREAT|O_RDWR, "%s", path);
+                if (errno != 0 || close(fd) != 0)
+                    return errno;
+                goto again;
             } else
                 return errno;
-        } else {
-            ret[i].mtime = sb.st_mtime;
-            ret[i].size = sb.st_size;
-        }
-        if (ret[i].size > tp->files[i].length) {
+        } else if (sb.st_size > tp->files[i].length) {
             if (truncate(path, tp->files[i].length) != 0)
                 return errno;
             goto again;
-        } else if (ret[i].size == -1 && tp->files[i].length == 0) {
-            int fd;
-            errno = vopen(&fd, O_CREAT|O_RDWR, "%s", path);
-            if (errno != 0 || close(fd) != 0)
-                return errno;
-            goto again;
+        } else {
+            ret[i].mtime = sb.st_mtime;
+            ret[i].size = sb.st_size;
         }
     }
     return 0;
@@ -688,10 +684,7 @@ cm_td_start(struct cm_op *op)
                 uint32_t start, end;
                 end = (off + tp->files[i].length - 1)
                     / tp->piece_length;
-                if (sbs[i].size == -1)
-                    start = off / tp->piece_length;
-                else
-                    start = (off + sbs[i].size) / tp->piece_length;
+                start = (off + sbs[i].size) / tp->piece_length;
                 while (start <= end) {
                     clear_bit(cm->pos_field, start);
                     clear_bit(cm->piece_field, start);
