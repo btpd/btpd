@@ -321,8 +321,8 @@ peer_create_out_compact(struct net *n, const char *compact)
     struct sockaddr_in addr;
 
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = *(long *)compact;
-    addr.sin_port = *(short *)(compact + 4);
+    bcopy(compact, &addr.sin_addr.s_addr, 4);
+    bcopy(compact + 4, &addr.sin_port, 2);
 
     if (net_connect2((struct sockaddr *)&addr, sizeof(addr), &sd) != 0)
         return;
