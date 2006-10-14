@@ -36,5 +36,6 @@ int write_fully(int fd, const void *buf, size_t len);
 void *read_file(const char *path, void *buf, size_t *size);
 
 char *find_btpd_dir(void);
+int make_abs_path(const char *in, char *out);
 
 #endif

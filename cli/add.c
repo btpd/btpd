@@ -89,8 +89,8 @@ cmd_add(int argc, char **argv)
         buf_write(&iob, td, tdlen);
     }
     buf_swrite(&iob, "\0");
-    if (realpath(iob.buf, dpath) == NULL)
-        err(1, "realpath '%s'", dpath);
+    if ((errno = make_abs_path(iob.buf, dpath)) != 0)
+        err(1, "make_abs_path '%s'", dpath);
     code = btpd_add(ipc, mi, mi_size, dpath, name);
     if (code == 0 && start) {
         struct ipc_torrent tspec;

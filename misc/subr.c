@@ -276,3 +276,107 @@ find_btpd_dir(void)
         asprintf(&res, "%s/.btpd", home);
     return res;
 }
+
+int
+make_abs_path(const char *in, char *out)
+{
+    int ii = 0, oi = 0, lastsep = 0;
+    switch (in[0]) {
+    case '\0':
+        return EINVAL;
+    case '/':
+        if (strlen(in) >= PATH_MAX)
+            return ENAMETOOLONG;
+        out[0] = '/';
+        oi++;
+        ii++;
+        break;
+    default:
+        if (getcwd(out, PATH_MAX) == NULL)
+            return errno;
+        oi = strlen(out);
+        if (oi + strlen(in) + 1 >= PATH_MAX)
+            return ENAMETOOLONG;
+        out[oi] = '/';
+        lastsep = oi;
+        oi++;
+        break;
+    }
+after_slash:
+    while (in[ii] == '/')
+        ii++;
+    switch(in[ii]) {
+    case '\0':
+        goto end;
+    case '.':
+        ii++;
+        goto one_dot;
+    default:
+        goto normal;
+    }
+one_dot:
+    switch (in[ii]) {
+    case '\0':
+        goto end;
+    case '/':
+        ii++;
+        goto after_slash;
+    case '.':
+        ii++;
+        goto two_dot;
+    default:
+        out[oi] = '.';
+        oi++;
+        goto normal;
+    }
+two_dot:
+    switch (in[ii]) {
+    case '\0':
+        if (lastsep == 0)
+            oi = 1;
+        else {
+            oi = lastsep;
+            while (out[oi - 1] != '/')
+                oi--;
+            lastsep = oi - 1;
+        }
+        goto end;
+    case '/':
+        if (lastsep == 0)
+            oi = 1;
+        else {
+            oi = lastsep;
+            while (out[oi - 1] != '/')
+                oi--;
+            lastsep = oi - 1;
+        }
+        ii++;
+        goto after_slash;
+    default:
+        out[oi] = '.';
+        out[oi + 1] = '.';
+        oi += 2;
+        goto normal;
+    }
+normal:
+    switch (in[ii]) {
+    case '\0':
+        goto end;
+    case '/':
+        out[oi] = '/';
+        lastsep = oi;
+        oi++;
+        ii++;
+        goto after_slash;
+    default:
+        out[oi] = in[ii];
+        oi++;
+        ii++;
+        goto normal;
+    }
+end:
+    if (oi == lastsep + 1 && lastsep != 0)
+        oi = lastsep;
+    out[oi] = '\0';
+    return 0;
+}
