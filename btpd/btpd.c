@@ -1,5 +1,6 @@
 #include <signal.h>
 #include <string.h>
+#include <time.h>
 
 #include "btpd.h"
 #include "http.h"
