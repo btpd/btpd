@@ -376,10 +376,10 @@ mi_test(const char *p, size_t size)
 char *
 mi_load(const char *path, size_t *size)
 {
-    void *res = NULL;
+    char *res;
     size_t mi_size = (1 << 21);
 
-    if ((errno = read_whole_file(&res, &mi_size, path)) != 0)
+    if ((res = read_file(path, NULL, &mi_size)) == NULL)
         return NULL;
     if (!mi_test(res, mi_size)) {
         free(res);
