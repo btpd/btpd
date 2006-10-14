@@ -38,6 +38,10 @@ tlib_kill(struct tlib *tl)
 {
     numtbl_remove(m_numtbl, &tl->num);
     hashtbl_remove(m_hashtbl, tl->hash);
+    if (tl->name != NULL)
+        free(tl->name);
+    if (tl->dir != NULL)
+        free(tl->dir);
     free(tl);
     m_ntlibs--;
 }
@@ -125,10 +129,10 @@ static void
 load_info(struct tlib *tl, const char *path)
 {
     size_t size = 1 << 14;
-    char buf[size], *p = buf;
+    char buf[size];
     const char *info;
 
-    if ((errno = read_whole_file((void **)&p, &size, path)) != 0) {
+    if (read_file(path, buf, &size) == NULL) {
         btpd_log(BTPD_L_ERROR, "couldn't load '%s' (%s).\n", path,
             strerror(errno));
         return;
@@ -155,8 +159,6 @@ save_info(struct tlib *tl)
 {
     FILE *fp;
     char relpath[SHAHEXSIZE], path[PATH_MAX], wpath[PATH_MAX];
-    char *old = NULL;
-    size_t size = 1 << 14;
     struct io_buffer iob = buf_init(1 << 10);
 
     buf_print(&iob,
@@ -171,21 +173,13 @@ save_info(struct tlib *tl)
     if (iob.error)
         btpd_err("Out of memory.\n");
 
-    if ((errno = read_whole_file((void **)&old, &size, path)) != 0
-            && errno != ENOENT)
-        btpd_log(BTPD_L_ERROR, "couldn't load '%s' (%s).\n", path,
-            strerror(errno));
-
     bin2hex(tl->hash, relpath, 20);
     snprintf(path, PATH_MAX, "torrents/%s/info", relpath);
     snprintf(wpath, PATH_MAX, "%s.write", path);
+
     if ((fp = fopen(wpath, "w")) == NULL)
         btpd_err("failed to open '%s' (%s).\n", wpath, strerror(errno));
-    if (old != NULL) {
-        dct_subst_save(fp, old, iob.buf);
-        free(old);
-    } else
-        dct_subst_save(fp, "de", iob.buf);
+    dct_subst_save(fp, "de", iob.buf);
     buf_free(&iob);
     if (ferror(fp) || fclose(fp) != 0)
         btpd_err("failed to write '%s'.\n", wpath);
@@ -295,7 +289,7 @@ tlib_init(void)
     if ((dirp = opendir("torrents")) == NULL)
         btpd_err("couldn't open the torrents directory.\n");
     while ((dp = readdir(dirp)) != NULL) {
-        if (dp->d_namlen == 40 && ishex(dp->d_name)) {
+        if (strlen(dp->d_name) == 40 && ishex(dp->d_name)) {
             struct tlib * tl = tlib_create(hex2bin(dp->d_name, hash, 20));
             snprintf(file, PATH_MAX, "torrents/%s/info", dp->d_name);
             load_info(tl, file);
