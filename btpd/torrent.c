@@ -95,16 +95,24 @@ torrent_start(struct tlib *tl)
     if (tl->dir == NULL)
         return IPC_EBADTENT;
 
-    if (mkdirs(tl->dir, 0777) != 0 && errno != EEXIST) {
-        btpd_log(BTPD_L_ERROR, "torrent '%s': "
-            "failed to create content dir '%s' (%s).\n",
-            tl->name, tl->dir, strerror(errno));
-        return IPC_ECREATECDIR;
-    } else if (stat(tl->dir, &sb) == -1 ||
-            ((sb.st_mode & S_IFMT) != S_IFDIR)) {
+    if (stat(tl->dir, &sb) == 0) {
+        if ((sb.st_mode & S_IFMT) != S_IFDIR) {
+            btpd_log(BTPD_L_ERROR,
+                "torrent '%s': content dir '%s' is not a directory\n",
+                tl->name, tl->dir);
+            return IPC_EBADCDIR;
+        }
+    } else if (errno == ENOENT) {
+        if (mkdirs(tl->dir, 0777) != 0 && errno != EEXIST) {
+            btpd_log(BTPD_L_ERROR, "torrent '%s': "
+                "failed to create content dir '%s' (%s).\n",
+                tl->name, tl->dir, strerror(errno));
+            return IPC_ECREATECDIR;
+        }
+    } else {
         btpd_log(BTPD_L_ERROR,
-            "torrent '%s': content dir '%s' is either not a directory or"
-            " cannot be accessed.\n", tl->name, tl->dir);
+            "torrent '%s': couldn't stat content dir '%s' (%s)\n",
+            tl->name, tl->dir, strerror(errno));
         return IPC_EBADCDIR;
     }
 
