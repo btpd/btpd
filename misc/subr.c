@@ -97,24 +97,24 @@ set_blocking(int fd)
 }
 
 int
-mkdirs(char *path)
+mkdirs(char *path, int mode)
 {
     int err = 0;
-    char *spos = strchr(path + 1, '/'); // Must ignore the root
+    char *spos = strchr(path + 1, '/'); // Skip leading '/'
 
     while (spos != NULL) {
         *spos = '\0';
-        err = mkdir(path, 0777);
+        err = mkdir(path, mode);
         *spos = '/';
 
-        if (err != 0 && errno != EEXIST) {
-            err = errno;
-            break;
-        }
+        if (err != 0 && errno != EEXIST)
+            return errno;
 
         spos = strchr(spos + 1, '/');
     }
-    return err;
+    if (mkdir(path, mode) != 0)
+        return errno;
+    return 0;
 }
 
 int
@@ -130,11 +130,16 @@ vaopen(int *res, int flags, const char *fmt, va_list ap)
 again:
     fd = open(path, flags, 0666);
     if (fd < 0 && errno == ENOENT && (flags & O_CREAT) != 0 && !didmkdirs) {
-        if (mkdirs(path) == 0) {
-            didmkdirs = 1;
-            goto again;
-        } else
-            return errno;
+        char *rs = rindex(path, '/');
+        if (rs != NULL) {
+            *rs = '\0';
+            if (mkdirs(path, 0777) == 0) {
+                *rs = '/';
+                didmkdirs = 1;
+                goto again;
+            }
+        }
+        return errno;
     }
 
     if (fd >= 0) {

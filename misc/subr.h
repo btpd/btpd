@@ -10,7 +10,7 @@
 int set_nonblocking(int fd);
 int set_blocking(int fd);
 
-int mkdirs(char *path);
+int mkdirs(char *path, int mode);
 
 __attribute__((format (printf, 3, 0)))
 int vaopen(int *resfd, int flags, const char *fmt, va_list ap);

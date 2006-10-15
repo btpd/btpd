@@ -95,7 +95,7 @@ torrent_start(struct tlib *tl)
     if (tl->dir == NULL)
         return IPC_EBADTENT;
 
-    if (mkdir(tl->dir, 0777) != 0 && errno != EEXIST) {
+    if (mkdirs(tl->dir, 0777) != 0 && errno != EEXIST) {
         btpd_log(BTPD_L_ERROR, "torrent '%s': "
             "failed to create content dir '%s' (%s).\n",
             tl->name, tl->dir, strerror(errno));
