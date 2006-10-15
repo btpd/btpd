@@ -146,11 +146,6 @@ bts_put(struct bt_stream *bts, off_t off, const uint8_t *buf, size_t len)
         bts->f_off += didwrite;
         bts->t_off += didwrite;
         if (bts->f_off == bts->files[bts->index].length) {
-            if (fsync(bts->fd) == -1) {
-                int err = errno;
-                close(bts->fd);
-                return err;
-            }
             if (close(bts->fd) == -1)
                 return errno;
             bts->fd = -1;
