@@ -156,12 +156,14 @@ torrent_kill(struct torrent *tp)
     assert(!(tr_active(tp) || net_active(tp) || cm_active(tp)));
     m_ntorrents--;
     BTPDQ_REMOVE(&m_torrents, tp, entry);
-    tr_kill(tp);
-    net_kill(tp);
-    cm_kill(tp);
+    if (!tp->delete)
+        tlib_update_info(tp->tl);
     tp->tl->tp = NULL;
     if (tp->delete)
         tlib_del(tp->tl);
+    tr_kill(tp);
+    net_kill(tp);
+    cm_kill(tp);
     mi_free_files(tp->nfiles, tp->files);
     free(tp);
     if (m_ntorrents == 0)
@@ -174,7 +176,6 @@ torrent_stop(struct torrent *tp)
     int tra, cma;
     switch (tp->state) {
     case T_ACTIVE:
-        tlib_update_info(tp->tl);
     case T_STARTING:
         tp->state = T_STOPPING;
         if (net_active(tp))
