@@ -7,7 +7,7 @@ Contents
 1.a               What is btpd?
 1.b               The programs
 1.c               The btcli commands
-2.              Using btpd
+2               Using btpd
 2.a               Introduction
 2.b               Starting btpd
 2.c               Examples
@@ -68,9 +68,9 @@ Contents
   The up- and download progress can be followed by using the 'btcli stat'
   command. Both the list and stat commands use the following indicators to
   display the state of a torrent:
-  +     the torrent is starting. This Can take time if btpd needs to test
+  +     the torrent is starting. This may take time if btpd needs to test
         the content of this torrent or one started before it.
-  -     the torrent is being stopped. Can take time if the tracker is
+  -     the torrent is being stopped. May take time if the tracker is
         unresponsive. 
   I     the torrent is inactive.
   S     btpd is seeding the torrent.
@@ -103,7 +103,7 @@ Contents
   it needs to be able to write there during its execution. You can specify
   another directory via the '-d' option or the $BTPD_HOME variable.
 
-  I recommend specifiying the maximum number of uploads. bittorrent employs a
+  I recommend specifiying the maximum number of uploads. Bittorrent employs a
   tit for tat algorithm, so uploading at good rates allows for downloading.
   Try to find a balance between uploads/outgoing bandwidth and the number of
   active torrents.
@@ -189,4 +189,5 @@ Contents
 4.a btpd 0.12
 
   The layout of the torrents directory in the btpd directory has changed
-  since previous versions. Please remove it before running the new version.
+  since previous versions. Please remove the torrents directory before
+  running 0.12 or later.
