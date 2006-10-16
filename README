@@ -6,113 +6,161 @@ Contents
 1               Introduction
 1.a               What is btpd?
 1.b               The programs
+1.c               The btcli commands
 2.              Using btpd
-2.a               Typical usage pattern
+2.a               Introduction
 2.b               Starting btpd
-2.c               Sharing torrents
-2.d               Information on active torrents
-2.e               Murder
+2.c               Examples
+2.d               Troubleshooting
 3               Building
 3.a               Requirements
 3.b               Standard build
+4               Upgrade notes
+4.a               btpd 0.12
 
 1. Introduction
 
 1.a What is btpd?
 
-  btpd is a BitTorrent client consisting of a daemon and client commands,
+  btpd is a bittorrent client consisting of a daemon and client commands,
   which can be used to read and/or manipulate the daemon state. The daemon
   is capable of running several torrents simultaneously and only uses one
-  tcp port. It's fairly low on resource usage and should be perfect for a
-  torrent distribution site. Efficient downloads and ease of use makes this
+  tcp port. It's fairly low on resource usage and should be perfect for
+  file distribution sites. Efficient downloads and ease of use makes this
   client a good choice for the casual user as well.
 
 1.b The programs
 
   btpd consists of the following programs:
-  * btpd     - The BitTorrent client.
+  * btpd     - The bittorrent client.
   * btcli    - Command line interface to btpd.
   * btinfo   - Shows information from a torrent file.
 
-  All programs accept the helpful "--help" option.
+  All programs accept the "--help" option.
+
+1.c The btcli commands
+
+  The btcli utility has several different modes of operation. One of the
+  following commands must be specified when running btcli:
+  * add      - Add torrents to btpd.
+  * del      - Remove torrents from btpd.
+  * kill     - Shut down btpd.
+  * list     - List torrents.
+  * start    - Activate torrents.
+  * stat     - Display stats for active torrents.
+  * stop     - Deactivate torrents.
 
 2. Using btpd
 
-2.a Typical usage pattern
+2.a Introduction
 
-  When you use this client you will mostly use the btcli tool. With btcli
-  you can tell btpd which torrents to run, list the active torrents and
-  display stats for them. You can even tell btpd to exit if you're so in-
-  clined. Before you can use this tool however, btpd must be started. The
-  typical usage pattern goes something like this:
-    1. start btpd.
-    2. add one or more torrents to btpd.
-    3. any of many different actions: display stats, add more or remove
-       torrents, go drink coffe, etc...
-  666. tell btpd to exit.
+  To start sharing a torrent with btpd, the torrent needs to be added to
+  btpd. This is done with 'btcli add'. When you add a torrent btpd auto-
+  matically (if you didn't specify otherwise) starts to share the torrent
+  and download any missing data. The content directory you specify when
+  adding a torrent doesn't need to exist; it will be created by btpd.
+
+  You can see which torrents have been added to btpd with 'btcli list'.
+  The list command also displays a number for each added torrent. This number
+  can be used to specify the target torrent for the btcli commands, so you
+  don't have to keep the torrent file once you've added it.
+
+  The up- and download progress can be followed by using the 'btcli stat'
+  command. Both the list and stat commands use the following indicators to
+  display the state of a torrent:
+  +     the torrent is starting. This Can take time if btpd needs to test
+        the content of this torrent or one started before it.
+  -     the torrent is being stopped. Can take time if the tracker is
+        unresponsive. 
+  I     the torrent is inactive.
+  S     btpd is seeding the torrent.
+  L     btpd is leeching the torrent.
+
+  You can stop an active torrent with 'btcli stop' and, of course,
+  start an inactive torrent by using 'btcli start'.
+
+  The 'btcli del' command should only be used when you're totally finished
+  with sharing a torrent. The command will remove the torrent and its
+  associated data from btpd. It's an escpecially bad idea to remove a not
+  fully downloaded torrent and then adding it again, since btpd has lost
+  information on the not fully downloaded pieces and will need to download
+  the data again.
+
+  To shut down btpd use 'btcli kill'. Don't forget to read the help for each
+  of btcli's commands.
 
 2.b Starting btpd
 
-  NOTE: As described in the section above, you should only need one instance
-  of btpd regardless of how many torrents you want to share.
+  NOTE: You should only need one instance of btpd regardless of how many
+  torrents you want to share.
 
-  To start btpd with default settings you only need to run it. There are
-  however, many useful options you may want to use. To see a full list run
-  'btpd --help'.
+  To start btpd with default settings you only need to run it. However,
+  there are many useful options you may want to use. To see a full list
+  run 'btpd --help'. If you didn't specify otherwise,  btpd starts with
+  the same set of active torrents as it had the last time it was shut down.
 
   btdp will store information and write its log in $HOME/.btpd. Therefore
   it needs to be able to write there during its execution. You can specify
   another directory via the '-d' option or the $BTPD_HOME variable.
 
-  I recommend specifiying the maximum number of uploads. BitTorrent employs a
+  I recommend specifiying the maximum number of uploads. bittorrent employs a
   tit for tat algorithm, so uploading at good rates allows for downloading.
   Try to find a balance between uploads/outgoing bandwidth and the number of
   active torrents.
 
-2.c Sharing torrents
+2.c Examples
 
-  To make btpd start leeching or seeding a torrent you use the 'btcli add'
-  command. In similar vein the 'btcli del' command will make btpd stop shar-
-  ing the torrent.
+  Start btpd with all options set to their default values.
+  # btpd
 
-  The first time you add a torrent you must specify where btpd should put
-  its content. This is not needed on subsequent add's of the same torrent
-  since btpd stores that information. Of course, if you move the content
-  directory between runs you need to specify it again.
+  Start btpd and make it listen on port 12345, limit outgoing bandwidth to
+  200kB/s, limit the number of peers to 40 and not start any torrents that
+  were active the last time btpd was shut down.
+  # btpd -p 12345 --bw-out 200 --max-peers 40 --empty-start
 
-  Examples:
-  Add foo.torrent and download its content to the foo.content directory.
-  # btcli add -d foo.content foo.torrent
+  Display a list btpd's torrents and their number, size, status, etc.
+  # btcli list
 
-  Stop sharing foo.torrent.
-  # btcli del foo.torrent
+  Same as above, but only for torrent 12 and my.little.torrent.
+  # btcli list 12 my.little.torrent
+  
+  Same as above but only for active torrents.
+  # btcli list -a
 
-  Start it again. Notice the absence of '-d foo.content'.
-  # btcli add foo.torrent
+  Add foo.torrent, with content dir foo.torrent.d, and start it.
+  # btcli add -d foo.torrent.d foo.torrent
 
-  Add bar.torrent and place the content like the mainline client.
-  # btcli add --topdir -d . bar.torrent
+  Same as above without starting it.
+  # btcli add --no-start -d foo.torrent.d foo.torrent 
 
-2.d Information on active torrents
+  Start bar.torrent and torrent number 7.
+  # btcli start bar.torrent 7
 
-  In case you're not happy only guessing about your torrents progress, or
-  can't remember which torrents are active, you may want to take a look at
-  the 'btcli stat' and 'btcli list' commands. 'btcli list' will, not totally
-  surprisingly, display a list of active torrents. 'btcli stat' will display
-  information such as rates and MBs uploaded and downloaded. See
-  'btcli --help stat' to make sense of it.
+  Stop torrent number 7.
+  # btcli stop 7
 
-  Each line 'btcli list' shows is prefixed by either '+', '-', 'S' or 'L'.
-  + means the torrent hasn't been started yet, because btpd is checking
-    the content of either this or another torrent with '+'.
-  - means the torrent is being stopped.
-  S means btpd is seeding the torrent.
-  L means btpd is leeching the torrent.
+  Stop all active torrents.
+  # btcli stop -a
 
-2.e Murder
+  Remove bar.torrent and it's associated information from btpd.
+  # btcli del bar.torrent
 
-  Too slay the innocent btpd process issue the command 'btcli kill'.
-  Horrible user!
+  Display a summary of up/download stats for the active torrents.
+  # btcli stat
+
+  Display the summary once every five seconds.
+  # btcli stat -w 5
+
+  Same as above, but also display individual stats for each active torrent.
+  # btcli stat -w 5 -i
+
+  Shut down btpd.
+  # btcli kill
+
+2.d Troubleshooting
+
+  If btpd has shut down for some unknown reason, check the logfile for
+  possible clues.
 
 3. Building
 
@@ -134,5 +182,11 @@ Contents
   # make
   # make install
 
-  See './configure --help' for options if the above fails or you're overcome
-  by curiousity.
+  See './configure --help' for available build options if the above fails.
+
+4. Upgrade notes
+
+4.a btpd 0.12
+
+  The layout of the torrents directory in the btpd directory has changed
+  since previous versions. Please remove it before running the new version.
