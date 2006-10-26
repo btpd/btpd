@@ -7,7 +7,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
-#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,8 +156,6 @@ main(int argc, char **argv)
 {
     char *dir = NULL, *log = NULL;
     int daemonize = 1;
-
-    setlocale(LC_ALL, "");
 
     for (;;) {
         switch (getopt_long(argc, argv, "d:p:", longopts, NULL)) {
