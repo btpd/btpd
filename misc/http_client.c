@@ -18,6 +18,8 @@
 #include "subr.h"
 #include "http_client.h"
 
+#define TIMEOUT (& (struct timeval) { 45, 0 })
+
 struct http_url *
 http_url_parse(const char *url)
 {
@@ -92,7 +94,7 @@ struct http_req {
     struct http_url *url;
     int sd;
     struct event ev;
-    http_cb cb;
+    http_cb_t cb;
     void *arg;
     int cancel;
 
@@ -135,7 +137,7 @@ http_error(struct http_req *req)
 static int
 headers_parse(struct http_req *req, char *buf, char *end)
 {
-    int code;
+    int code, majv, minv;
     char *cur, *crlf;
     char name[128], value[872];
     struct http_response res;
@@ -143,7 +145,7 @@ headers_parse(struct http_req *req, char *buf, char *end)
     req->chunked = 0;
     req->length = -1;
 
-    if (sscanf(buf, "HTTP/1.1 %d", &code) == 0)
+    if (sscanf(buf, "HTTP/%d.%d %d", &majv, &minv, &code) != 3)
         return 0;
     res.type = HTTP_T_CODE;
     res.v.code = code;
@@ -348,7 +350,7 @@ http_read_cb(int sd, short type, void *arg)
         return;
     req->state = HTTP_RECEIVE;
 more:
-    if (event_add(&req->ev, NULL) != 0)
+    if (event_add(&req->ev, TIMEOUT) != 0)
         http_error(req);
 }
 
@@ -369,12 +371,12 @@ http_write_cb(int sd, short type, void *arg)
     }
 out:
     if (req->buf->off != 0) {
-        if (event_add(&req->ev, NULL) != 0)
+        if (event_add(&req->ev, TIMEOUT) != 0)
             goto error;
     } else {
         req->state = HTTP_RECEIVE;
         event_set(&req->ev, req->sd, EV_READ, http_read_cb, req);
-        if (event_add(&req->ev, NULL) != 0)
+        if (event_add(&req->ev, TIMEOUT) != 0)
             goto error;
     }
     return;
@@ -404,7 +406,7 @@ http_dnscb(int result, char type, int count, int ttl, void *addrs, void *arg)
                 && errno != EINPROGRESS))
             goto error;
         event_set(&req->ev, req->sd, EV_WRITE, http_write_cb, req);
-        if (event_add(&req->ev, NULL) != 0)
+        if (event_add(&req->ev, TIMEOUT) != 0)
             goto error;
     } else
         goto error;
@@ -415,8 +417,8 @@ error:
 }
 
 int
-http_get(struct http_req **out, const char *url, const char *hdrs, http_cb cb,
-    void *arg)
+http_get(struct http_req **out, const char *url, const char *hdrs,
+    http_cb_t cb, void *arg)
 {
     struct http_req *req = calloc(1, sizeof(*req));
     if (req == NULL)

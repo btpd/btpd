@@ -27,12 +27,12 @@ struct http_url {
 
 struct http_req;
 
-typedef void (*http_cb)(struct http_req *, struct http_response *, void *);
+typedef void (*http_cb_t)(struct http_req *, struct http_response *, void *);
 
 struct http_url *http_url_parse(const char *url);
 void http_url_free(struct http_url *url);
 int http_get(struct http_req **out, const char *url, const char *hdrs,
-    http_cb cb, void *arg);
+    http_cb_t cb, void *arg);
 void http_cancel(struct http_req *req);
 
 #endif
