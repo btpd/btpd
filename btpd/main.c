@@ -2,13 +2,13 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 
-#include <assert.h>
 #include <err.h>
 #include <errno.h>
+#include <event.h>
+#include <evdns.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -215,6 +215,12 @@ args_done:
     setup_daemon(daemonize, dir, log);
 
     event_init();
+
+    if ((errno = evdns_resolv_conf_parse(DNS_OPTION_NAMESERVERS,
+             "/etc/resolv.conf")) != 0) {
+        btpd_log(BTPD_L_ERROR,
+            "failed to setup dns from /etc/resolv.conf (%d).\n", errno);
+    }
 
     btpd_init();
 
