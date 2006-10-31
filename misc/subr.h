@@ -4,7 +4,9 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#define max(x, y) ((x) >= (y) ? (x) : (y))
 #define min(x, y) ((x) <= (y) ? (x) : (y))
+
 #define SHAHEXSIZE 41
 
 int set_nonblocking(int fd);
