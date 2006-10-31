@@ -1,24 +1,16 @@
-#include <stdio.h>
 #include <string.h>
 
 #include "btpd.h"
-#include "benc.h"
 #include "subr.h"
-#include "http.h"
 #include "tracker_req.h"
 
+#define REQ_DELAY 1
 #define REQ_TIMEOUT (& (struct timeval) { 120, 0 })
 #define RETRY_WAIT (& (struct timeval) { rand_between(35, 70), 0 })
 
-enum tr_event {
-    TR_EV_STARTED,
-    TR_EV_STOPPED,
-    TR_EV_COMPLETED,
-    TR_EV_EMPTY
-};
+long tr_key;
 
-static long m_key;
-static const char *m_events[] = { "started", "stopped", "completed", "" };
+static long m_tlast_req, m_tnext_req;
 
 enum timer_type {
     TIMER_NONE,
@@ -34,102 +26,28 @@ struct tracker {
     unsigned nerrors;
     int tier, url;
     struct mi_announce *ann;
-    struct http *req;
+    void *req;
     struct event timer;
 };
 
-static void tr_send(struct torrent *tp, enum tr_event event);
+typedef struct _dummy *(*request_fun_t)(struct torrent *, enum tr_event,
+    const char *);
+typedef void (*cancel_fun_t)(struct _dummy *);
 
-static void
-maybe_connect_to(struct torrent *tp, const char *pinfo)
-{
-    const char *pid;
-    char *ip;
-    int port;
-    size_t len;
+struct tr_op {
+    int len;
+    const char *scheme;
+    request_fun_t request;
+    cancel_fun_t cancel;
+};
 
-    if ((pid = benc_dget_mem(pinfo, "peer id", &len)) == NULL || len != 20)
-        return;
+static struct tr_op m_http_op = {
+    7, "http://", (request_fun_t)http_tr_req, (cancel_fun_t)http_tr_cancel
+};
 
-    if (bcmp(btpd_get_peer_id(), pid, 20) == 0)
-        return;
-
-    if (net_torrent_has_peer(tp->net, pid))
-        return;
-
-    if ((ip = benc_dget_str(pinfo, "ip", NULL)) == NULL)
-        return;
-
-    port = benc_dget_int(pinfo, "port");
-    peer_create_out(tp->net, pid, ip, port);
-
-    if (ip != NULL)
-        free(ip);
-}
-
-
-static int
-parse_reply(struct torrent *tp, const char *content, size_t size, int parse)
-{
-    const char *buf;
-    size_t len;
-    const char *peers;
-    int interval;
-
-    if (benc_validate(content, size) != 0)
-        goto bad_data;
-
-    if ((buf = benc_dget_mem(content, "failure reason", &len)) != NULL) {
-        btpd_log(BTPD_L_ERROR, "Tracker failure: '%.*s' for '%s'.\n",
-            (int)len, buf, torrent_name(tp));
-        return 1;
-    }
-
-    if (!parse)
-        return 0;
-
-    if (!benc_dct_chk(content, 2, BE_INT, 1, "interval", BE_ANY, 1, "peers"))
-        goto bad_data;
-
-    interval = benc_dget_int(content, "interval");
-    if (interval < 1)
-        goto bad_data;
-
-    tp->tr->interval = interval;
-    peers = benc_dget_any(content, "peers");
-
-    if (benc_islst(peers)) {
-        for (peers = benc_first(peers);
-             peers != NULL && net_npeers < net_max_peers;
-             peers = benc_next(peers))
-            maybe_connect_to(tp, peers);
-    } else if (benc_isstr(peers)) {
-        peers = benc_dget_mem(content, "peers", &len);
-        for (size_t i = 0; i < len && net_npeers < net_max_peers; i += 6)
-            peer_create_out_compact(tp->net, peers + i);
-    } else
-        goto bad_data;
-
-    return 0;
-
-bad_data:
-    btpd_log(BTPD_L_ERROR, "Bad data from tracker for '%s'.\n",
-        torrent_name(tp));
-    return 1;
-}
-
-static void
-tr_set_stopped(struct torrent *tp)
-{
-    struct tracker *tr = tp->tr;
-    btpd_ev_del(&tr->timer);
-    tr->ttype = TIMER_NONE;
-    if (tr->req != NULL) {
-        http_cancel(tr->req);
-        tr->req = NULL;
-    }
-    torrent_on_tr_stopped(tp);
-}
+static struct tr_op *m_tr_ops[] = {
+    &m_http_op, NULL
+};
 
 static char *
 get_url(struct tracker *tr)
@@ -158,26 +76,82 @@ next_url(struct tracker *tr)
         tr->tier = (tr->tier + 1) % tr->ann->ntiers;
 }
 
-static void
-http_cb(struct http *req, struct http_res *res, void *arg)
+struct tr_op *
+get_op(struct tracker *tr)
 {
-    struct torrent *tp = arg;
-    struct tracker *tr = tp->tr;
-    assert(tr->ttype == TIMER_TIMEOUT);
+    struct tr_op *op;
+    char *url = get_url(tr);
+    for (op = m_tr_ops[0]; op != NULL; op++)
+        if (strncasecmp(op->scheme, url, op->len) == 0)
+            return op;
+    return NULL;
+}
+
+static void
+tr_cancel(struct tracker *tr)
+{
+    struct tr_op *op = get_op(tr);
+    assert(op != NULL);
+    op->cancel(tr->req);
     tr->req = NULL;
-    if (res->res == HRES_OK && parse_reply(tp, res->content, res->length,
-            tr->event != TR_EV_STOPPED) == 0) {
+}
+
+static void
+tr_send(struct torrent *tp, enum tr_event event)
+{
+    struct tracker *tr = tp->tr;
+    struct tr_op *op = get_op(tr);
+
+    tr->event = event;
+    if (tr->req != NULL)
+        tr_cancel(tr);
+
+    if (m_tlast_req > btpd_seconds - REQ_DELAY) {
+        m_tnext_req = max(m_tnext_req, m_tlast_req) + REQ_DELAY;
+        tr->ttype = TIMER_RETRY;
+        btpd_ev_add(&tr->timer,
+            (& (struct timeval) { m_tnext_req - btpd_seconds, 0 }));
+        return;
+    }
+
+    if ((op == NULL ||
+            (tr->req = op->request(tp, event, get_url(tr))) == NULL)) {
+        tr->ttype = TIMER_RETRY;
+        btpd_ev_add(&tr->timer, (& (struct timeval) { 20, 0 }));
+    } else {
+        m_tlast_req = btpd_seconds;
+        tr->ttype = TIMER_TIMEOUT;
+        btpd_ev_add(&tr->timer, REQ_TIMEOUT);
+    }
+}
+
+static void
+tr_set_stopped(struct torrent *tp)
+{
+    struct tracker *tr = tp->tr;
+    btpd_ev_del(&tr->timer);
+    tr->ttype = TIMER_NONE;
+    if (tr->req != NULL)
+        tr_cancel(tr);
+    torrent_on_tr_stopped(tp);
+}
+
+void
+tr_result(struct torrent *tp, enum tr_res res, int interval)
+{
+    struct tracker *tr = tp->tr;
+    tr->req = NULL;
+    if (res == TR_RES_OK) {
         good_url(tr);
+        tr->interval = interval;
         tr->nerrors = 0;
         tr->ttype = TIMER_INTERVAL;
-        btpd_ev_add(&tr->timer, (& (struct timeval) { tr->interval, 0 }));
+        btpd_ev_add(&tr->timer, (& (struct timeval) { tr->interval, 0}));
     } else {
-        if (res->res == HRES_FAIL)
-            btpd_log(BTPD_L_BTPD, "Tracker request for '%s' failed (%s).\n",
-                torrent_name(tp), res->errmsg);
         tr->nerrors++;
         tr->ttype = TIMER_RETRY;
         btpd_ev_add(&tr->timer, RETRY_WAIT);
+        next_url(tr);
     }
     if (tr->event == TR_EV_STOPPED && (tr->nerrors == 0 || tr->nerrors >= 5))
         tr_set_stopped(tp);
@@ -197,8 +171,9 @@ timer_cb(int fd, short type, void *arg)
             tr_set_stopped(tp);
             break;
         }
-    case TIMER_RETRY:
+        tr_cancel(tr);
         next_url(tr);
+    case TIMER_RETRY:
         tr_send(tp, tr->event);
         break;
     case TIMER_INTERVAL:
@@ -207,43 +182,6 @@ timer_cb(int fd, short type, void *arg)
     default:
         abort();
     }
-}
-
-static void
-tr_send(struct torrent *tp, enum tr_event event)
-{
-    long busy_secs;
-    char e_hash[61], e_id[61], qc;;
-    const uint8_t *peer_id = btpd_get_peer_id();
-
-    struct tracker *tr = tp->tr;
-    tr->event = event;
-    if (tr->ttype == TIMER_TIMEOUT)
-        http_cancel(tr->req);
-
-    if ((busy_secs = http_server_busy_time(get_url(tr), 3)) > 0) {
-        tr->ttype = TIMER_RETRY;
-        btpd_ev_add(&tr->timer, (& (struct timeval) { busy_secs, 0 }));
-        return;
-    }
-
-    tr->ttype = TIMER_TIMEOUT;
-    btpd_ev_add(&tr->timer, REQ_TIMEOUT);
-
-    qc = (strchr(get_url(tr), '?') == NULL) ? '?' : '&';
-
-    for (int i = 0; i < 20; i++)
-        snprintf(e_hash + i * 3, 4, "%%%.2x", tp->tl->hash[i]);
-    for (int i = 0; i < 20; i++)
-        snprintf(e_id + i * 3, 4, "%%%.2x", peer_id[i]);
-
-    http_get(&tr->req, http_cb, tp,
-        "%s%cinfo_hash=%s&peer_id=%s&key=%ld&port=%d&uploaded=%llu"
-        "&downloaded=%llu&left=%llu&compact=1%s%s",
-        get_url(tr), qc, e_hash, e_id, m_key, net_port,
-        tp->net->uploaded, tp->net->downloaded,
-        (long long)tp->total_length - cm_content(tp),
-        event == TR_EV_EMPTY ? "" : "&event=", m_events[event]);
 }
 
 int
@@ -263,7 +201,7 @@ tr_kill(struct torrent *tp)
     tp->tr = NULL;
     btpd_ev_del(&tr->timer);
     if (tr->req != NULL)
-        http_cancel(tr->req);
+        tr_cancel(tr);
     mi_free_announce(tr->ann);
     free(tr);
 }
@@ -310,5 +248,5 @@ tr_errors(struct torrent *tp)
 void
 tr_init(void)
 {
-    m_key = random();
+    tr_key = random();
 }
