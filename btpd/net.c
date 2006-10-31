@@ -655,7 +655,9 @@ net_init(void)
     m_bw_bytes_out = net_bw_limit_out;
     m_bw_bytes_in = net_bw_limit_in;
 
-    int safe_fds = min(getdtablesize(), FD_SETSIZE) * 4 / 5;
+    int safe_fds = getdtablesize() * 4 / 5;
+    if (strcmp(event_get_method(), "select") == 0)
+        safe_fds = min(safe_fds, FD_SETSIZE * 4 / 5);
     if (net_max_peers == 0 || net_max_peers > safe_fds)
         net_max_peers = safe_fds;
 
