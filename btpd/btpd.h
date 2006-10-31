@@ -34,7 +34,7 @@
 #include "btpd_if.h"
 #undef DAEMON
 
-#define BTPD_VERSION (PACKAGE_NAME "/" PACKAGE_VERSION)
+#define BTPD_VERSION PACKAGE_NAME "/" PACKAGE_VERSION
 
 #define BTPD_L_ALL      0xffffffff
 #define BTPD_L_ERROR    0x00000001
