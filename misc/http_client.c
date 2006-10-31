@@ -91,17 +91,21 @@ struct http_req {
     enum {
         HTTP_RESOLVE, HTTP_CONNECT, HTTP_WRITE, HTTP_RECEIVE, HTTP_PARSE
     } state;
-    struct http_url *url;
-    int sd;
-    struct event ev;
-    http_cb_t cb;
-    void *arg;
-    int cancel;
+    enum {
+        PS_HEAD, PS_CHUNK_SIZE, PS_CHUNK_DATA, PS_CHUNK_CRLF, PS_ID_DATA
+    } pstate;
 
-    int pstate, chunked;
+    int sd;
+    int cancel;
+    int chunked;
     long length;
 
+    http_cb_t cb;
+    void *arg;
+
+    struct http_url *url;
     struct evbuffer *buf;
+    struct event ev;
 };
 
 static void
@@ -127,12 +131,6 @@ http_error(struct http_req *req)
     req->cb(req, &res, req->arg);
     http_free(req);
 }
-
-#define PS_HEAD  0
-#define PS_CHUNK_SIZE 1
-#define PS_CHUNK_DATA 2
-#define PS_CHUNK_CRLF 3
-#define PS_ID_DATA  4
 
 static int
 headers_parse(struct http_req *req, char *buf, char *end)
@@ -391,7 +389,7 @@ http_dnscb(int result, char type, int count, int ttl, void *addrs, void *arg)
     struct http_req *req = arg;
     if (req->cancel)
         http_free(req);
-    else if (result == 0 && type == 1 && count > 0) {
+    else if (result == DNS_ERR_NONE && type == DNS_IPv4_A && count > 0) {
         int addri = rand_between(0, count - 1);
         struct sockaddr_in addr;
         addr.sin_family = AF_INET;
