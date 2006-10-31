@@ -3,7 +3,6 @@
 #include <time.h>
 
 #include "btpd.h"
-#include "http.h"
 #include "active.h"
 
 static uint8_t m_peer_id[20];
@@ -95,7 +94,6 @@ btpd_init(void)
         m_peer_id[i] = rand_between(0, 255);
 
     td_init();
-    http_init();
     net_init();
     ipc_init();
     ul_init();
