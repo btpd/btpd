@@ -178,3 +178,9 @@ bts_sha(struct bt_stream *bts, off_t start, off_t length, uint8_t *hash)
     SHA1_Final(hash, &ctx);
     return err;
 }
+
+const char *
+bts_filename(struct bt_stream *bts)
+{
+    return bts->files[bts->index].path;
+}

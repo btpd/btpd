@@ -23,4 +23,6 @@ int bts_get(struct bt_stream *bts, off_t off, uint8_t *buf, size_t len);
 int bts_put(struct bt_stream *bts, off_t off, const uint8_t *buf, size_t len);
 int bts_sha(struct bt_stream *bts, off_t start, off_t length, uint8_t *hash);
 
+const char *bts_filename(struct bt_stream *bts);
+
 #endif
