@@ -66,8 +66,10 @@ parse_reply(struct torrent *tp, const char *content, size_t size, int parse,
         return 1;
     }
 
-    if (!parse)
+    if (!parse) {
+        *interval = -1;
         return 0;
+    }
 
     if (!benc_dct_chk(content, 2, BE_INT, 1, "interval", BE_ANY, 1, "peers"))
         goto bad_data;
