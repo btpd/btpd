@@ -5,6 +5,7 @@
 #include "tracker_req.h"
 
 #define REQ_DELAY 1
+#define STOP_ERRORS 5
 #define REQ_TIMEOUT (& (struct timeval) { 120, 0 })
 #define RETRY_WAIT (& (struct timeval) { rand_between(35, 70), 0 })
 
@@ -140,7 +141,10 @@ tr_result(struct torrent *tp, enum tr_res res, int interval)
 {
     struct tracker *tr = tp->tr;
     tr->req = NULL;
-    if (res == TR_RES_OK) {
+    if (tr->event == TR_EV_STOPPED &&
+            (res == TR_RES_OK || tr->nerrors >= STOP_ERRORS - 1))
+        tr_set_stopped(tp);
+    else if (res == TR_RES_OK) {
         good_url(tr);
         tr->interval = interval;
         tr->nerrors = 0;
@@ -152,8 +156,6 @@ tr_result(struct torrent *tp, enum tr_res res, int interval)
         btpd_ev_add(&tr->timer, RETRY_WAIT);
         next_url(tr);
     }
-    if (tr->event == TR_EV_STOPPED && (tr->nerrors == 0 || tr->nerrors >= 5))
-        tr_set_stopped(tp);
 }
 
 static void
@@ -166,7 +168,7 @@ timer_cb(int fd, short type, void *arg)
         btpd_log(BTPD_L_ERROR, "Tracker request timed out for '%s'.\n",
             torrent_name(tp));
         tr->nerrors++;
-        if (tr->event == TR_EV_STOPPED && tr->nerrors >= 5) {
+        if (tr->event == TR_EV_STOPPED && tr->nerrors >= STOP_ERRORS) {
             tr_set_stopped(tp);
             break;
         }
