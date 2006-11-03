@@ -67,13 +67,4 @@ int btpd_is_stopping(void);
 
 const uint8_t *btpd_get_peer_id(void);
 
-void td_acquire_lock(void);
-void td_release_lock(void);
-
-#define td_post_begin td_acquire_lock
-void td_post(void (*fun)(void *), void *arg);
-void td_post_end(void);
-
-void btpd_on_no_torrents(void);
-
 #endif

@@ -40,8 +40,9 @@ btpd_shutdown(int grace_seconds)
             if (tp->state != T_STOPPING)
                 torrent_stop(tp);
         if (grace_seconds >= 0) {
-            event_once(-1, EV_TIMEOUT, grace_cb, NULL,
-                (& (struct timeval) { grace_seconds, 0 }));
+            if (event_once(-1, EV_TIMEOUT, grace_cb, NULL,
+                    (& (struct timeval) { grace_seconds, 0 })) != 0)
+                btpd_err("failed to add event (%s).\n", strerror(errno));
         }
     }
 }
@@ -57,13 +58,6 @@ btpd_get_peer_id(void)
     return m_peer_id;
 }
 
-void
-btpd_on_no_torrents(void)
-{
-    if (m_shutdown)
-        btpd_exit(0);
-}
-
 static void
 signal_cb(int signal, short type, void *arg)
 {
@@ -77,9 +71,11 @@ heartbeat_cb(int fd, short type, void *arg)
     btpd_ev_add(&m_heartbeat, (& (struct timeval) { 1, 0 }));
     btpd_seconds++;
     net_on_tick();
+    torrent_on_tick_all();
+    if (m_shutdown && torrent_count() == 0)
+        btpd_exit(0);
 }
 
-void td_init(void);
 void tr_init(void);
 void ipc_init(void);
 
@@ -93,7 +89,6 @@ btpd_init(void)
     for (int i = sizeof(BTPD_VERSION); i < 20; i++)
         m_peer_id[i] = rand_between(0, 255);
 
-    td_init();
     net_init();
     ipc_init();
     ul_init();

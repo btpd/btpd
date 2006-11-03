@@ -133,7 +133,6 @@ tr_set_stopped(struct torrent *tp)
     tr->ttype = TIMER_NONE;
     if (tr->req != NULL)
         tr_cancel(tr);
-    torrent_on_tr_stopped(tp);
 }
 
 void
