@@ -141,7 +141,7 @@ torrent_start(struct tlib *tl)
     btpd_log(BTPD_L_BTPD, "Starting torrent '%s'.\n", torrent_name(tp));
     if (tr_create(tp, mi) == 0) {
         net_create(tp);
-        cm_create(tp);
+        cm_create(tp, mi);
         BTPDQ_INSERT_TAIL(&m_torrents, tp, entry);
         m_ntorrents++;
         cm_start(tp);
@@ -174,28 +174,21 @@ torrent_kill(struct torrent *tp)
     cm_kill(tp);
     mi_free_files(tp->nfiles, tp->files);
     free(tp);
-    if (m_ntorrents == 0)
-        btpd_on_no_torrents();
 }
 
 void
 torrent_stop(struct torrent *tp)
 {
-    int tra, cma;
     switch (tp->state) {
     case T_ACTIVE:
     case T_STARTING:
         tp->state = T_STOPPING;
         if (net_active(tp))
             net_stop(tp);
-        tra = tr_active(tp);
-        cma = cm_active(tp);
-        if (tra)
+        if (tr_active(tp))
             tr_stop(tp);
-        if (cma)
+        if (cm_active(tp))
             cm_stop(tp);
-        if (!(tra || cma))
-            torrent_kill(tp);
         break;
     case T_STOPPING:
         if (tr_active(tp))
@@ -205,25 +198,29 @@ torrent_stop(struct torrent *tp)
 }
 
 void
-torrent_on_cm_started(struct torrent *tp)
+torrent_on_tick(struct torrent *tp)
 {
-    tp->state = T_ACTIVE;
-    net_start(tp);
-    tr_start(tp);
+    switch (tp->state) {
+    case T_STARTING:
+        if (cm_started(tp)) {
+            tp->state = T_ACTIVE;
+            net_start(tp);
+            tr_start(tp);
+        }
+        break;
+    case T_STOPPING:
+        if (!(cm_active(tp) || tr_active(tp)))
+            torrent_kill(tp);
+        break;
+    default:
+        break;
+    }
 }
 
 void
-torrent_on_cm_stopped(struct torrent *tp)
+torrent_on_tick_all(void)
 {
-    assert(tp->state == T_STOPPING);
-    if (!tr_active(tp))
-        torrent_kill(tp);
-}
-
-void
-torrent_on_tr_stopped(struct torrent *tp)
-{
-    assert(tp->state == T_STOPPING);
-    if (!cm_active(tp))
-        torrent_kill(tp);
+    struct torrent *tp, *next;
+    BTPDQ_FOREACH_MUTABLE(tp, &m_torrents, entry, next)
+        torrent_on_tick(tp);
 }
