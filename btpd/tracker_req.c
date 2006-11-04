@@ -117,6 +117,7 @@ tr_send(struct torrent *tp, enum tr_event event)
 
     if ((op == NULL ||
             (tr->req = op->request(tp, event, get_url(tr))) == NULL)) {
+        next_url(tr);
         tr->ttype = TIMER_RETRY;
         btpd_ev_add(&tr->timer, (& (struct timeval) { 20, 0 }));
     } else {
