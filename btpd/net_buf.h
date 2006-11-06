@@ -36,7 +36,7 @@ struct peer;
 
 struct net_buf *nb_create_keepalive(void);
 struct net_buf *nb_create_piece(uint32_t index, uint32_t begin, size_t blen);
-struct net_buf *nb_create_torrentdata(char *block, size_t blen);
+struct net_buf *nb_create_torrentdata(void);
 struct net_buf *nb_create_request(uint32_t index,
     uint32_t begin, uint32_t length);
 struct net_buf *nb_create_cancel(uint32_t index,
@@ -50,6 +50,9 @@ struct net_buf *nb_create_interest(void);
 struct net_buf *nb_create_bitfield(struct torrent *tp);
 struct net_buf *nb_create_bitdata(struct torrent *tp);
 struct net_buf *nb_create_shake(struct torrent *tp);
+
+int nb_torrentdata_fill(struct net_buf *nb, struct torrent *tp, uint32_t index,
+    uint32_t begin, uint32_t length);
 
 int nb_drop(struct net_buf *nb);
 void nb_hold(struct net_buf *nb);

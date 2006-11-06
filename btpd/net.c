@@ -134,6 +134,8 @@ net_read32(const void *buf)
         | (uint16_t)*(p + 2) << 8 | *(p + 3);
 }
 
+#define BLOCK_MEM_COUNT 4
+
 static unsigned long
 net_write(struct peer *p, unsigned long wmax)
 {
@@ -143,13 +145,29 @@ net_write(struct peer *p, unsigned long wmax)
     int limited;
     ssize_t nwritten;
     unsigned long bcount;
+    int block_count = 0;
 
     limited = wmax > 0;
 
     niov = 0;
     assert((nl = BTPDQ_FIRST(&p->outq)) != NULL);
+    if (nl->nb->type == NB_TORRENTDATA)
+        block_count = 1;
     while ((niov < IOV_MAX && nl != NULL
                && (!limited || (limited && wmax > 0)))) {
+        if (nl->nb->type == NB_PIECE) {
+            if (block_count >= BLOCK_MEM_COUNT)
+                break;
+            struct net_buf *tdata = BTPDQ_NEXT(nl, entry)->nb;
+            if (tdata->buf == NULL) {
+                if (nb_torrentdata_fill(tdata, p->n->tp, nb_get_index(nl->nb),
+                        nb_get_begin(nl->nb), nb_get_length(nl->nb)) != 0) {
+                    peer_kill(p);
+                    return 0;
+                }
+            }
+            block_count++;
+        }
         if (niov > 0) {
             iov[niov].iov_base = nl->nb->buf;
             iov[niov].iov_len = nl->nb->len;

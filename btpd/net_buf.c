@@ -90,11 +90,26 @@ nb_create_piece(uint32_t index, uint32_t begin, size_t blen)
 }
 
 struct net_buf *
-nb_create_torrentdata(char *block, size_t blen)
+nb_create_torrentdata(void)
 {
     struct net_buf *out;
-    out = nb_create_set(NB_TORRENTDATA, block, blen, kill_buf_free);
+    out = nb_create_set(NB_TORRENTDATA, NULL, 0, kill_buf_no);
     return out;
+}
+
+int
+nb_torrentdata_fill(struct net_buf *nb, struct torrent *tp, uint32_t index,
+    uint32_t begin, uint32_t length)
+{
+    int err;
+    uint8_t *content;
+    assert(nb->type == NB_TORRENTDATA && nb->buf == NULL);
+    if ((err = cm_get_bytes(tp, index, begin, length, &content)) != 0)
+        return err;
+    nb->buf = content;
+    nb->len = length;
+    nb->kill_buf = kill_buf_free;
+    return 0;
 }
 
 struct net_buf *
