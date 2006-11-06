@@ -338,7 +338,6 @@ http_read_cb(int sd, short type, void *arg)
         if (nr == EAGAIN)
             goto more;
         else {
-            printf("read err\n");
             http_error(req);
             return;
         }
@@ -379,7 +378,6 @@ out:
     }
     return;
 error:
-    printf("http write err\n");
     http_error(req);
 }
 
