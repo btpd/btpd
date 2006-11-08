@@ -21,13 +21,13 @@ if test "$GCC" = yes ; then
         CFLAGS="$CFLAGS -Wall"
 fi
 
-AC_PROG_LIBTOOL
+AC_PROG_RANLIB
 
 dnl   Uncomment "AC_DISABLE_SHARED" to make shared librraries not get
 dnl   built by default.  You can also turn shared libs on and off from 
 dnl   the command line with --enable-shared and --disable-shared.
 dnl AC_DISABLE_SHARED
-AC_SUBST(LIBTOOL_DEPS)
+dnl AC_SUBST(LIBTOOL_DEPS)
 
 dnl Check for optional stuff
 AC_ARG_WITH(rtsig,
@@ -133,7 +133,7 @@ AC_HEADER_TIME
 
 dnl Checks for library functions.
 AC_CHECK_FUNCS(gettimeofday vasprintf fcntl clock_gettime strtok_r)
-AC_REPLACE_FUNCS(strlcpy)
+dnl AC_REPLACE_FUNCS(strlcpy)
 
 if test "x$ac_cv_func_clock_gettime" = "xyes"; then
    AC_DEFINE(DNS_USE_CPU_CLOCK_FOR_ID, 1, [Define if clock_gettime is available in libc])
@@ -369,4 +369,4 @@ AC_TRY_COMPILE([],
          [Define to appropriate substitue if compiler doesnt have __func__])))
 
 
-AC_OUTPUT(Makefile test/Makefile sample/Makefile)
+AC_OUTPUT(Makefile)
