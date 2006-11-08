@@ -1,2 +1,2 @@
-SUBDIRS=misc btpd cli
+SUBDIRS=@subdirs@ misc btpd cli
 EXTRA_DIST=COPYRIGHT CHANGES

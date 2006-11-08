@@ -1,4 +1,4 @@
-AC_INIT(btpd, 0.12, btpd@murmeldjur.se)
+AC_INIT(btpd, 0.13, btpd@murmeldjur.se)
 
 AM_INIT_AUTOMAKE([foreign])
 
@@ -10,28 +10,11 @@ AC_PROG_RANLIB
 CFLAGS="$CFLAGS -std=c99"
 CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64"
 
-ACX_PTHREAD([], [echo Must have pthread support; exit 1])
-
-AC_ARG_WITH(libevent,
-[  --with-libevent=dir     use libevent installed in dir],
-[
-        AC_SUBST(event_LDFLAGS,["-L${withval}/lib -Wl,-rpath=${withval}/lib"])
-        AC_SUBST(event_CPPFLAGS,"-I${withval}/include")
-],
-[])
-
 AC_ARG_WITH(openssl,
 [  --with-openssl=dir      use openssl installed in dir],
 [
         AC_SUBST(openssl_LDFLAGS,["-L${withval}/lib -Wl,-rpath=${withval}/lib"])
         AC_SUBST(openssl_CPPFLAGS,"-I${withval}/include")
-],
-[])
-
-AC_ARG_WITH(curlconf,
-[  --with-curlconf=prog    use this curl-config],
-[
-    CURLCONF=$withval
 ],
 [])
 
@@ -56,30 +39,10 @@ AC_ARG_WITH(warn,
 [])
 
 old_LDFLAGS="$LDFLAGS"
-LDFLAGS="$LDFLAGS $event_LDFLAGS"
-AC_CHECK_LIB(event, event_init, :, echo Must have libevent; exit 1)
-LDFLAGS=$old_LDFLAGS
-
-old_LDFLAGS="$LDFLAGS"
 LDFLAGS="$LDFLAGS $openssl_LDFLAGS"
 AC_CHECK_LIB(crypto, SHA1_Final, :, echo Must have openssl; exit 1)
 LDFLAGS=$old_LDFLAGS
 
-if test x$CURLCONF = x; then
-   AC_PATH_PROG(CURLCONF, curl-config)
-fi
-
-if test x$CURLCONF = x -o \! \( -r "$CURLCONF" -a -x "$CURLCONF" \); then
-   echo Must have the curl-config script
-   exit 1
-else
-   AC_SUBST(curl_CFLAGS, `$CURLCONF --cflags`)
-   AC_SUBST(curl_LDFLAGS, `$CURLCONF --libs`)
-fi
-
-old_LDFLAGS="$LDFLAGS"
-LDFLAGS="$LDFLAGS $curl_LDFLAGS"
-AC_CHECK_LIB(curl, curl_easy_strerror, :, echo Must have recent curl; exit 1)
-LDFLAGS=$old_LDFLAGS
+AC_CONFIG_SUBDIRS([libevent])
 
 AC_OUTPUT
