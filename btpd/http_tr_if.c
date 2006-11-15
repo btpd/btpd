@@ -1,3 +1,5 @@
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <string.h>
 
 #include "btpd.h"
@@ -137,7 +139,7 @@ http_cb(struct http_req *req, struct http_response *res, void *arg)
 struct http_tr_req *
 http_tr_req(struct torrent *tp, enum tr_event event, const char *aurl)
 {
-    char e_hash[61], e_id[61], url[512], qc;;
+    char e_hash[61], e_id[61], ip_arg[INET_ADDRSTRLEN + 4], url[512], qc;
     const uint8_t *peer_id = btpd_get_peer_id();
 
     qc = (strchr(aurl, '?') == NULL) ? '?' : '&';
@@ -147,10 +149,17 @@ http_tr_req(struct torrent *tp, enum tr_event event, const char *aurl)
     for (int i = 0; i < 20; i++)
         snprintf(e_id + i * 3, 4, "%%%.2x", peer_id[i]);
 
+    if (tr_ip_arg == INADDR_ANY)
+        ip_arg[0] = '\0';
+    else {
+        bcopy("&ip=", ip_arg, 4);
+        inet_ntop(AF_INET, &tr_ip_arg, ip_arg + 4, sizeof(ip_arg) - 4);
+    }
+
     snprintf(url, sizeof(url),
-        "%s%cinfo_hash=%s&peer_id=%s&key=%ld&port=%d&uploaded=%llu"
+        "%s%cinfo_hash=%s&peer_id=%s&key=%ld%s&port=%d&uploaded=%llu"
         "&downloaded=%llu&left=%llu&compact=1%s%s",
-        aurl, qc, e_hash, e_id, tr_key, net_port,
+        aurl, qc, e_hash, e_id, tr_key, ip_arg, net_port,
         tp->net->uploaded, tp->net->downloaded,
         (long long)tp->total_length - cm_content(tp),
         event == TR_EV_EMPTY ? "" : "&event=", m_tr_events[event]);

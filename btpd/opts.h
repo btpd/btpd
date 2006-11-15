@@ -11,5 +11,6 @@ extern int net_port;
 extern off_t cm_alloc_size;
 extern int ipcprot;
 extern int empty_start;
+extern uint32_t tr_ip_arg;
 
 #endif

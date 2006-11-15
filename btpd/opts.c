@@ -1,3 +1,4 @@
+#include <netinet/in.h>
 #include <btpd.h>
 
 const char *btpd_dir;
@@ -14,3 +15,4 @@ int net_port = 6881;
 off_t cm_alloc_size = 2048 * 1024;
 int ipcprot = 0600;
 int empty_start = 0;
+uint32_t tr_ip_arg = INADDR_ANY;

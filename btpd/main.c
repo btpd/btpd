@@ -1,6 +1,7 @@
 #include <sys/types.h>
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <arpa/inet.h>
 
 #include <err.h>
 #include <errno.h>
@@ -101,6 +102,11 @@ usage(void)
         "--help\n"
         "\tShow this text.\n"
         "\n"
+        "--ip addr\n"
+        "\tMake other peers use the given address, instead of the one\n"
+        "\tthe tracker perceives as this peer's address, when contacting\n"
+        "\tthis peer.\n"
+        "\n"
         "--ipcprot mode\n"
         "\tSet the protection mode of the command socket.\n"
         "\tThe mode is specified by an octal number. Default is 0600.\n"
@@ -147,6 +153,7 @@ static struct option longopts[] = {
     { "logfile", required_argument,     &longval,       7 },
     { "ipcprot", required_argument,     &longval,       8 },
     { "empty-start", no_argument,       &longval,       9 },
+    { "ip", required_argument,          &longval,       10 },
     { "help",   no_argument,            &longval,       128 },
     { NULL,     0,                      NULL,           0 }
 };
@@ -195,6 +202,17 @@ main(int argc, char **argv)
                 break;
             case 9:
                 empty_start = 1;
+                break;
+            case 10:
+                switch (inet_pton(AF_INET, optarg, &tr_ip_arg)) {
+                case 1:
+                    break;
+                case 0:
+                    errx(1, "You must specify a dotted IPv4 address.\n");
+                    break;
+                default:
+                    err(1, "inet_ntop %s", optarg);
+                }
                 break;
             default:
                 usage();
