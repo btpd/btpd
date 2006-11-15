@@ -80,11 +80,11 @@ next_url(struct tracker *tr)
 struct tr_op *
 get_op(struct tracker *tr)
 {
-    struct tr_op *op;
+    struct tr_op **opp;
     char *url = get_url(tr);
-    for (op = m_tr_ops[0]; op != NULL; op++)
-        if (strncasecmp(op->scheme, url, op->len) == 0)
-            return op;
+    for (opp = m_tr_ops; *opp != NULL; opp++)
+        if (strncasecmp((*opp)->scheme, url, (*opp)->len) == 0)
+            return *opp;
     return NULL;
 }
 
@@ -118,8 +118,9 @@ tr_send(struct torrent *tp, enum tr_event event)
     if ((op == NULL ||
             (tr->req = op->request(tp, event, get_url(tr))) == NULL)) {
         next_url(tr);
+        tr->nerrors++;
         tr->ttype = TIMER_RETRY;
-        btpd_ev_add(&tr->timer, (& (struct timeval) { 20, 0 }));
+        btpd_ev_add(&tr->timer, (& (struct timeval) { 5, 0 }));
     } else {
         m_tlast_req = btpd_seconds;
         tr->ttype = TIMER_TIMEOUT;
