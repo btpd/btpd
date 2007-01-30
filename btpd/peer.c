@@ -474,9 +474,9 @@ peer_on_piece(struct peer *p, uint32_t index, uint32_t begin,
         assert(p->nreqs_out > 0);
         p->nreqs_out--;
         BTPDQ_REMOVE(&p->my_reqs, req, p_entry);
-        dl_on_block(p, req, index, begin, length, data);
         if (p->nreqs_out == 0)
             peer_on_no_reqs(p);
+        dl_on_block(p, req, index, begin, length, data);
     } else
         btpd_log(BTPD_L_MSG, "discarded piece(%u,%u,%u) from %p\n",
             index, begin, length, p);
