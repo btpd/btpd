@@ -14,7 +14,6 @@ enum torrent_state {
 struct torrent {
     struct tlib *tl;
 
-    char relpath[RELPATH_SIZE];
     enum torrent_state state;
     int delete;
 

@@ -328,8 +328,10 @@ tlib_load_resume(struct tlib *tl, unsigned nfiles, struct file_time_size *fts,
 {
     int err, ver;
     FILE *fp;
+    char relpath[RELPATH_SIZE];
+    bin2hex(tl->hash, relpath, 20);
 
-    if ((err = vfopen(&fp, "r" , "torrents/%s/resume", tl->tp->relpath)) != 0)
+    if ((err = vfopen(&fp, "r" , "torrents/%s/resume", relpath)) != 0)
         return err;
 
     if (fscanf(fp, "%d\n", &ver) != 1)
@@ -363,7 +365,10 @@ tlib_save_resume(struct tlib *tl, unsigned nfiles, struct file_time_size *fts,
 {
     int err;
     FILE *fp;
-    if ((err = vfopen(&fp, "wb", "torrents/%s/resume", tl->tp->relpath)) != 0)
+    char relpath[RELPATH_SIZE];
+    bin2hex(tl->hash, relpath, 20);
+
+    if ((err = vfopen(&fp, "wb", "torrents/%s/resume", relpath)) != 0)
         return;
     fprintf(fp, "%d\n", 1);
     for (int i = 0; i < nfiles; i++)

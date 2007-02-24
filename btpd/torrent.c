@@ -127,7 +127,6 @@ torrent_start(struct tlib *tl)
 
     tp = btpd_calloc(1, sizeof(*tp));
     tp->tl = tl;
-    bcopy(relpath, tp->relpath, RELPATH_SIZE);
     tp->files = mi_files(mi);
     tp->nfiles = mi_nfiles(mi);
     if (tp->files == NULL)
