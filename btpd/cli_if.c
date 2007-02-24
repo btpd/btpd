@@ -58,18 +58,11 @@ write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
     enum ipc_tstate ts = IPC_TSTATE_INACTIVE;
     switch (val) {
     case IPC_TVAL_CGOT:
-        if (tl->tp == NULL)
-            buf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->content_have);
-        else
-            buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
-                (long long)cm_content(tl->tp));
+        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+            tl->tp == NULL ? tl->content_have : (long long)cm_content(tl->tp));
         return;
     case IPC_TVAL_CSIZE:
-        if (tl->tp == NULL)
-            buf_print(iob, "i%dei%llde", IPC_TYPE_ERR, tl->content_size);
-        else
-            buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
-                (long long)tl->tp->total_length);
+        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->content_size);
         return;
     case IPC_TVAL_PCCOUNT:
         if (tl->tp == NULL)
@@ -87,7 +80,7 @@ write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
         return;
     case IPC_TVAL_PCSEEN:
         if (tl->tp == NULL)
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+            buf_print(iob, "i%dei%de", IPC_TYPE_NUM, 0);
         else {
             unsigned long pcseen = 0;
             for (unsigned long i = 0; i < tl->tp->npieces; i++)
@@ -97,31 +90,20 @@ write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
         }
         return;
     case IPC_TVAL_RATEDWN:
-        if (tl->tp == NULL)
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
-        else
-            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
-                tl->tp->net->rate_dwn / RATEHISTORY);
+        buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
+            tl->tp == NULL ? 0UL : tl->tp->net->rate_dwn / RATEHISTORY);
         return;
     case IPC_TVAL_RATEUP:
-        if (tl->tp == NULL)
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
-        else
-            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
-                tl->tp->net->rate_up / RATEHISTORY);
+        buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
+            tl->tp == NULL ? 0UL : tl->tp->net->rate_up / RATEHISTORY);
         return;
     case IPC_TVAL_SESSDWN:
-        if (tl->tp == NULL)
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
-        else
-            buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
-                tl->tp->net->downloaded);
+        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+            tl->tp == NULL ? 0LL : tl->tp->net->downloaded);
         return;
     case IPC_TVAL_SESSUP:
-        if (tl->tp == NULL)
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
-        else
-            buf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->tp->net->uploaded);
+        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+            tl->tp == NULL ? 0LL : tl->tp->net->uploaded);
         return;
     case IPC_TVAL_DIR:
         if (tl->dir != NULL)
