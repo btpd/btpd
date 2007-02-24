@@ -144,7 +144,8 @@ cm_write_done(struct torrent *tp)
     btpd_ev_del(&cm->save_timer);
     if (!err)
         cm_save(tp);
-    cm_on_error(tp);
+    else
+        cm_on_error(tp);
 }
 
 void
