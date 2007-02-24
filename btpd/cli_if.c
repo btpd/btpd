@@ -156,13 +156,13 @@ write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
                 ts = IPC_TSTATE_START;
                 break;
             case T_STOPPING:
-                ts= IPC_TSTATE_STOP;
+                ts = IPC_TSTATE_STOP;
                 break;
-            case T_ACTIVE:
-                if (cm_full(tl->tp))
-                    ts = IPC_TSTATE_SEED;
-                else
-                    ts = IPC_TSTATE_LEECH;
+            case T_SEED:
+                ts = IPC_TSTATE_SEED;
+                break;
+            case T_LEECH:
+                ts = IPC_TSTATE_LEECH;
                 break;
             }
         }

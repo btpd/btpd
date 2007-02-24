@@ -16,6 +16,11 @@ struct tlib {
     HTBL_ENTRY(hchain);
 };
 
+struct file_time_size {
+    off_t size;
+    time_t mtime;
+};
+
 void tlib_init(void);
 void tlib_put_all(struct tlib **v);
 
@@ -28,5 +33,16 @@ void tlib_update_info(struct tlib *tl);
 struct tlib *tlib_by_hash(const uint8_t *hash);
 struct tlib *tlib_by_num(unsigned num);
 unsigned tlib_count(void);
+
+void tlib_read_hash(struct tlib *tl, size_t off, uint32_t piece,
+    uint8_t *hash);
+
+int tlib_load_resume(struct tlib *tl, unsigned nfiles,
+    struct file_time_size *fts, size_t pfsize, uint8_t *pc_field,
+    size_t bfsize, uint8_t *blk_field);
+
+void tlib_save_resume(struct tlib *tl, unsigned nfiles,
+    struct file_time_size *fts, size_t pfsize, uint8_t *pc_field,
+    size_t bfsize, uint8_t *blk_field);
 
 #endif

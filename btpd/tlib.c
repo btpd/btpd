@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -296,4 +297,78 @@ tlib_init(void)
         }
     }
     closedir(dirp);
+}
+
+void
+tlib_read_hash(struct tlib *tl, size_t off, uint32_t piece, uint8_t *hash)
+{
+    int fd;
+    ssize_t nread;
+    char relpath[RELPATH_SIZE];
+    bin2hex(tl->hash, relpath, 20);
+
+    if ((errno = vopen(&fd, O_RDONLY, "torrents/%s/torrent", relpath)) != 0)
+        btpd_err("failed to open 'torrents/%s/torrent' (%s).\n",
+            relpath, strerror(errno));
+    lseek(fd, off + piece * 20, SEEK_SET);
+    if ((nread = read(fd, hash, 20)) != 20) {
+        if (nread == -1)
+            btpd_err("failed to read 'torrents/%s/torrent' (%s).\n", relpath,
+                strerror(errno));
+        else
+            btpd_err("corrupt file: 'torrents/%s/torrent'.\n", relpath);
+    }
+
+    close(fd);
+}
+
+int
+tlib_load_resume(struct tlib *tl, unsigned nfiles, struct file_time_size *fts,
+    size_t pfsize, uint8_t *pc_field, size_t bfsize, uint8_t *blk_field)
+{
+    int err, ver;
+    FILE *fp;
+
+    if ((err = vfopen(&fp, "r" , "torrents/%s/resume", tl->tp->relpath)) != 0)
+        return err;
+
+    if (fscanf(fp, "%d\n", &ver) != 1)
+        goto invalid;
+    if (ver != 1)
+        goto invalid;
+    for (int i = 0; i < nfiles; i++) {
+        quad_t size;
+        long time;
+        if (fscanf(fp, "%qd %ld\n", &size, &time) != 2)
+            goto invalid;
+        fts[i].size = size;
+        fts[i].mtime = time;
+    }
+    if (fread(pc_field, 1, pfsize, fp) != pfsize)
+        goto invalid;
+    if (fread(blk_field, 1, bfsize, fp) != bfsize)
+        goto invalid;
+    fclose(fp);
+    return 0;
+invalid:
+    fclose(fp);
+    bzero(pc_field, pfsize);
+    bzero(blk_field, bfsize);
+    return EINVAL;
+}
+
+void
+tlib_save_resume(struct tlib *tl, unsigned nfiles, struct file_time_size *fts,
+    size_t pfsize, uint8_t *pc_field, size_t bfsize, uint8_t *blk_field)
+{
+    int err;
+    FILE *fp;
+    if ((err = vfopen(&fp, "wb", "torrents/%s/resume", tl->tp->relpath)) != 0)
+        return;
+    fprintf(fp, "%d\n", 1);
+    for (int i = 0; i < nfiles; i++)
+        fprintf(fp, "%lld %ld\n", (long long)fts[i].size, (long)fts[i].mtime);
+    fwrite(pc_field, 1, pfsize, fp);
+    fwrite(blk_field, 1, bfsize, fp);
+    if (fclose(fp) != 0); //XXX
 }

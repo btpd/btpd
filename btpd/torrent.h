@@ -6,7 +6,8 @@
 
 enum torrent_state {
     T_STARTING,
-    T_ACTIVE,
+    T_LEECH,
+    T_SEED,
     T_STOPPING
 };
 

@@ -6,10 +6,11 @@ void cm_init(void);
 void cm_create(struct torrent *tp, const char *mi);
 void cm_kill(struct torrent *tp);
 
-void cm_start(struct torrent *tp);
+void cm_start(struct torrent *tp, int force_test);
 void cm_stop(struct torrent * tp);
 
 int cm_active(struct torrent *tp);
+int cm_error(struct torrent *tp);
 int cm_started(struct torrent *tp);
 int cm_full(struct torrent *tp);
 

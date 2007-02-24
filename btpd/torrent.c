@@ -140,12 +140,12 @@ torrent_start(struct tlib *tl)
 
     btpd_log(BTPD_L_BTPD, "Starting torrent '%s'.\n", torrent_name(tp));
     if (tr_create(tp, mi) == 0) {
+        tl->tp = tp;
         net_create(tp);
         cm_create(tp, mi);
         BTPDQ_INSERT_TAIL(&m_torrents, tp, entry);
         m_ntorrents++;
-        cm_start(tp);
-        tl->tp = tp;
+        cm_start(tp, 0);
         free(mi);
         return IPC_OK;
     } else {
@@ -180,7 +180,8 @@ void
 torrent_stop(struct torrent *tp)
 {
     switch (tp->state) {
-    case T_ACTIVE:
+    case T_LEECH:
+    case T_SEED:
     case T_STARTING:
         tp->state = T_STOPPING;
         if (net_active(tp))
@@ -200,12 +201,31 @@ torrent_stop(struct torrent *tp)
 void
 torrent_on_tick(struct torrent *tp)
 {
+    if (tp->state != T_STOPPING && cm_error(tp))
+        torrent_stop(tp);
     switch (tp->state) {
     case T_STARTING:
         if (cm_started(tp)) {
-            tp->state = T_ACTIVE;
+            if (cm_full(tp))
+                tp->state = T_SEED;
+            else
+                tp->state = T_LEECH;
             net_start(tp);
             tr_start(tp);
+        }
+        break;
+    case T_LEECH:
+        if (cm_full(tp)) {
+            struct peer *p, *next;
+            tp->state = T_SEED;
+            btpd_log(BTPD_L_BTPD, "Finished downloading '%s'.\n",
+                torrent_name(tp));
+            tr_complete(tp);
+            BTPDQ_FOREACH_MUTABLE(p, &tp->net->peers, p_entry, next) {
+                assert(p->nwant == 0);
+                if (peer_full(p))
+                    peer_kill(p);
+            }
         }
         break;
     case T_STOPPING:

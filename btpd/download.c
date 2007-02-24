@@ -79,7 +79,7 @@ dl_on_choke(struct peer *p)
 void
 dl_on_ok_piece(struct net *n, uint32_t piece)
 {
-    struct peer *p, *next;
+    struct peer *p;
     struct piece *pc = dl_find_piece(n, piece);
 
     btpd_log(BTPD_L_POL, "Got piece: %u.\n", pc->index);
@@ -98,17 +98,6 @@ dl_on_ok_piece(struct net *n, uint32_t piece)
 
     assert(pc->nreqs == 0);
     piece_free(pc);
-
-    if (cm_full(n->tp)) {
-        btpd_log(BTPD_L_BTPD, "Finished downloading '%s'.\n",
-            torrent_name(n->tp));
-        tr_complete(n->tp);
-        BTPDQ_FOREACH_MUTABLE(p, &n->peers, p_entry, next) {
-            assert(p->nwant == 0);
-            if (peer_full(p))
-                peer_kill(p);
-        }
-    }
 }
 
 /*
