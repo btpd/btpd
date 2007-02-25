@@ -38,6 +38,7 @@ extern "C" {
 #include <windows.h>
 #undef WIN32_LEAN_AND_MEAN
 typedef unsigned char u_char;
+typedef unsigned short u_short;
 #endif
 
 #define EVLIST_TIMEOUT	0x01
@@ -191,7 +192,7 @@ void event_active(struct event *, int, short);
 int event_pending(struct event *, short, struct timeval *);
 
 #ifdef WIN32
-#define event_initialized(ev)		((ev)->ev_flags & EVLIST_INIT && (ev)->ev_fd != INVALID_HANDLE_VALUE)
+#define event_initialized(ev)		((ev)->ev_flags & EVLIST_INIT && (ev)->ev_fd != (int)INVALID_HANDLE_VALUE)
 #else
 #define event_initialized(ev)		((ev)->ev_flags & EVLIST_INIT)
 #endif
@@ -259,6 +260,7 @@ struct bufferevent {
 
 struct bufferevent *bufferevent_new(int fd,
     evbuffercb readcb, evbuffercb writecb, everrorcb errorcb, void *cbarg);
+int bufferevent_base_set(struct event_base *base, struct bufferevent *bufev);
 int bufferevent_priority_set(struct bufferevent *bufev, int pri);
 void bufferevent_free(struct bufferevent *bufev);
 int bufferevent_write(struct bufferevent *bufev, void *data, size_t size);
@@ -277,7 +279,7 @@ void bufferevent_settimeout(struct bufferevent *bufev,
 struct evbuffer *evbuffer_new(void);
 void evbuffer_free(struct evbuffer *);
 int evbuffer_expand(struct evbuffer *, size_t);
-int evbuffer_add(struct evbuffer *, void *, size_t);
+int evbuffer_add(struct evbuffer *, const void *, size_t);
 int evbuffer_remove(struct evbuffer *, void *, size_t);
 char *evbuffer_readline(struct evbuffer *);
 int evbuffer_add_buffer(struct evbuffer *, struct evbuffer *);
