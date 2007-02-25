@@ -373,14 +373,23 @@ again:
         if (stat(path, &sb) == -1) {
             if (errno == ENOENT) {
                 errno = vopen(&fd, O_CREAT|O_RDWR, "%s", path);
-                if (errno != 0 || close(fd) != 0)
+                if (errno != 0 || close(fd) != 0) {
+                    btpd_log(BTPD_L_ERROR, "failed to create '%s' (%s).\n",
+                        path, strerror(errno));
                     return errno;
+                }
                 goto again;
-            } else
+            } else {
+                btpd_log(BTPD_L_ERROR, "failed to stat '%s' (%s).\n",
+                    path, strerror(errno));
                 return errno;
+            }
         } else if (sb.st_size > tp->files[i].length) {
-            if (truncate(path, tp->files[i].length) != 0)
+            if (truncate(path, tp->files[i].length) != 0) {
+                btpd_log(BTPD_L_ERROR, "failed to truncate '%s' (%s).\n",
+                    path, strerror(errno));
                 return errno;
+            }
             goto again;
         } else {
             ret[i].mtime = sb.st_mtime;
@@ -514,8 +523,6 @@ cm_start(struct torrent *tp, int force_test)
     fts = btpd_calloc(tp->nfiles * 2, sizeof(*fts));
 
     if ((err = stat_and_adjust(tp, fts)) != 0) {
-        btpd_log(BTPD_L_ERROR, "failed stat_and_adjust for '%s' (%s).\n",
-            torrent_name(tp), strerror(err));
         free(fts);
         cm_on_error(tp);
         return;
