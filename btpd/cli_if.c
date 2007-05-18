@@ -286,10 +286,9 @@ cmd_del(struct cli *cli, int argc, const char *args)
         ret = write_code_buffer(cli, IPC_ENOTENT);
     else {
         ret = write_code_buffer(cli, IPC_OK);
-        if (tl->tp != NULL) {
-            tl->tp->delete = 1;
-            torrent_stop(tl->tp);
-        } else
+        if (tl->tp != NULL)
+            torrent_stop(tl->tp, 1);
+        else
             tlib_del(tl);
     }
 
@@ -345,7 +344,7 @@ cmd_stop(struct cli *cli, int argc, const char *args)
         // Stopping a torrent may trigger exit so we need to reply before.
         int ret = write_code_buffer(cli, IPC_OK);
         active_del(tl->hash);
-        torrent_stop(tl->tp);
+        torrent_stop(tl->tp, 0);
         return ret;
     }
 }
@@ -358,7 +357,7 @@ cmd_stop_all(struct cli *cli, int argc, const char *args)
     active_clear();
     BTPDQ_FOREACH(tp, torrent_get_all(), entry)
         if (tp->state != T_STOPPING)
-            torrent_stop(tp);
+            torrent_stop(tp, 0);
     return ret;
 }
 

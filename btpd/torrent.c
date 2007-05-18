@@ -130,8 +130,6 @@ torrent_kill(struct torrent *tp)
     assert(!(tr_active(tp) || net_active(tp) || cm_active(tp)));
     m_ntorrents--;
     BTPDQ_REMOVE(&m_torrents, tp, entry);
-    if (!tp->delete)
-        tlib_update_info(tp->tl);
     tp->tl->tp = NULL;
     if (tp->delete)
         tlib_del(tp->tl);
@@ -143,8 +141,10 @@ torrent_kill(struct torrent *tp)
 }
 
 void
-torrent_stop(struct torrent *tp)
+torrent_stop(struct torrent *tp, int delete)
 {
+    if (delete)
+        tp->delete = 1;
     switch (tp->state) {
     case T_LEECH:
     case T_SEED:
@@ -156,6 +156,8 @@ torrent_stop(struct torrent *tp)
             tr_stop(tp);
         if (cm_active(tp))
             cm_stop(tp);
+        if (!delete)
+            tlib_update_info(tp->tl);
         break;
     case T_STOPPING:
         if (tr_active(tp))
@@ -168,7 +170,7 @@ void
 torrent_on_tick(struct torrent *tp)
 {
     if (tp->state != T_STOPPING && cm_error(tp))
-        torrent_stop(tp);
+        torrent_stop(tp, 0);
     switch (tp->state) {
     case T_STARTING:
         if (cm_started(tp)) {

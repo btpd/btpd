@@ -39,7 +39,7 @@ struct torrent *torrent_by_num(unsigned num);
 struct torrent *torrent_by_hash(const uint8_t *hash);
 
 enum ipc_err torrent_start(struct tlib *tl);
-void torrent_stop(struct torrent *tp);
+void torrent_stop(struct torrent *tp, int delete);
 
 off_t torrent_piece_size(struct torrent *tp, uint32_t piece);
 uint32_t torrent_piece_blocks(struct torrent *tp, uint32_t piece);

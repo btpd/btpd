@@ -25,7 +25,7 @@ grace_cb(int fd, short type, void *arg)
 {
     struct torrent *tp;
     BTPDQ_FOREACH(tp, torrent_get_all(), entry)
-        torrent_stop(tp);
+        torrent_stop(tp, 0);
 }
 
 void
@@ -38,7 +38,7 @@ btpd_shutdown(int grace_seconds)
         m_shutdown = 1;
         BTPDQ_FOREACH(tp, torrent_get_all(), entry)
             if (tp->state != T_STOPPING)
-                torrent_stop(tp);
+                torrent_stop(tp, 0);
         if (grace_seconds >= 0) {
             if (event_once(-1, EV_TIMEOUT, grace_cb, NULL,
                     (& (struct timeval) { grace_seconds, 0 })) != 0)
