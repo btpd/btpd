@@ -34,15 +34,20 @@ struct tlib *tlib_by_hash(const uint8_t *hash);
 struct tlib *tlib_by_num(unsigned num);
 unsigned tlib_count(void);
 
+int tlib_load_mi(struct tlib *tl, char **res);
+
 void tlib_read_hash(struct tlib *tl, size_t off, uint32_t piece,
     uint8_t *hash);
 
-int tlib_load_resume(struct tlib *tl, unsigned nfiles,
-    struct file_time_size *fts, size_t pfsize, uint8_t *pc_field,
-    size_t bfsize, uint8_t *blk_field);
+struct resume_data *tlib_open_resume(struct tlib *tl, unsigned nfiles,
+    size_t pfsize, size_t bfsize);
+void tlib_close_resume(struct resume_data *resume);
 
-void tlib_save_resume(struct tlib *tl, unsigned nfiles,
-    struct file_time_size *fts, size_t pfsize, uint8_t *pc_field,
-    size_t bfsize, uint8_t *blk_field);
+uint8_t *resume_piece_field(struct resume_data *resd);
+uint8_t *resume_block_field(struct resume_data *resd);
+void resume_set_fts(struct resume_data *resd, int i,
+    struct file_time_size *fts);
+void resume_get_fts(struct resume_data *resd, int i,
+    struct file_time_size *fts);
 
 #endif

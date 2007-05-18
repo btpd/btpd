@@ -37,7 +37,4 @@ void net_write_cb(int sd, short type, void *arg);
 int net_connect2(struct sockaddr *sa, socklen_t salen, int *sd);
 int net_connect(const char *ip, int port, int *sd);
 
-void net_write32(void *buf, uint32_t num);
-uint32_t net_read32(const void *buf);
-
 #endif

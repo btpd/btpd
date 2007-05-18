@@ -14,6 +14,48 @@
 #include <unistd.h>
 
 void
+enc_be32(void *buf, uint32_t num)
+{
+    uint8_t *p = buf;
+    *p = (num >> 24) & 0xff;
+    *(p + 1) = (num >> 16) & 0xff;
+    *(p + 2) = (num >> 8) & 0xff;
+    *(p + 3) = num & 0xff;
+}
+
+uint32_t
+dec_be32(const void *buf)
+{
+    const uint8_t *p = buf;
+    return (uint32_t)*p << 24 | (uint32_t)*(p + 1) << 16
+        | (uint16_t)*(p + 2) << 8 | *(p + 3);
+}
+
+void
+enc_be64(void *buf, uint64_t num)
+{
+    uint8_t *p = buf;
+    *p = (num >> 56) & 0xff;
+    *(p + 1) = (num >> 48) & 0xff;
+    *(p + 2) = (num >> 40) & 0xff;
+    *(p + 3) = (num >> 32) & 0xff;
+    *(p + 4) = (num >> 24) & 0xff;
+    *(p + 5) = (num >> 16) & 0xff;
+    *(p + 6) = (num >> 8) & 0xff;
+    *(p + 7) = num & 0xff;
+}
+
+uint64_t
+dec_be64(const void *buf)
+{
+    const uint8_t *p = buf;
+    return (uint64_t)*p << 56 | (uint64_t)*(p + 1) << 48
+        | (uint64_t)*(p + 2) << 40 | (uint64_t)*(p + 3) << 32
+        | (uint64_t)*(p + 4) << 24 | (uint64_t)*(p + 5) << 16
+        | (uint64_t)*(p + 6) << 8 | (uint64_t)*(p + 7);
+}
+
+void
 set_bit(uint8_t *bits, unsigned long index)
 {
     bits[index / 8] |= (1 << (7 - index % 8));

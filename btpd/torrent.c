@@ -1,7 +1,4 @@
 #include <sys/types.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -86,44 +83,14 @@ torrent_block_size(struct torrent *tp, uint32_t piece, uint32_t nblocks,
 enum ipc_err
 torrent_start(struct tlib *tl)
 {
-    struct stat sb;
     struct torrent *tp;
     char *mi;
-    char relpath[RELPATH_SIZE];
-    char file[PATH_MAX];
 
     if (tl->dir == NULL)
         return IPC_EBADTENT;
 
-    if (stat(tl->dir, &sb) == 0) {
-        if ((sb.st_mode & S_IFMT) != S_IFDIR) {
-            btpd_log(BTPD_L_ERROR,
-                "torrent '%s': content dir '%s' is not a directory\n",
-                tl->name, tl->dir);
-            return IPC_EBADCDIR;
-        }
-    } else if (errno == ENOENT) {
-        if (mkdirs(tl->dir, 0777) != 0 && errno != EEXIST) {
-            btpd_log(BTPD_L_ERROR, "torrent '%s': "
-                "failed to create content dir '%s' (%s).\n",
-                tl->name, tl->dir, strerror(errno));
-            return IPC_ECREATECDIR;
-        }
-    } else {
-        btpd_log(BTPD_L_ERROR,
-            "torrent '%s': couldn't stat content dir '%s' (%s)\n",
-            tl->name, tl->dir, strerror(errno));
-        return IPC_EBADCDIR;
-    }
-
-    bin2hex(tl->hash, relpath, 20);
-    snprintf(file, PATH_MAX, "torrents/%s/torrent", relpath);
-    if ((mi = mi_load(file, NULL)) == NULL) {
-        btpd_log(BTPD_L_ERROR,
-            "torrent '%s': failed to load metainfo (%s).\n",
-            tl->name, strerror(errno));
+    if (tlib_load_mi(tl, &mi) != 0)
         return IPC_EBADTENT;
-    }
 
     tp = btpd_calloc(1, sizeof(*tp));
     tp->tl = tl;

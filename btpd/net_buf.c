@@ -53,7 +53,7 @@ static struct net_buf *
 nb_create_onesized(char mtype, int btype)
 {
     struct net_buf *out = nb_create_alloc(btype, 5);
-    net_write32(out->buf, 1);
+    enc_be32(out->buf, 1);
     out->buf[4] = mtype;
     return out;
 }
@@ -71,7 +71,7 @@ nb_create_keepalive(void)
 {
     if (m_keepalive == NULL) {
         m_keepalive = nb_create_alloc(NB_KEEPALIVE, 4);
-        net_write32(m_keepalive->buf, 0);
+        enc_be32(m_keepalive->buf, 0);
         nb_singleton(m_keepalive);
     }
     return m_keepalive;
@@ -82,10 +82,10 @@ nb_create_piece(uint32_t index, uint32_t begin, size_t blen)
 {
     struct net_buf *out;
     out = nb_create_alloc(NB_PIECE, 13);
-    net_write32(out->buf, 9 + blen);
+    enc_be32(out->buf, 9 + blen);
     out->buf[4] = MSG_PIECE;
-    net_write32(out->buf + 5, index);
-    net_write32(out->buf + 9, begin);
+    enc_be32(out->buf + 5, index);
+    enc_be32(out->buf + 9, begin);
     return out;
 }
 
@@ -116,11 +116,11 @@ struct net_buf *
 nb_create_request(uint32_t index, uint32_t begin, uint32_t length)
 {
     struct net_buf *out = nb_create_alloc(NB_REQUEST, 17);
-    net_write32(out->buf, 13);
+    enc_be32(out->buf, 13);
     out->buf[4] = MSG_REQUEST;
-    net_write32(out->buf + 5, index);
-    net_write32(out->buf + 9, begin);
-    net_write32(out->buf + 13, length);
+    enc_be32(out->buf + 5, index);
+    enc_be32(out->buf + 9, begin);
+    enc_be32(out->buf + 13, length);
     return out;
 }
 
@@ -128,11 +128,11 @@ struct net_buf *
 nb_create_cancel(uint32_t index, uint32_t begin, uint32_t length)
 {
     struct net_buf *out = nb_create_alloc(NB_CANCEL, 17);
-    net_write32(out->buf, 13);
+    enc_be32(out->buf, 13);
     out->buf[4] = MSG_CANCEL;
-    net_write32(out->buf + 5, index);
-    net_write32(out->buf + 9, begin);
-    net_write32(out->buf + 13, length);
+    enc_be32(out->buf + 5, index);
+    enc_be32(out->buf + 9, begin);
+    enc_be32(out->buf + 13, length);
     return out;
 }
 
@@ -140,9 +140,9 @@ struct net_buf *
 nb_create_have(uint32_t index)
 {
     struct net_buf *out = nb_create_alloc(NB_HAVE, 9);
-    net_write32(out->buf, 5);
+    enc_be32(out->buf, 5);
     out->buf[4] = MSG_HAVE;
-    net_write32(out->buf + 5, index);
+    enc_be32(out->buf + 5, index);
     return out;
 }
 
@@ -153,9 +153,9 @@ nb_create_multihave(struct torrent *tp)
     struct net_buf *out = nb_create_alloc(NB_MULTIHAVE, 9 * have_npieces);
     for (uint32_t i = 0, count = 0; count < have_npieces; i++) {
         if (cm_has_piece(tp, i)) {
-            net_write32(out->buf + count * 9, 5);
+            enc_be32(out->buf + count * 9, 5);
             out->buf[count * 9 + 4] = MSG_HAVE;
-            net_write32(out->buf + count * 9 + 5, i);
+            enc_be32(out->buf + count * 9 + 5, i);
             count++;
         }
     }
@@ -202,7 +202,7 @@ nb_create_bitfield(struct torrent *tp)
     uint32_t plen = ceil(tp->npieces / 8.0);
 
     struct net_buf *out = nb_create_alloc(NB_BITFIELD, 5);
-    net_write32(out->buf, plen + 1);
+    enc_be32(out->buf, plen + 1);
     out->buf[4] = MSG_BITFIELD;
     return out;
 }
@@ -234,7 +234,7 @@ nb_get_index(struct net_buf *nb)
     case NB_HAVE:
     case NB_PIECE:
     case NB_REQUEST:
-        return net_read32(nb->buf + 5);
+        return dec_be32(nb->buf + 5);
     default:
         abort();
     }
@@ -247,7 +247,7 @@ nb_get_begin(struct net_buf *nb)
     case NB_CANCEL:
     case NB_PIECE:
     case NB_REQUEST:
-        return net_read32(nb->buf + 9);
+        return dec_be32(nb->buf + 9);
     default:
         abort();
     }
@@ -259,9 +259,9 @@ nb_get_length(struct net_buf *nb)
     switch (nb->type) {
     case NB_CANCEL:
     case NB_REQUEST:
-        return net_read32(nb->buf + 13);
+        return dec_be32(nb->buf + 13);
     case NB_PIECE:
-        return net_read32(nb->buf) - 9;
+        return dec_be32(nb->buf) - 9;
     default:
         abort();
     }

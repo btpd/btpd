@@ -116,24 +116,6 @@ net_active(struct torrent *tp)
     return tp->net->active;
 }
 
-void
-net_write32(void *buf, uint32_t num)
-{
-    uint8_t *p = buf;
-    *p = (num >> 24) & 0xff;
-    *(p + 1) = (num >> 16) & 0xff;
-    *(p + 2) = (num >> 8) & 0xff;
-    *(p + 3) = num & 0xff;
-}
-
-uint32_t
-net_read32(const void *buf)
-{
-    const uint8_t *p = buf;
-    return (uint32_t)*p << 24 | (uint32_t)*(p + 1) << 16
-        | (uint16_t)*(p + 2) << 8 | *(p + 3);
-}
-
 #define BLOCK_MEM_COUNT 4
 
 static unsigned long
@@ -256,7 +238,7 @@ net_dispatch_msg(struct peer *p, const char *buf)
         peer_on_uninterest(p);
         break;
     case MSG_HAVE:
-        peer_on_have(p, net_read32(buf));
+        peer_on_have(p, dec_be32(buf));
         break;
     case MSG_BITFIELD:
         if (p->npieces == 0)
@@ -266,9 +248,9 @@ net_dispatch_msg(struct peer *p, const char *buf)
         break;
     case MSG_REQUEST:
         if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT) {
-            index = net_read32(buf);
-            begin = net_read32(buf + 4);
-            length = net_read32(buf + 8);
+            index = dec_be32(buf);
+            begin = dec_be32(buf + 4);
+            length = dec_be32(buf + 8);
             if ((length > PIECE_BLOCKLEN
                     || index >= p->n->tp->npieces
                     || !cm_has_piece(p->n->tp, index)
@@ -282,9 +264,9 @@ net_dispatch_msg(struct peer *p, const char *buf)
         }
         break;
     case MSG_CANCEL:
-        index = net_read32(buf);
-        begin = net_read32(buf + 4);
-        length = net_read32(buf + 8);
+        index = dec_be32(buf);
+        begin = dec_be32(buf + 4);
+        length = dec_be32(buf + 8);
         peer_on_cancel(p, index, begin, length);
         break;
     case MSG_PIECE:
@@ -359,7 +341,7 @@ net_state(struct peer *p, const char *buf)
         peer_set_in_state(p, BTP_MSGSIZE, 4);
         break;
     case BTP_MSGSIZE:
-        p->in.msg_len = net_read32(buf);
+        p->in.msg_len = dec_be32(buf);
         if (p->in.msg_len == 0)
             peer_on_keepalive(p);
         else
@@ -379,8 +361,8 @@ net_state(struct peer *p, const char *buf)
             peer_set_in_state(p, BTP_MSGBODY, p->in.msg_len - 1);
         break;
     case BTP_PIECEMETA:
-        p->in.pc_index = net_read32(buf);
-        p->in.pc_begin = net_read32(buf + 4);
+        p->in.pc_index = dec_be32(buf);
+        p->in.pc_begin = dec_be32(buf + 4);
         peer_set_in_state(p, BTP_MSGBODY, p->in.msg_len - 9);
         break;
     case BTP_MSGBODY:

@@ -30,7 +30,7 @@ struct content {
     struct bt_stream *rds;
     struct bt_stream *wrs;
 
-    struct event save_timer;
+    struct resume_data *resd;
 };
 
 #define ZEROBUFLEN (1 << 14)
@@ -103,8 +103,7 @@ void
 cm_kill(struct torrent *tp)
 {
     struct content *cm = tp->cm;
-    free(cm->piece_field);
-    free(cm->block_field);
+    tlib_close_resume(cm->resd);
     free(cm->pos_field);
     free(cm);
     tp->cm = NULL;
@@ -117,9 +116,8 @@ cm_save(struct torrent *tp)
 {
     struct file_time_size fts[tp->nfiles];
     stat_and_adjust(tp, fts);
-    tlib_save_resume(tp->tl, tp->nfiles, fts,
-        ceil(tp->npieces / 8.0), tp->cm->piece_field,
-        tp->cm->bppbf * tp->npieces, tp->cm->block_field);
+    for (int i = 0; i < tp->nfiles; i++)
+        resume_set_fts(tp->cm->resd, i, fts + i);
 }
 
 static void
@@ -134,18 +132,18 @@ cm_on_error(struct torrent *tp)
 static void
 cm_write_done(struct torrent *tp)
 {
-    int err = 0;
+    int err;
     struct content *cm = tp->cm;
 
-    if ((err = bts_close(cm->wrs)) != 0)
+    err = bts_close(cm->wrs);
+    cm->wrs = NULL;
+    if (err && !cm->error) {
         btpd_log(BTPD_L_ERROR, "error closing write stream for '%s' (%s).\n",
             torrent_name(tp), strerror(err));
-    cm->wrs = NULL;
-    btpd_ev_del(&cm->save_timer);
-    if (!err)
-        cm_save(tp);
-    else
         cm_on_error(tp);
+    }
+    if (!cm->error)
+        cm_save(tp);
 }
 
 void
@@ -195,27 +193,17 @@ cm_started(struct torrent *tp)
     return cm->state == CM_ACTIVE;
 }
 
-#define SAVE_INTERVAL (& (struct timeval) { 15, 0 })
-
-static void
-save_timer_cb(int fd, short type, void *arg)
-{
-    struct torrent *tp = arg;
-    btpd_ev_add(&tp->cm->save_timer, SAVE_INTERVAL);
-    cm_save(tp);
-}
-
 void
 cm_create(struct torrent *tp, const char *mi)
 {
     size_t pfield_size = ceil(tp->npieces / 8.0);
     struct content *cm = btpd_calloc(1, sizeof(*cm));
     cm->bppbf = ceil((double)tp->piece_length / (1 << 17));
-    cm->piece_field = btpd_calloc(pfield_size, 1);
     cm->pos_field = btpd_calloc(pfield_size, 1);
-    cm->block_field = btpd_calloc(tp->npieces * cm->bppbf, 1);
-
-    evtimer_set(&cm->save_timer, save_timer_cb, tp);
+    cm->resd = tlib_open_resume(tp->tl, tp->nfiles, pfield_size,
+        cm->bppbf * tp->npieces);
+    cm->piece_field = resume_piece_field(cm->resd);
+    cm->block_field = resume_block_field(cm->resd);
 
     tp->cm = cm;
 }
@@ -431,9 +419,8 @@ startup_test_end(struct torrent *tp, int unclean)
     if (unclean) {
         struct start_test_data *std = BTPDQ_FIRST(&m_startq);
         BTPDQ_REMOVE(&m_startq, std, entry);
-        tlib_save_resume(tp->tl, tp->nfiles, std->fts,
-            ceil(tp->npieces / 8.0), cm->piece_field, cm->bppbf * 8,
-            cm->block_field);
+        for (int i = 0; i < tp->nfiles; i++)
+            resume_set_fts(cm->resd, i, std->fts + i);
         free(std->fts);
         free(std);
     }
@@ -447,7 +434,6 @@ startup_test_end(struct torrent *tp, int unclean)
             cm_on_error(tp);
             return;
         }
-        btpd_ev_add(&cm->save_timer, SAVE_INTERVAL);
     }
     cm->state = CM_ACTIVE;
 }
@@ -520,7 +506,7 @@ cm_start(struct torrent *tp, int force_test)
         return;
     }
 
-    fts = btpd_calloc(tp->nfiles * 2, sizeof(*fts));
+    fts = btpd_calloc(tp->nfiles, sizeof(*fts));
 
     if ((err = stat_and_adjust(tp, fts)) != 0) {
         free(fts);
@@ -528,13 +514,10 @@ cm_start(struct torrent *tp, int force_test)
         return;
     }
 
-    if (tlib_load_resume(tp->tl, tp->nfiles, fts + tp->nfiles,
-            ceil(tp->npieces / 8.0), cm->piece_field,
-            cm->bppbf * tp->npieces, cm->block_field) != 0)
-        run_test = 1;
     for (int i = 0; i < tp->nfiles; i++) {
-        if ((fts[i].mtime != fts[i + tp->nfiles].mtime ||
-                fts[i].size != fts[i + tp->nfiles].size)) {
+        struct file_time_size rfts;
+        resume_get_fts(cm->resd, i, &rfts);
+        if ((fts[i].mtime != rfts.mtime || fts[i].size != rfts.size)) {
             run_test = 1;
             break;
         }

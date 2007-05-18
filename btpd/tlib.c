@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -265,7 +266,7 @@ id_test(const void *k1, const void *k2)
 static uint32_t
 id_hash(const void *k)
 {
-    return net_read32(k + 16);
+    return dec_be32(k + 16);
 }
 
 void
@@ -323,57 +324,131 @@ tlib_read_hash(struct tlib *tl, size_t off, uint32_t piece, uint8_t *hash)
 }
 
 int
-tlib_load_resume(struct tlib *tl, unsigned nfiles, struct file_time_size *fts,
-    size_t pfsize, uint8_t *pc_field, size_t bfsize, uint8_t *blk_field)
+tlib_load_mi(struct tlib *tl, char **res)
 {
-    int err, ver;
-    FILE *fp;
+    char file[PATH_MAX];
     char relpath[RELPATH_SIZE];
+    char *mi;
+    bin2hex(tl->hash, relpath, 20);
+    snprintf(file, sizeof(file), "torrents/%s/torrent", relpath);
+    if ((mi = mi_load(file, NULL)) == NULL) {
+        btpd_log(BTPD_L_ERROR,
+            "torrent '%s': failed to load metainfo (%s).\n",
+            tl->name, strerror(errno));
+        return errno;
+    }
+    *res = mi;
+    return 0;
+}
+
+struct resume_data {
+    void *base;
+    size_t size;
+    uint8_t *pc_field;
+    uint8_t *blk_field;
+};
+
+static void *
+resume_file_size(struct resume_data *resd, int i)
+{
+    return resd->base + 8 + 16 * i;
+}
+
+static void *
+resume_file_time(struct resume_data *resd, int i)
+{
+    return resd->base + 16 + 16 * i;
+}
+
+static void
+init_resume(int fd, size_t size)
+{
+    char buf[1024];
+    uint32_t ver;
+    bzero(buf, sizeof(buf));
+    enc_be32(&ver, 2);
+    if (write(fd, "RESD", 4) == -1 || write(fd, &ver, 4) == -1)
+        goto fatal;
+    size -= 8;
+    while (size > 0) {
+        ssize_t nw = write(fd, buf, min(sizeof(buf), size));
+        if (nw < 1)
+            goto fatal;
+        size -= nw;
+    }
+    return;
+fatal:
+    btpd_err("failed to initialize resume file (%s).\n", strerror(errno));
+}
+
+struct resume_data *
+tlib_open_resume(struct tlib *tl, unsigned nfiles, size_t pfsize,
+    size_t bfsize)
+{
+    int fd;
+    char relpath[RELPATH_SIZE];
+    struct stat sb;
+    struct resume_data *resd = btpd_calloc(1, sizeof(*resd));
     bin2hex(tl->hash, relpath, 20);
 
-    if ((err = vfopen(&fp, "r" , "torrents/%s/resume", relpath)) != 0)
-        return err;
+    resd->size = 8 + nfiles * 16 + pfsize + bfsize;
 
-    if (fscanf(fp, "%d\n", &ver) != 1)
-        goto invalid;
-    if (ver != 1)
-        goto invalid;
-    for (int i = 0; i < nfiles; i++) {
-        quad_t size;
-        long time;
-        if (fscanf(fp, "%qd %ld\n", &size, &time) != 2)
-            goto invalid;
-        fts[i].size = size;
-        fts[i].mtime = time;
+    if ((errno =
+            vopen(&fd, O_RDWR|O_CREAT, "torrents/%s/resume", relpath)) != 0)
+        goto fatal;
+    if (fstat(fd, &sb) != 0)
+        goto fatal;
+    if (sb.st_size != resd->size) {
+        if (sb.st_size != 0 && ftruncate(fd, 0) != 0)
+            goto fatal;
+        init_resume(fd, resd->size);
     }
-    if (fread(pc_field, 1, pfsize, fp) != pfsize)
-        goto invalid;
-    if (fread(blk_field, 1, bfsize, fp) != bfsize)
-        goto invalid;
-    fclose(fp);
-    return 0;
-invalid:
-    fclose(fp);
-    bzero(pc_field, pfsize);
-    bzero(blk_field, bfsize);
-    return EINVAL;
+    resd->base =
+        mmap(NULL, resd->size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    if (resd->base == MAP_FAILED)
+        goto fatal;
+    if (bcmp(resd->base, "RESD", 4) != 0 || dec_be32(resd->base + 4) != 2)
+        init_resume(fd, resd->size);
+    close(fd);
+
+    resd->pc_field = resd->base + 8 + nfiles * 16;
+    resd->blk_field = resd->pc_field + pfsize;
+
+    return resd;
+fatal:
+    btpd_err("file operation failed on 'torrents/%s/resume' (%s).\n",
+        relpath, strerror(errno));
+}
+
+uint8_t *
+resume_piece_field(struct resume_data *resd)
+{
+    return resd->pc_field;
+}
+
+uint8_t *
+resume_block_field(struct resume_data *resd)
+{
+    return resd->blk_field;
 }
 
 void
-tlib_save_resume(struct tlib *tl, unsigned nfiles, struct file_time_size *fts,
-    size_t pfsize, uint8_t *pc_field, size_t bfsize, uint8_t *blk_field)
+resume_set_fts(struct resume_data *resd, int i, struct file_time_size *fts)
 {
-    int err;
-    FILE *fp;
-    char relpath[RELPATH_SIZE];
-    bin2hex(tl->hash, relpath, 20);
+    enc_be64(resume_file_size(resd, i), (uint64_t)fts->size);
+    enc_be64(resume_file_time(resd, i), (uint64_t)fts->mtime);
+}
 
-    if ((err = vfopen(&fp, "wb", "torrents/%s/resume", relpath)) != 0)
-        return;
-    fprintf(fp, "%d\n", 1);
-    for (int i = 0; i < nfiles; i++)
-        fprintf(fp, "%lld %ld\n", (long long)fts[i].size, (long)fts[i].mtime);
-    fwrite(pc_field, 1, pfsize, fp);
-    fwrite(blk_field, 1, bfsize, fp);
-    if (fclose(fp) != 0); //XXX
+void
+resume_get_fts(struct resume_data *resd, int i, struct file_time_size *fts)
+{
+    fts->size = dec_be64(resume_file_size(resd, i));
+    fts->mtime = dec_be64(resume_file_time(resd, i));
+}
+
+void
+tlib_close_resume(struct resume_data *resd)
+{
+    munmap(resd->base, resd->size);
+    free(resd);
 }
