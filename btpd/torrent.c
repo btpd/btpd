@@ -16,8 +16,13 @@
 #include "tracker_req.h"
 #include "stream.h"
 
+#define SAVE_INTERVAL 300
+
 static unsigned m_ntorrents;
 static struct torrent_tq m_torrents = BTPDQ_HEAD_INITIALIZER(m_torrents);
+
+static unsigned m_tsave;
+static struct torrent *m_savetp;
 
 const struct torrent_tq *
 torrent_get_all(void)
@@ -113,6 +118,10 @@ torrent_start(struct tlib *tl)
         m_ntorrents++;
         cm_start(tp, 0);
         free(mi);
+        if (m_ntorrents == 1) {
+            m_tsave = btpd_seconds + SAVE_INTERVAL;
+            m_savetp = tp;
+        }
         return IPC_OK;
     } else {
         mi_free_files(tp->nfiles, tp->files);
@@ -137,6 +146,9 @@ torrent_kill(struct torrent *tp)
     net_kill(tp);
     cm_kill(tp);
     mi_free_files(tp->nfiles, tp->files);
+    if (m_savetp == tp)
+        if ((m_savetp = BTPDQ_NEXT(tp, entry)) == NULL)
+            m_savetp = BTPDQ_FIRST(&m_torrents);
     free(tp);
 }
 
@@ -157,7 +169,7 @@ torrent_stop(struct torrent *tp, int delete)
         if (cm_active(tp))
             cm_stop(tp);
         if (!delete)
-            tlib_update_info(tp->tl);
+            tlib_update_info(tp->tl, 0);
         break;
     case T_STOPPING:
         if (tr_active(tp))
@@ -211,4 +223,15 @@ torrent_on_tick_all(void)
     struct torrent *tp, *next;
     BTPDQ_FOREACH_MUTABLE(tp, &m_torrents, entry, next)
         torrent_on_tick(tp);
+
+    if (m_savetp != NULL && m_tsave <= btpd_seconds) {
+        if (m_savetp->state == T_LEECH || m_savetp->state == T_SEED) {
+            tlib_update_info(m_savetp->tl, 1);
+            if ((m_savetp = BTPDQ_NEXT(m_savetp, entry)) == NULL)
+                m_savetp = BTPDQ_FIRST(&m_torrents);
+            if (m_ntorrents > 0)
+                m_tsave = btpd_seconds +
+                    max(m_ntorrents, SAVE_INTERVAL) / m_ntorrents;
+        }
+    }
 }

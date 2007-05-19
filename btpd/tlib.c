@@ -183,7 +183,8 @@ save_info(struct tlib *tl)
         btpd_err("failed to open '%s' (%s).\n", wpath, strerror(errno));
     dct_subst_save(fp, "de", iob.buf);
     buf_free(&iob);
-    if (ferror(fp) || fclose(fp) != 0)
+    if ((fflush(fp) == EOF || fsync(fileno(fp)) != 0
+            || ferror(fp) || fclose(fp) != 0))
         btpd_err("failed to write '%s'.\n", wpath);
     if (rename(wpath, path) != 0)
         btpd_err("failed to rename: '%s' -> '%s' (%s).\n", wpath, path,
@@ -191,9 +192,14 @@ save_info(struct tlib *tl)
 }
 
 void
-tlib_update_info(struct tlib *tl)
+tlib_update_info(struct tlib *tl, int only_file)
 {
+    struct tlib tmp;
     assert(tl->tp != NULL);
+    if (only_file) {
+        tmp = *tl;
+        tl = &tmp;
+    }
     tl->tot_down += tl->tp->net->downloaded;
     tl->tot_up += tl->tp->net->uploaded;
     tl->content_have = cm_content(tl->tp);
