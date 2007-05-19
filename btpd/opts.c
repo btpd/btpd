@@ -1,5 +1,5 @@
-#include <netinet/in.h>
 #include <btpd.h>
+#include <netinet/in.h>
 
 const char *btpd_dir;
 #ifdef DEBUG
