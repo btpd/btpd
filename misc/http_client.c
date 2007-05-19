@@ -381,6 +381,29 @@ error:
     http_error(req);
 }
 
+static int
+http_connect(struct http_req *req, struct in_addr inaddr)
+{
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(req->url->port);
+    addr.sin_addr = inaddr;
+    req->state = HTTP_CONNECT;
+    if ((req->sd = socket(PF_INET, SOCK_STREAM, 0)) == -1)
+        goto error;
+    if (set_nonblocking(req->sd) != 0)
+        goto error;
+    if ((connect(req->sd, (struct sockaddr *)&addr, sizeof(addr)) != 0
+            && errno != EINPROGRESS))
+        goto error;
+    event_set(&req->ev, req->sd, EV_WRITE, http_write_cb, req);
+    if (event_add(&req->ev, TIMEOUT) != 0)
+        goto error;
+    return 1;
+error:
+    return 0;
+}
+
 static void
 http_dnscb(int result, char type, int count, int ttl, void *addrs, void *arg)
 {
@@ -389,27 +412,13 @@ http_dnscb(int result, char type, int count, int ttl, void *addrs, void *arg)
         http_free(req);
     else if (result == DNS_ERR_NONE && type == DNS_IPv4_A && count > 0) {
         int addri = rand_between(0, count - 1);
-        struct sockaddr_in addr;
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(req->url->port);
-        bcopy(addrs + addri * 4, &addr.sin_addr.s_addr, 4);
-        req->state = HTTP_CONNECT;
-        if ((req->sd = socket(PF_INET, SOCK_STREAM, 0)) == -1)
-            goto error;
-        if (set_nonblocking(req->sd) != 0)
-            goto error;
-        if ((connect(req->sd, (struct sockaddr *)&addr, sizeof(addr)) != 0
-                && errno != EINPROGRESS))
-            goto error;
-        event_set(&req->ev, req->sd, EV_WRITE, http_write_cb, req);
-        if (event_add(&req->ev, TIMEOUT) != 0)
-            goto error;
+        struct in_addr inaddr;
+        bcopy(addrs + addri * sizeof(struct in_addr), &inaddr,
+            sizeof(struct in_addr));
+        if (!http_connect(req, inaddr))
+            http_error(req);
     } else
-        goto error;
-    return;
-
-error:
-    http_error(req);
+        http_error(req);
 }
 
 int
@@ -435,9 +444,10 @@ http_get(struct http_req **out, const char *url, const char *hdrs,
             "%s"
             "\r\n", req->url->uri, req->url->host, hdrs) == -1)
         goto error;
-    if (inet_aton(req->url->host, &addr) == 1)
-        http_dnscb(DNS_ERR_NONE, DNS_IPv4_A, 1, 0, &addr, req);
-    else if (evdns_resolve_ipv4(req->url->host, 0, http_dnscb, req) != 0)
+    if (inet_aton(req->url->host, &addr) == 1) {
+        if (!http_connect(req, addr))
+            goto error;
+    } else if (evdns_resolve_ipv4(req->url->host, 0, http_dnscb, req) != 0)
         goto error;
     if (out != NULL)
         *out = req;
