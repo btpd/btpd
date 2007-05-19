@@ -98,6 +98,16 @@ tr_cancel(struct tracker *tr)
 }
 
 static void
+tr_set_stopped(struct torrent *tp)
+{
+    struct tracker *tr = tp->tr;
+    btpd_ev_del(&tr->timer);
+    tr->ttype = TIMER_NONE;
+    if (tr->req != NULL)
+        tr_cancel(tr);
+}
+
+static void
 tr_send(struct torrent *tp, enum tr_event event)
 {
     struct tracker *tr = tp->tr;
@@ -117,8 +127,12 @@ tr_send(struct torrent *tp, enum tr_event event)
 
     if ((op == NULL ||
             (tr->req = op->request(tp, event, get_url(tr))) == NULL)) {
-        next_url(tr);
         tr->nerrors++;
+        if (tr->event == TR_EV_STOPPED && tr->nerrors >= STOP_ERRORS) {
+            tr_set_stopped(tp);
+            return;
+        }
+        next_url(tr);
         tr->ttype = TIMER_RETRY;
         btpd_ev_add(&tr->timer, (& (struct timeval) { 5, 0 }));
     } else {
@@ -126,16 +140,6 @@ tr_send(struct torrent *tp, enum tr_event event)
         tr->ttype = TIMER_TIMEOUT;
         btpd_ev_add(&tr->timer, REQ_TIMEOUT);
     }
-}
-
-static void
-tr_set_stopped(struct torrent *tp)
-{
-    struct tracker *tr = tp->tr;
-    btpd_ev_del(&tr->timer);
-    tr->ttype = TIMER_NONE;
-    if (tr->req != NULL)
-        tr_cancel(tr);
 }
 
 void
