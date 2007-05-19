@@ -416,6 +416,7 @@ int
 http_get(struct http_req **out, const char *url, const char *hdrs,
     http_cb_t cb, void *arg)
 {
+    struct in_addr addr;
     struct http_req *req = calloc(1, sizeof(*req));
     if (req == NULL)
         return 0;
@@ -434,7 +435,9 @@ http_get(struct http_req **out, const char *url, const char *hdrs,
             "%s"
             "\r\n", req->url->uri, req->url->host, hdrs) == -1)
         goto error;
-    if (evdns_resolve_ipv4(req->url->host, 0, http_dnscb, req) != 0)
+    if (inet_aton(req->url->host, &addr) == 1)
+        http_dnscb(DNS_ERR_NONE, DNS_IPv4_A, 1, 0, &addr, req);
+    else if (evdns_resolve_ipv4(req->url->host, 0, http_dnscb, req) != 0)
         goto error;
     if (out != NULL)
         *out = req;
