@@ -3,13 +3,15 @@ btpd 0.13:
 
 Misc:
 - cURL is no longer required. btpd now uses its own http client.
-- Needed parts of libevent-1.3b are now included in btpd.
+- btpd doesn't use threads anymore, so pthreads are not required.
+- Needed parts of libevent are now included in btpd.
 - I/O errors for torrents no longer make btpd shut down. Instead the
   problematic torrent is stopped.
 - Added the option '--ip' to specify the ip address btpd will report
   to trackers.
 - Resume file format changed. Already added torrents will be retested once.
 - The torrent info (ratio etc.) are now saved regularly.
+- Reduced the amount of outgoing data kept in memory.
 
 btpd 0.12:
 ----------
