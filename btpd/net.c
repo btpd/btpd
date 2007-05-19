@@ -116,7 +116,7 @@ net_active(struct torrent *tp)
     return tp->net->active;
 }
 
-#define BLOCK_MEM_COUNT 4
+#define BLOCK_MEM_COUNT 1
 
 static unsigned long
 net_write(struct peer *p, unsigned long wmax)
