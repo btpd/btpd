@@ -166,13 +166,10 @@ Contents
 
 3.a Requirements
 
-  You should have a *BSD, Linux or sufficiently similar system with pthread
-  support.
+  You should have a *BSD, Linux or sufficiently similar system.
 
   Make sure you have recent versions of the following software:
-  * curl      - Get at <URL:http://curl.haxx.se/>
-  * openssl   - Get at <URL:http://www.openssl.org/>
-  * libevent  - Get at <URL:http://www.monkey.org/~provos/libevent/>
+  * OpenSSL   - Get at <URL:http://www.openssl.org/>
 
   You also need a c99 compiler. A non antique GCC should do.
 
