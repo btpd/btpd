@@ -1,7 +1,4 @@
-#include <math.h>
-
 #include "btpd.h"
-#include "tracker_req.h"
 
 /*
  * Called when a peer announces it's got a new piece.

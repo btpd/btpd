@@ -1,9 +1,7 @@
-#include <signal.h>
-#include <string.h>
-#include <time.h>
-
 #include "btpd.h"
-#include "active.h"
+
+#include <signal.h>
+#include <time.h>
 
 static uint8_t m_peer_id[20];
 static struct event m_sigint;

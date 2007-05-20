@@ -1,13 +1,6 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-
-#include <event.h>
-#include <evdns.h>
-#include <string.h>
-
 #include "btpd.h"
-#include "tracker_req.h"
+
+#include <evdns.h>
 
 struct udp_tr_req {
     enum { UDP_RESOLVE, UDP_CONN_SEND, UDP_CONN_RECV,

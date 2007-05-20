@@ -1,13 +1,6 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include "btpd.h"
 
 #include <ctype.h>
-#include <math.h>
-#include <string.h>
-#include <unistd.h>
-
-#include "btpd.h"
 
 void
 peer_kill(struct peer *p)

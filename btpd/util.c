@@ -1,9 +1,7 @@
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
-
 #include "btpd.h"
+
+#include <stdarg.h>
+#include <time.h>
 
 void *
 btpd_malloc(size_t size)

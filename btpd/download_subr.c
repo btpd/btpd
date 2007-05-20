@@ -19,15 +19,10 @@
  *
  */
 
-#include <fcntl.h>
-#include <math.h>
-#include <string.h>
-#include <unistd.h>
+#include "btpd.h"
 
 #include <openssl/sha.h>
-
-#include "btpd.h"
-#include "stream.h"
+#include <stream.h>
 
 static struct piece *
 piece_alloc(struct net *n, uint32_t index)

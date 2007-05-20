@@ -1,8 +1,4 @@
-#include <string.h>
-
 #include "btpd.h"
-#include "subr.h"
-#include "tracker_req.h"
 
 #define REQ_DELAY 1
 #define STOP_ERRORS 5

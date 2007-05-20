@@ -1,5 +1,3 @@
-#include <string.h>
-
 #include "btpd.h"
 
 #define CHOKE_INTERVAL (& (struct timeval) { 10, 0 })

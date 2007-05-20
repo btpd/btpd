@@ -1,19 +1,7 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <arpa/inet.h>
-#include <sys/stat.h>
-
-#include <inttypes.h>
-#include <limits.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-
 #include "btpd.h"
-#include "active.h"
-#include "tracker_req.h"
+
+#include <sys/un.h>
+#include <iobuf.h>
 
 struct cli {
     int sd;

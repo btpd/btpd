@@ -1,22 +1,7 @@
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-
-#include <sys/mman.h>
-#include <sys/wait.h>
-
-#include <assert.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
 #include "btpd.h"
+
+#include <sys/uio.h>
+#include <netdb.h>
 
 static unsigned long m_bw_bytes_in;
 static unsigned long m_bw_bytes_out;

@@ -2,23 +2,35 @@
 #define BTPD_H
 
 #include <sys/types.h>
-#include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <assert.h>
 #include <errno.h>
-#include <event.h>
+#include <fcntl.h>
+#include <math.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-#include "queue.h"
+#include <benc.h>
+#define DAEMON
+#include <btpd_if.h>
+#undef DAEMON
+#include <event.h>
+#include <metainfo.h>
+#include <queue.h>
+#include <subr.h>
 
-#include "benc.h"
-#include "metainfo.h"
-#include "subr.h"
-#include "iobuf.h"
+#include "active.h"
 #include "hashtable.h"
 #include "net_buf.h"
 #include "net_types.h"
@@ -30,9 +42,7 @@
 #include "upload.h"
 #include "content.h"
 #include "opts.h"
-#define DAEMON
-#include "btpd_if.h"
-#undef DAEMON
+#include "tracker_req.h"
 
 #define BTPD_VERSION PACKAGE_NAME "/" PACKAGE_VERSION
 

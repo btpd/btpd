@@ -1,6 +1,3 @@
-#include <math.h>
-#include <string.h>
-
 #include "btpd.h"
 
 static struct net_buf *m_choke;

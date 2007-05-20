@@ -1,20 +1,6 @@
-#include <sys/types.h>
-#include <assert.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <math.h>
-#include <limits.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include "btpd.h"
 
 #include <openssl/sha.h>
-
-#include "btpd.h"
-#include "tracker_req.h"
-#include "stream.h"
 
 #define SAVE_INTERVAL 300
 

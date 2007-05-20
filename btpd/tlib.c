@@ -1,13 +1,8 @@
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-
-#include <dirent.h>
-#include <fcntl.h>
-#include <string.h>
-#include <unistd.h>
-
 #include "btpd.h"
+
+#include <sys/mman.h>
+#include <dirent.h>
+#include <iobuf.h>
 
 HTBL_TYPE(numtbl, tlib, unsigned, num, nchain);
 HTBL_TYPE(hashtbl, tlib, uint8_t, hash, hchain);

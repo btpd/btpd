@@ -1,10 +1,6 @@
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <string.h>
-
 #include "btpd.h"
-#include "tracker_req.h"
-#include "http_client.h"
+
+#include <http_client.h>
 
 #define MAX_DOWNLOAD (1 << 18)  // 256kB
 

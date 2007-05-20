@@ -1,16 +1,7 @@
-#include <sys/types.h>
-#include <sys/stat.h>
-
-#include <fcntl.h>
-#include <math.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
+#include "btpd.h"
 
 #include <openssl/sha.h>
-
-#include "btpd.h"
-#include "stream.h"
+#include <stream.h>
 
 struct content {
     enum { CM_INACTIVE, CM_STARTING, CM_ACTIVE } state;

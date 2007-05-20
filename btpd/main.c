@@ -1,19 +1,9 @@
-#include <sys/types.h>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <arpa/inet.h>
-
-#include <err.h>
-#include <errno.h>
-#include <event.h>
-#include <evdns.h>
-#include <fcntl.h>
-#include <getopt.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-
 #include "btpd.h"
+
+#include <sys/file.h>
+#include <err.h>
+#include <evdns.h>
+#include <getopt.h>
 
 static void
 writepid(int pidfd)
