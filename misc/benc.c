@@ -114,7 +114,7 @@ benc_length(const char *p)
     case 'd':
     case 'l':
         blen = 2; // [l|d]...e
-        next = benc_first(p);
+        next = p + 1;
         while (*next != 'e') {
             size_t len = benc_length(next);
             blen += len;
