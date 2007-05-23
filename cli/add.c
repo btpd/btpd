@@ -81,7 +81,7 @@ cmd_add(int argc, char **argv)
 
     iob = buf_init(PATH_MAX);
     buf_write(&iob, dir, dirlen);
-    if (topdir) {
+    if (topdir && !mi_simple(mi)) {
         size_t tdlen;
         const char *td =
             benc_dget_mem(benc_dget_dct(mi, "info"), "name", &tdlen);
