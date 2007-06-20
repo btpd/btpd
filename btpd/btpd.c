@@ -1,7 +1,7 @@
 #include "btpd.h"
 
+#include <openssl/sha.h>
 #include <signal.h>
-#include <time.h>
 
 static uint8_t m_peer_id[20];
 static struct event m_sigint;
@@ -80,12 +80,25 @@ void ipc_init(void);
 void
 btpd_init(void)
 {
-    srandom(time(NULL));
+    unsigned long seed;
+    uint8_t idcon[1024];
+    struct timeval now;
+    int n;
 
+    gettimeofday(&now, NULL);
+    n = snprintf(idcon, sizeof(idcon), "%ld%ld%d", now.tv_sec, now.tv_usec,
+        net_port);
+    if (n < sizeof(idcon))
+        gethostname(idcon + n, sizeof(idcon) - n);
+    idcon[sizeof(idcon) - 1] = '\0';
+    n = strlen(idcon);
+
+    SHA1(idcon, n, m_peer_id);
+    bcopy(m_peer_id, &seed, sizeof(seed));
     bcopy(BTPD_VERSION, m_peer_id, sizeof(BTPD_VERSION) - 1);
     m_peer_id[sizeof(BTPD_VERSION) - 1] = '|';
-    for (int i = sizeof(BTPD_VERSION); i < 20; i++)
-        m_peer_id[i] = rand_between(0, 255);
+
+    srandom(seed);
 
     net_init();
     ipc_init();
