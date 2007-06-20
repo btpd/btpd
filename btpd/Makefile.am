@@ -15,6 +15,6 @@ btpd_SOURCES=\
 	upload.c upload.h\
 	util.c
 
-btpd_LDADD=../misc/libmisc.a ../libevent/libevent.a
+btpd_LDADD=../misc/libmisc.a ../libevent/libevent.a -lcrypto -lm
 btpd_CPPFLAGS=-I$(top_srcdir)/misc -I$(top_srcdir)/libevent @openssl_CPPFLAGS@
-btpd_LDFLAGS=@openssl_LDFLAGS@ -lcrypto -lm
+btpd_LDFLAGS=@openssl_LDFLAGS@
