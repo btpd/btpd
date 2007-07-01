@@ -459,11 +459,11 @@ http_get(struct http_req **out, const char *url, const char *hdrs,
     if ((req->buf = evbuffer_new()) == NULL)
         goto error;
     if (evbuffer_add_printf(req->buf, "GET %s HTTP/1.1\r\n"
+            "Host: %s:%hu\r\n"
             "Accept-Encoding:\r\n"
             "Connection: close\r\n"
-            "Host: %s\r\n"
             "%s"
-            "\r\n", req->url->uri, req->url->host, hdrs) == -1)
+            "\r\n", req->url->uri, req->url->host, req->url->port, hdrs) == -1)
         goto error;
     if (inet_aton(req->url->host, &addr) == 1) {
         if (!http_connect(req, addr))
