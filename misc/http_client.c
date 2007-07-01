@@ -132,11 +132,24 @@ http_error(struct http_req *req)
     http_free(req);
 }
 
+static char *
+strnl(char *str, int *nlsize)
+{
+    char *nl = strchr(str, '\n');
+    if (nl != NULL && nl > str && *(nl - 1) == '\r') {
+        *nlsize = 2;
+        return nl - 1;
+    } else {
+        *nlsize = 1;
+        return nl;
+    }
+}
+
 static int
 headers_parse(struct http_req *req, char *buf, char *end)
 {
-    int code, majv, minv;
-    char *cur, *crlf;
+    int code, majv, minv, nlsize;
+    char *cur, *nl;
     char name[128], value[872];
     struct http_response res;
 
@@ -151,12 +164,12 @@ headers_parse(struct http_req *req, char *buf, char *end)
     if (req->cancel)
         return 1;
 
-    cur = strstr(buf, "\r\n") + 2;
-    crlf = strstr(cur, "\r\n");
+    cur = strchr(buf, '\n') + 1;
+    nl = strnl(cur, &nlsize);
     while (cur < end) {
         int i;
         char *colon = strchr(cur, ':');
-        if (colon == NULL || colon > crlf)
+        if (colon == NULL || colon > nl)
             return 0;
         snprintf(name, sizeof(name), "%.*s", (int)(colon - cur), cur);
 
@@ -165,15 +178,15 @@ headers_parse(struct http_req *req, char *buf, char *end)
     val_loop:
         while (isblank(*cur))
             cur++;
-        while (cur < crlf) {
+        while (cur < nl) {
             if (i < sizeof(value) - 1) {
                 value[i] = *cur;
                 i++;
             }
             cur++;
         }
-        cur += 2;
-        crlf = strstr(cur, "\r\n");
+        cur += nlsize;
+        nl = strnl(cur, &nlsize);
         if (isblank(*cur)) {
             if (i < sizeof(value) - 1) {
                 value[i] = ' ';
@@ -222,7 +235,11 @@ again:
     case PS_HEAD:
         if (len == 0)
             goto error;
-        if ((end = evbuffer_find(req->buf, "\r\n\r\n", 4)) == NULL) {
+        if ((end = evbuffer_find(req->buf, "\r\n\r\n", 4)) != NULL)
+            dlen = 4;
+        else if ((end = evbuffer_find(req->buf, "\n\n", 2)) != NULL)
+            dlen = 2;
+        else {
             if (req->buf->off < (1 << 15))
                 return 1;
             else
@@ -235,13 +252,13 @@ again:
             goto error;
         if (req->cancel)
             goto cancel;
-        evbuffer_drain(req->buf, end - (char *)req->buf->buffer + 4);
+        evbuffer_drain(req->buf, end - (char *)req->buf->buffer + dlen);
         goto again;
     case PS_CHUNK_SIZE:
         assert(req->chunked);
         if (len == 0)
             goto error;
-        if ((end = evbuffer_find(req->buf, "\r\n", 2)) == NULL) {
+        if ((end = evbuffer_find(req->buf, "\n", 1)) == NULL) {
             if (req->buf->off < 20)
                 return 1;
             else
@@ -253,7 +270,7 @@ again:
             goto error;
         if (req->length == 0)
             goto done;
-        evbuffer_drain(req->buf, end - (char *)req->buf->buffer + 2);
+        evbuffer_drain(req->buf, end - (char *)req->buf->buffer + 1);
         req->pstate = PS_CHUNK_DATA;
         goto again;
     case PS_CHUNK_DATA:
@@ -282,9 +299,13 @@ again:
         assert(req->length == 0);
         if (req->buf->off < 2)
             return 1;
-        if (bcmp(req->buf->buffer, "\r\n", 2) != 0)
+        if (req->buf->buffer[0] == '\r' && req->buf->buffer[1] == '\n')
+            dlen = 2;
+        else if (req->buf->buffer[0] == '\n')
+            dlen = 1;
+        else
             goto error;
-        evbuffer_drain(req->buf, 2);
+        evbuffer_drain(req->buf, dlen);
         req->pstate = PS_CHUNK_SIZE;
         goto again;
     case PS_ID_DATA:
