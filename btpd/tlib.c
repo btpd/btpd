@@ -164,7 +164,7 @@ save_info(struct tlib *tl)
         "3:dir%d:%s4:name%d:%s"
         "14:total downloadi%llde12:total uploadi%llde"
         "ee",
-        tl->content_have, tl->content_size,
+        (long long)tl->content_have, (long long)tl->content_size,
         (int)strlen(tl->dir), tl->dir, (int)strlen(tl->name), tl->name,
         tl->tot_down, tl->tot_up);
     if (iob.error)

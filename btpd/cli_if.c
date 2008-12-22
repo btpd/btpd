@@ -50,7 +50,8 @@ write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
             tl->tp == NULL ? tl->content_have : (long long)cm_content(tl->tp));
         return;
     case IPC_TVAL_CSIZE:
-        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->content_size);
+        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+            (long long)tl->content_size);
         return;
     case IPC_TVAL_PCCOUNT:
         if (tl->tp == NULL)
