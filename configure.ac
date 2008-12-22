@@ -25,10 +25,10 @@ AC_ARG_WITH(warn,
     no)
 	;;
     all)
-	CFLAGS="$CFLAGS -Wall"
+	CFLAGS="$CFLAGS -Wall -Wno-pointer-sign"
 	;;
     allerr)
-	CFLAGS="$CFLAGS -Wall -Werror"
+	CFLAGS="$CFLAGS -Wall -Wno-pointer-sign -Werror"
 	;;
     *)
 	echo "Warning preset \"$withval\" not recognized. See --help."
