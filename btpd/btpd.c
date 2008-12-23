@@ -77,6 +77,7 @@ heartbeat_cb(int fd, short type, void *arg)
 void tr_init(void);
 void ipc_init(void);
 void td_init(void);
+void addrinfo_init(void);
 
 void
 btpd_init(void)
@@ -102,6 +103,7 @@ btpd_init(void)
     srandom(seed);
 
     td_init();
+    addrinfo_init();
     net_init();
     ipc_init();
     ul_init();
