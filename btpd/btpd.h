@@ -90,4 +90,10 @@ aictx_t btpd_addrinfo(const char *node, short port, struct addrinfo *hints,
     void (*cb)(void *, int, struct addrinfo *), void *arg);
 void btpd_addrinfo_cancel(aictx_t ctx); 
 
+
+typedef struct nameconn *nameconn_t;
+nameconn_t btpd_name_connect(const char *name, short port,
+    void (*cb)(void *, int, int), void *arg);
+void btpd_name_connect_cancel(nameconn_t nc);
+
 #endif

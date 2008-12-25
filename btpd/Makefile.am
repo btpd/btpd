@@ -6,7 +6,7 @@ btpd_SOURCES=\
 	download.c download_subr.c download.h\
 	http_tr_if.c\
 	main.c\
-	net.c net.h net_types.h\
+	nameconn.c net.c net.h net_types.h\
 	net_buf.c net_buf.h\
 	opts.c opts.h\
 	peer.c peer.h\
