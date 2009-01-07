@@ -1,24 +1,15 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/time.h>
-
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#include <event.h>
-#include <evdns.h>
-
+#include "iobuf.h"
 #include "subr.h"
 #include "http_client.h"
-
-#define TIMEOUT (& (struct timeval) { 45, 0 })
 
 struct http_url *
 http_url_parse(const char *url)
@@ -89,13 +80,10 @@ http_url_free(struct http_url *url)
 
 struct http_req {
     enum {
-        HTTP_RESOLVE, HTTP_CONNECT, HTTP_WRITE, HTTP_RECEIVE, HTTP_PARSE
-    } state;
-    enum {
         PS_HEAD, PS_CHUNK_SIZE, PS_CHUNK_DATA, PS_CHUNK_CRLF, PS_ID_DATA
     } pstate;
 
-    int sd;
+    int parsing;
     int cancel;
     int chunked;
     long length;
@@ -104,8 +92,8 @@ struct http_req {
     void *arg;
 
     struct http_url *url;
-    struct evbuffer *buf;
-    struct event ev;
+    struct iobuf rbuf;
+    struct iobuf wbuf;
 };
 
 static void
@@ -113,12 +101,8 @@ http_free(struct http_req *req)
 {
     if (req->url != NULL)
         http_url_free(req->url);
-    if (req->buf != NULL)
-        evbuffer_free(req->buf);
-    if (req->sd > 0) {
-        event_del(&req->ev);
-        close(req->sd);
-    }
+    iobuf_free(&req->rbuf);
+    iobuf_free(&req->wbuf);
     free(req);
 }
 
@@ -235,57 +219,57 @@ again:
     case PS_HEAD:
         if (len == 0)
             goto error;
-        if ((end = evbuffer_find(req->buf, "\r\n\r\n", 4)) != NULL)
+        if ((end = iobuf_find(&req->rbuf, "\r\n\r\n", 4)) != NULL)
             dlen = 4;
-        else if ((end = evbuffer_find(req->buf, "\n\n", 2)) != NULL)
+        else if ((end = iobuf_find(&req->rbuf, "\n\n", 2)) != NULL)
             dlen = 2;
         else {
-            if (req->buf->off < (1 << 15))
+            if (req->rbuf.off < (1 << 15))
                 return 1;
             else
                 goto error;
         }
-        if (evbuffer_add(req->buf, "", 1) != 0)
+        if (!iobuf_write(&req->rbuf, "", 1))
             goto error;
-        req->buf->off--;
-        if (!headers_parse(req, req->buf->buffer, end))
+        req->rbuf.off--;
+        if (!headers_parse(req, req->rbuf.buf, end))
             goto error;
         if (req->cancel)
             goto cancel;
-        evbuffer_drain(req->buf, end - (char *)req->buf->buffer + dlen);
+        iobuf_consumed(&req->rbuf, end - (char *)req->rbuf.buf + dlen);
         goto again;
     case PS_CHUNK_SIZE:
         assert(req->chunked);
         if (len == 0)
             goto error;
-        if ((end = evbuffer_find(req->buf, "\n", 1)) == NULL) {
-            if (req->buf->off < 20)
+        if ((end = iobuf_find(&req->rbuf, "\n", 1)) == NULL) {
+            if (req->rbuf.off < 20)
                 return 1;
             else
                 goto error;
         }
         errno = 0;
-        req->length = strtol(req->buf->buffer, &numend, 16);
-        if (req->length < 0 || numend == (char *)req->buf->buffer || errno)
+        req->length = strtol(req->rbuf.buf, &numend, 16);
+        if (req->length < 0 || numend == (char *)req->rbuf.buf || errno)
             goto error;
         if (req->length == 0)
             goto done;
-        evbuffer_drain(req->buf, end - (char *)req->buf->buffer + 1);
+        iobuf_consumed(&req->rbuf, end - (char *)req->rbuf.buf + 1);
         req->pstate = PS_CHUNK_DATA;
         goto again;
     case PS_CHUNK_DATA:
         if (len == 0)
             goto error;
         assert(req->length > 0);
-        dlen = min(req->buf->off, req->length);
+        dlen = min(req->rbuf.off, req->length);
         if (dlen > 0) {
             res.type = HTTP_T_DATA;
             res.v.data.l = dlen;
-            res.v.data.p = req->buf->buffer;
+            res.v.data.p = req->rbuf.buf;
             req->cb(req, &res, req->arg);
             if (req->cancel)
                 goto cancel;
-            evbuffer_drain(req->buf, dlen);
+            iobuf_consumed(&req->rbuf, dlen);
             req->length -= dlen;
             if (req->length == 0) {
                 req->pstate = PS_CHUNK_CRLF;
@@ -297,15 +281,15 @@ again:
         if (len == 0)
             goto error;
         assert(req->length == 0);
-        if (req->buf->off < 2)
+        if (req->rbuf.off < 2)
             return 1;
-        if (req->buf->buffer[0] == '\r' && req->buf->buffer[1] == '\n')
+        if (req->rbuf.buf[0] == '\r' && req->rbuf.buf[1] == '\n')
             dlen = 2;
-        else if (req->buf->buffer[0] == '\n')
+        else if (req->rbuf.buf[0] == '\n')
             dlen = 1;
         else
             goto error;
-        evbuffer_drain(req->buf, dlen);
+        iobuf_consumed(&req->rbuf, dlen);
         req->pstate = PS_CHUNK_SIZE;
         goto again;
     case PS_ID_DATA:
@@ -314,17 +298,17 @@ again:
         else if (len == 0)
             goto error;
         if (req->length < 0)
-            dlen = req->buf->off;
+            dlen = req->rbuf.off;
         else
-            dlen = min(req->buf->off, req->length);
+            dlen = min(req->rbuf.off, req->length);
         if (dlen > 0) {
             res.type = HTTP_T_DATA;
-            res.v.data.p = req->buf->buffer;
+            res.v.data.p = req->rbuf.buf;
             res.v.data.l = dlen;
             req->cb(req, &res, req->arg);
             if (req->cancel)
                 goto cancel;
-            evbuffer_drain(req->buf, dlen);
+            iobuf_consumed(&req->rbuf, dlen);
             if (req->length > 0) {
                 req->length -= dlen;
                 if (req->length == 0)
@@ -346,129 +330,85 @@ cancel:
     return 0;
 }
 
-static void
-http_read_cb(int sd, short type, void *arg)
+struct http_url *
+http_url_get(struct http_req *req)
 {
-    struct http_req *req = arg;
-    if (type == EV_TIMEOUT) {
-        http_error(req);
-        return;
-    }
-    int nr = evbuffer_read(req->buf, sd, 1 << 14);
-    if (nr < 0) {
-        if (nr == EAGAIN)
-            goto more;
-        else {
-            http_error(req);
-            return;
-        }
-    }
-    req->state = HTTP_PARSE;
-    if (!http_parse(req, nr))
-        return;
-    req->state = HTTP_RECEIVE;
-more:
-    if (event_add(&req->ev, TIMEOUT) != 0)
-        http_error(req);
+    return req->url;
 }
 
-static void
-http_write_cb(int sd, short type, void *arg)
+int
+http_want_read(struct http_req *req)
 {
-    struct http_req *req = arg;
-    if (type == EV_TIMEOUT) {
-        http_error(req);
-        return;
-    }
-    int nw = evbuffer_write(req->buf, sd);
-    if (nw == -1) {
-        if (errno == EAGAIN)
-            goto out;
-        else
-            goto error;
-    }
-out:
-    if (req->buf->off != 0) {
-        if (event_add(&req->ev, TIMEOUT) != 0)
-            goto error;
-    } else {
-        req->state = HTTP_RECEIVE;
-        event_set(&req->ev, req->sd, EV_READ, http_read_cb, req);
-        if (event_add(&req->ev, TIMEOUT) != 0)
-            goto error;
-    }
-    return;
-error:
-    http_error(req);
-}
-
-static int
-http_connect(struct http_req *req, struct in_addr inaddr)
-{
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(req->url->port);
-    addr.sin_addr = inaddr;
-    req->state = HTTP_CONNECT;
-    if ((req->sd = socket(PF_INET, SOCK_STREAM, 0)) == -1)
-        goto error;
-    if (set_nonblocking(req->sd) != 0)
-        goto error;
-    if ((connect(req->sd, (struct sockaddr *)&addr, sizeof(addr)) != 0
-            && errno != EINPROGRESS))
-        goto error;
-    event_set(&req->ev, req->sd, EV_WRITE, http_write_cb, req);
-    if (event_add(&req->ev, TIMEOUT) != 0)
-        goto error;
     return 1;
-error:
-    return 0;
 }
 
-static void
-http_dnscb(int result, char type, int count, int ttl, void *addrs, void *arg)
+int
+http_want_write(struct http_req *req)
 {
-    struct http_req *req = arg;
-    if (req->cancel)
-        http_free(req);
-    else if (result == DNS_ERR_NONE && type == DNS_IPv4_A && count > 0) {
-        int addri = rand_between(0, count - 1);
-        struct in_addr inaddr;
-        bcopy(addrs + addri * sizeof(struct in_addr), &inaddr,
-            sizeof(struct in_addr));
-        if (!http_connect(req, inaddr))
-            http_error(req);
-    } else
+    return req->wbuf.off > 0;
+}
+
+int
+http_read(struct http_req *req, int sd)
+{
+    if (!iobuf_accommodate(&req->rbuf, 4096)) {
         http_error(req);
+        return 0;
+    }
+    ssize_t nr = read(sd, req->rbuf.buf + req->rbuf.off, 4096);
+    if (nr < 0 && errno == EAGAIN)
+        return 1;
+    else if (nr < 0) {
+        http_error(req);
+        return 0;
+    } else {
+        req->rbuf.off += nr;
+        req->parsing = 1;
+        if (http_parse(req, nr)) {
+            req->parsing = 0;
+            return 1;
+        } else
+            return 0;
+    }
+}
+
+int
+http_write(struct http_req *req, int sd)
+{
+    assert(req->wbuf.off > 0);
+    ssize_t nw =
+        write(sd, req->wbuf.buf, req->wbuf.off);
+    if (nw < 0 && errno == EAGAIN)
+        return 1;
+    else if (nw < 0) {
+        http_error(req);
+        return 0;
+    } else {
+        iobuf_consumed(&req->wbuf, nw);
+        return 1;
+    }
 }
 
 int
 http_get(struct http_req **out, const char *url, const char *hdrs,
     http_cb_t cb, void *arg)
 {
-    struct in_addr addr;
     struct http_req *req = calloc(1, sizeof(*req));
     if (req == NULL)
         return 0;
-    req->sd = -1;
     req->cb = cb;
     req->arg = arg;
     req->url = http_url_parse(url);
     if (req->url == NULL)
         goto error;
-    if ((req->buf = evbuffer_new()) == NULL)
-        goto error;
-    if (evbuffer_add_printf(req->buf, "GET %s HTTP/1.1\r\n"
+    req->rbuf = iobuf_init(4096);
+    req->wbuf = iobuf_init(1024);
+    if (!iobuf_print(&req->wbuf, "GET %s HTTP/1.1\r\n"
             "Host: %s:%hu\r\n"
             "Accept-Encoding:\r\n"
             "Connection: close\r\n"
             "%s"
-            "\r\n", req->url->uri, req->url->host, req->url->port, hdrs) == -1)
-        goto error;
-    if (inet_aton(req->url->host, &addr) == 1) {
-        if (!http_connect(req, addr))
-            goto error;
-    } else if (evdns_resolve_ipv4(req->url->host, 0, http_dnscb, req) != 0)
+            "\r\n", req->url->uri, req->url->host, req->url->port, hdrs))
         goto error;
     if (out != NULL)
         *out = req;
@@ -481,7 +421,7 @@ error:
 void
 http_cancel(struct http_req *req)
 {
-    if (req->state == HTTP_RESOLVE || req->state == HTTP_PARSE)
+    if (req->parsing)
         req->cancel = 1;
     else
         http_free(req);

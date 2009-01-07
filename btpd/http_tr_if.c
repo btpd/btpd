@@ -1,6 +1,7 @@
 #include "btpd.h"
 
 #include <http_client.h>
+#include <iobuf.h>
 
 #define MAX_DOWNLOAD (1 << 18)  // 256kB
 
@@ -9,14 +10,23 @@ static const char *m_tr_events[] = { "started", "stopped", "completed", "" };
 struct http_tr_req {
     struct torrent *tp;
     struct http_req *req;
-    struct evbuffer *buf;
+    struct iobuf buf;
+    struct event rdev;
+    struct event wrev;
+    nameconn_t nc;
+    int sd;
     enum tr_event event;
 };
 
 static void
 http_tr_free(struct http_tr_req *treq)
 {
-    evbuffer_free(treq->buf);
+    if (treq->sd != -1) {
+        btpd_ev_del(&treq->rdev);
+        btpd_ev_del(&treq->wrev);
+        close(treq->sd);
+    }
+    iobuf_free(&treq->buf);
     free(treq);
 }
 
@@ -111,16 +121,16 @@ http_cb(struct http_req *req, struct http_response *res, void *arg)
         http_tr_free(treq);
         break;
     case HTTP_T_DATA:
-        if (treq->buf->off + res->v.data.l > MAX_DOWNLOAD) {
+        if (treq->buf.off + res->v.data.l > MAX_DOWNLOAD) {
             tr_result(treq->tp, TR_RES_FAIL, -1);
             http_tr_cancel(treq);
             break;
         }
-        if (evbuffer_add(treq->buf, res->v.data.p, res->v.data.l) != 0)
+        if (!iobuf_write(&treq->buf, res->v.data.p, res->v.data.l))
             btpd_err("Out of memory.\n");
         break;
     case HTTP_T_DONE:
-        if (parse_reply(treq->tp, treq->buf->buffer, treq->buf->off,
+        if (parse_reply(treq->tp, treq->buf.buf, treq->buf.off,
                 treq->event != TR_EV_STOPPED, &interval) == 0)
             tr_result(treq->tp, TR_RES_OK, interval);
         else
@@ -132,11 +142,47 @@ http_cb(struct http_req *req, struct http_response *res, void *arg)
     }
 }
 
+static void
+sd_wr_cb(int sd, short type, void *arg)
+{
+    struct http_tr_req *treq = arg;
+    if (http_write(treq->req, sd) && http_want_write(treq->req))
+        btpd_ev_add(&treq->wrev, NULL);
+}
+
+static void
+sd_rd_cb(int sd, short type, void *arg)
+{
+    struct http_tr_req *treq = arg;
+    if (http_read(treq->req, sd) && http_want_read(treq->req))
+        btpd_ev_add(&treq->rdev, NULL);
+}
+
+static void
+nc_cb(void *arg, int error, int sd)
+{
+    struct http_tr_req *treq = arg;
+    if (error) {
+        tr_result(treq->tp, TR_RES_FAIL, -1);
+        http_cancel(treq->req);
+        http_tr_free(treq);
+    } else {
+        treq->sd = sd;
+        event_set(&treq->wrev, sd, EV_WRITE, sd_wr_cb, treq);
+        event_set(&treq->rdev, sd, EV_READ, sd_rd_cb, treq);
+        if (http_want_read(treq->req))
+            btpd_ev_add(&treq->rdev, NULL);
+        if (http_want_write(treq->req))
+            btpd_ev_add(&treq->wrev, NULL);
+    }
+}
+
 struct http_tr_req *
 http_tr_req(struct torrent *tp, enum tr_event event, const char *aurl)
 {
     char e_hash[61], e_id[61], ip_arg[INET_ADDRSTRLEN + 4], url[512], qc;
     const uint8_t *peer_id = btpd_get_peer_id();
+    struct http_url *http_url;
 
     qc = (strchr(aurl, '?') == NULL) ? '?' : '&';
 
@@ -166,16 +212,22 @@ http_tr_req(struct torrent *tp, enum tr_event event, const char *aurl)
         free(treq);
         return NULL;
     }
-    if ((treq->buf = evbuffer_new()) == NULL)
+    treq->buf = iobuf_init(4096);
+    if (treq->buf.error)
         btpd_err("Out of memory.\n");
     treq->tp = tp;
     treq->event = event;
+    treq->sd = -1;
+    http_url = http_url_get(treq->req);
+    treq->nc = btpd_name_connect(http_url->host, http_url->port, nc_cb, treq);
     return treq;
 }
 
 void
 http_tr_cancel(struct http_tr_req *treq)
 {
+    if (treq->sd == -1)
+        btpd_name_connect_cancel(treq->nc);
     http_cancel(treq->req);
     http_tr_free(treq);
 }
