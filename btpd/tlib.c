@@ -62,11 +62,22 @@ int
 tlib_del(struct tlib *tl)
 {
     char relpath[RELPATH_SIZE];
-    char cmd[PATH_MAX];
+    char path[PATH_MAX];
+    DIR *dir;
+    struct dirent *de;
     assert(tl->tp == NULL);
-    snprintf(cmd, PATH_MAX, "rm -r torrents/%s",
-        bin2hex(tl->hash, relpath, 20));
-    system(cmd);
+    snprintf(path, PATH_MAX, "torrents/%s", bin2hex(tl->hash, relpath, 20));
+    if ((dir = opendir(path)) != NULL) {
+        while ((de = readdir(dir)) != NULL) {
+            if (strcmp(".", de->d_name) == 0 || strcmp("..", de->d_name) == 0)
+                continue;
+            snprintf(path, PATH_MAX, "torrents/%s/%s", relpath, de->d_name);
+            remove(path);
+        }
+        closedir(dir);
+    }
+    snprintf(path, PATH_MAX, "torrents/%s", relpath);
+    remove(path);
     tlib_kill(tl);
     return 0;
 }
