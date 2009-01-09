@@ -2,7 +2,6 @@
 
 #include <sys/file.h>
 #include <err.h>
-#include <evdns.h>
 #include <getopt.h>
 
 static void
@@ -222,19 +221,13 @@ args_done:
 
     setup_daemon(daemonize, dir, log);
 
-    event_init();
-
-    if ((errno = evdns_resolv_conf_parse(DNS_OPTION_NAMESERVERS,
-             "/etc/resolv.conf")) != 0) {
-        btpd_log(BTPD_L_ERROR,
-            "failed to setup dns from /etc/resolv.conf (%d).\n", errno);
-    }
+    evloop_init();
 
     btpd_init();
 
-    event_dispatch();
+    evloop();
 
-    btpd_err("Unexpected exit from libevent.\n");
+    btpd_err("Unexpected exit from evloop.\n");
 
     return 1;
 }

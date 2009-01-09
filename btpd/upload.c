@@ -1,8 +1,8 @@
 #include "btpd.h"
 
-#define CHOKE_INTERVAL (& (struct timeval) { 10, 0 })
+#define CHOKE_INTERVAL (& (struct timespec) { 10, 0 })
 
-static struct event m_choke_timer;
+static struct timeout m_choke_timer;
 static unsigned m_npeers;
 static struct peer_tq m_peerq = BTPDQ_HEAD_INITIALIZER(m_peerq);
 static int m_max_uploads;
@@ -110,7 +110,7 @@ shuffle_optimists(void)
 static void
 choke_cb(int sd, short type, void *arg)
 {
-    btpd_ev_add(&m_choke_timer, CHOKE_INTERVAL);
+    btpd_timer_add(&m_choke_timer, CHOKE_INTERVAL);
     static int cb_count = 0;
     cb_count++;
     if (cb_count % 3 == 0)
@@ -190,6 +190,6 @@ ul_init(void)
             m_max_uploads = 5 + (net_bw_limit_out / (100 << 10));
     }
 
-    evtimer_set(&m_choke_timer, choke_cb, NULL);
-    btpd_ev_add(&m_choke_timer, CHOKE_INTERVAL);
+    timer_init(&m_choke_timer, choke_cb, NULL);
+    btpd_timer_add(&m_choke_timer, CHOKE_INTERVAL);
 }

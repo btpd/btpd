@@ -15,7 +15,7 @@ struct td_cb {
 BTPDQ_HEAD(td_cb_tq, td_cb);
 
 static int m_td_rd, m_td_wr;
-static struct event m_td_ev;
+static struct fdev m_td_ev;
 static struct td_cb_tq m_td_cbs = BTPDQ_HEAD_INITIALIZER(m_td_cbs);
 static pthread_mutex_t m_td_lock;
 
@@ -82,6 +82,5 @@ td_init(void)
     if ((err = pthread_mutex_init(&m_td_lock, NULL)) != 0)
         btpd_err("Couldn't create mutex (%s).\n", strerror(err));
 
-    event_set(&m_td_ev, m_td_rd, EV_READ|EV_PERSIST, td_cb, NULL);
-    btpd_ev_add(&m_td_ev, NULL);
+    btpd_ev_new(&m_td_ev, m_td_rd, EV_READ, td_cb, NULL);
 }

@@ -53,7 +53,7 @@ BTPDQ_HEAD(std_tq, start_test_data);
 
 static struct std_tq m_startq = BTPDQ_HEAD_INITIALIZER(m_startq);
 
-static struct event m_workev;
+static struct timeout m_workev;
 
 #define READBUFLEN (1 << 14)
 
@@ -456,7 +456,7 @@ startup_test_run(void)
     if (std->start >= tp->npieces)
         startup_test_end(tp, 1);
     if (!BTPDQ_EMPTY(&m_startq))
-        event_add(&m_workev, (& (struct timeval) { 0, 0 }));
+        btpd_timer_add(&m_workev, (& (struct timespec) { 0, 0 }));
 }
 
 void
@@ -473,7 +473,7 @@ startup_test_begin(struct torrent *tp, struct file_time_size *fts)
         std->fts = fts;
         BTPDQ_INSERT_TAIL(&m_startq, std, entry);
         if (std == BTPDQ_FIRST(&m_startq))
-            event_add(&m_workev, (& (struct timeval) { 0, 0 }));
+            btpd_timer_add(&m_workev, (& (struct timespec) { 0, 0 }));
     } else {
         free(fts);
         startup_test_end(tp, 0);
@@ -539,5 +539,5 @@ cm_start(struct torrent *tp, int force_test)
 void
 cm_init(void)
 {
-    evtimer_set(&m_workev, worker_cb, NULL);
+    timer_init(&m_workev, worker_cb, NULL);
 }

@@ -4,9 +4,9 @@
 #include <signal.h>
 
 static uint8_t m_peer_id[20];
-static struct event m_sigint;
-static struct event m_sigterm;
-static struct event m_heartbeat;
+static struct timeout m_heartbeat;
+static struct timeout m_grace_timer;
+static int m_signal;
 static int m_shutdown;
 
 long btpd_seconds;
@@ -37,11 +37,9 @@ btpd_shutdown(int grace_seconds)
         BTPDQ_FOREACH(tp, torrent_get_all(), entry)
             if (tp->state != T_STOPPING)
                 torrent_stop(tp, 0);
-        if (grace_seconds >= 0) {
-            if (event_once(-1, EV_TIMEOUT, grace_cb, NULL,
-                    (& (struct timeval) { grace_seconds, 0 })) != 0)
-                btpd_err("failed to add event (%s).\n", strerror(errno));
-        }
+        if (grace_seconds >= 0)
+            btpd_timer_add(&m_grace_timer,
+                (& (struct timespec){ grace_seconds, 0 }));
     }
 }
 
@@ -57,19 +55,23 @@ btpd_get_peer_id(void)
 }
 
 static void
-signal_cb(int signal, short type, void *arg)
+signal_handler(int signal)
 {
-    btpd_log(BTPD_L_BTPD, "Got signal %d.\n", signal);
-    btpd_shutdown(30);
+    m_signal = signal;
 }
 
 static void
 heartbeat_cb(int fd, short type, void *arg)
 {
-    btpd_ev_add(&m_heartbeat, (& (struct timeval) { 1, 0 }));
+    btpd_timer_add(&m_heartbeat, (& (struct timespec) { 1, 0 }));
     btpd_seconds++;
     net_on_tick();
     torrent_on_tick_all();
+    if (m_signal) {
+        btpd_log(BTPD_L_BTPD, "Got signal %d.\n", m_signal);
+        btpd_shutdown(30);
+        m_signal = 0;
+    }
     if (m_shutdown && torrent_count() == 0)
         btpd_exit(0);
 }
@@ -82,10 +84,20 @@ void addrinfo_init(void);
 void
 btpd_init(void)
 {
+    struct sigaction sa;
     unsigned long seed;
     uint8_t idcon[1024];
     struct timeval now;
     int n;
+
+    bzero(&sa, sizeof(sa));
+    sa.sa_handler = SIG_IGN;
+    sa.sa_flags = SA_RESTART;
+    sigfillset(&sa.sa_mask);
+    sigaction(SIGPIPE, &sa, NULL);
+    sa.sa_handler = signal_handler;
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGINT, &sa, NULL);
 
     gettimeofday(&now, NULL);
     n = snprintf(idcon, sizeof(idcon), "%ld%ld%d", now.tv_sec, now.tv_usec,
@@ -111,14 +123,9 @@ btpd_init(void)
     tr_init();
     tlib_init();
 
-    signal(SIGPIPE, SIG_IGN);
-
-    signal_set(&m_sigint, SIGINT, signal_cb, NULL);
-    btpd_ev_add(&m_sigint, NULL);
-    signal_set(&m_sigterm, SIGTERM, signal_cb, NULL);
-    btpd_ev_add(&m_sigterm, NULL);
-    evtimer_set(&m_heartbeat, heartbeat_cb, NULL);
-    btpd_ev_add(&m_heartbeat, (& (struct timeval) { 1, 0 }));
+    timer_init(&m_grace_timer, grace_cb, NULL);
+    timer_init(&m_heartbeat, heartbeat_cb, NULL);
+    btpd_timer_add(&m_heartbeat, (& (struct timespec) { 1, 0 }));
 
     if (!empty_start)
         active_start();

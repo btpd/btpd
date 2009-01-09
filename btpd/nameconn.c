@@ -1,7 +1,7 @@
 #include "btpd.h"
 
 struct nameconn {
-    struct event write_ev;
+    struct fdev write_ev;
     void (*cb)(void *, int, int);
     void *arg;
     aictx_t ai_handle;
@@ -35,9 +35,11 @@ nc_write_cb(int sd, short type, void *arg)
     socklen_t errsiz = sizeof(int);
     if (getsockopt(nc->sd, SOL_SOCKET, SO_ERROR, &error, &errsiz) < 0)
         btpd_err("getsockopt error (%s).\n", strerror(errno));
-    if (error == 0)
+    if (error == 0) {
+        btpd_ev_del(&nc->write_ev);
         nc_done(nc, 0);
-    else {
+    } else {
+        btpd_ev_del(&nc->write_ev);
         close(nc->sd);
         nc->ai_cur = nc->ai_cur->ai_next;
         nc_connect(nc);
@@ -64,10 +66,9 @@ again:
     err = connect(nc->sd, ai->ai_addr, ai->ai_addrlen);
     if (err == 0)
         nc_done(nc, 0);
-    else if (err < 0 && errno == EINPROGRESS) {
-        event_set(&nc->write_ev, nc->sd, EV_WRITE, nc_write_cb, nc);
-        btpd_ev_add(&nc->write_ev, NULL);
-    } else {
+    else if (err < 0 && errno == EINPROGRESS)
+        btpd_ev_new(&nc->write_ev, nc->sd, EV_WRITE, nc_write_cb, nc);
+    else {
         close(nc->sd);
         nc->ai_cur = ai->ai_next;
         goto again;

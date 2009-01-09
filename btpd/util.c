@@ -22,17 +22,44 @@ btpd_calloc(size_t nmemb, size_t size)
 }
 
 void
-btpd_ev_add(struct event *ev, struct timeval *tv)
+btpd_ev_new(struct fdev *ev, int fd, uint16_t flags, evloop_cb_t cb, void *arg)
 {
-    if (event_add(ev, tv) != 0)
+    if (fdev_new(ev, fd, flags, cb, arg) != 0)
         btpd_err("Failed to add event (%s).\n", strerror(errno));
 }
 
 void
-btpd_ev_del(struct event *ev)
+btpd_ev_del(struct fdev *ev)
 {
-    if (event_del(ev) != 0)
+    if (fdev_del(ev) != 0)
         btpd_err("Failed to remove event (%s).\n", strerror(errno));
+}
+
+void
+btpd_ev_enable(struct fdev *ev, uint16_t flags)
+{
+    if (fdev_enable(ev, flags) != 0)
+        btpd_err("Failed to enable event (%s).\n", strerror(errno));
+}
+
+void
+btpd_ev_disable(struct fdev *ev, uint16_t flags)
+{
+    if (fdev_disable(ev, flags) != 0)
+        btpd_err("Failed to disable event (%s).\n", strerror(errno));
+}
+
+void
+btpd_timer_add(struct timeout *to, struct timespec *ts)
+{
+    if (timer_add(to, ts) != 0)
+        btpd_err("Failed to add timeout (%s).\n", strerror(errno));
+}
+
+void
+btpd_timer_del(struct timeout *to)
+{
+    timer_del(to);
 }
 
 static const char *

@@ -26,7 +26,7 @@
 #define DAEMON
 #include <btpd_if.h>
 #undef DAEMON
-#include <event.h>
+#include <evloop.h>
 #include <metainfo.h>
 #include <queue.h>
 #include <subr.h>
@@ -70,8 +70,13 @@ void *btpd_malloc(size_t size);
 __attribute__((malloc))
 void *btpd_calloc(size_t nmemb, size_t size);
 
-void btpd_ev_add(struct event *ev, struct timeval *tv);
-void btpd_ev_del(struct event *ev);
+void btpd_ev_new(struct fdev *ev, int fd, uint16_t flags, evloop_cb_t cb,
+    void *arg);
+void btpd_ev_del(struct fdev *ev);
+void btpd_ev_enable(struct fdev *ev, uint16_t flags);
+void btpd_ev_disable(struct fdev *ev, uint16_t flags);
+void btpd_timer_add(struct timeout *to, struct timespec *ts);
+void btpd_timer_del(struct timeout *to);
 
 void btpd_shutdown(int grace_seconds);
 int btpd_is_stopping(void);

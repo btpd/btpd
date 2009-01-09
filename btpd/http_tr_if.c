@@ -11,8 +11,7 @@ struct http_tr_req {
     struct torrent *tp;
     struct http_req *req;
     struct iobuf buf;
-    struct event rdev;
-    struct event wrev;
+    struct fdev ioev;
     nameconn_t nc;
     int sd;
     enum tr_event event;
@@ -22,8 +21,7 @@ static void
 http_tr_free(struct http_tr_req *treq)
 {
     if (treq->sd != -1) {
-        btpd_ev_del(&treq->rdev);
-        btpd_ev_del(&treq->wrev);
+        btpd_ev_del(&treq->ioev);
         close(treq->sd);
     }
     iobuf_free(&treq->buf);
@@ -143,19 +141,21 @@ http_cb(struct http_req *req, struct http_response *res, void *arg)
 }
 
 static void
-sd_wr_cb(int sd, short type, void *arg)
+sd_io_cb(int sd, short type, void *arg)
 {
     struct http_tr_req *treq = arg;
-    if (http_write(treq->req, sd) && http_want_write(treq->req))
-        btpd_ev_add(&treq->wrev, NULL);
-}
-
-static void
-sd_rd_cb(int sd, short type, void *arg)
-{
-    struct http_tr_req *treq = arg;
-    if (http_read(treq->req, sd) && http_want_read(treq->req))
-        btpd_ev_add(&treq->rdev, NULL);
+    switch (type) {
+    case EV_READ:
+        if (http_read(treq->req, sd) && !http_want_read(treq->req))
+            btpd_ev_disable(&treq->ioev, EV_READ);
+        break;
+    case EV_WRITE:
+        if (http_write(treq->req, sd) && !http_want_write(treq->req))
+            btpd_ev_disable(&treq->ioev, EV_WRITE);
+        break;
+    default:
+        abort();
+    }
 }
 
 static void
@@ -168,12 +168,10 @@ nc_cb(void *arg, int error, int sd)
         http_tr_free(treq);
     } else {
         treq->sd = sd;
-        event_set(&treq->wrev, sd, EV_WRITE, sd_wr_cb, treq);
-        event_set(&treq->rdev, sd, EV_READ, sd_rd_cb, treq);
-        if (http_want_read(treq->req))
-            btpd_ev_add(&treq->rdev, NULL);
-        if (http_want_write(treq->req))
-            btpd_ev_add(&treq->wrev, NULL);
+        uint16_t flags =
+            (http_want_read(treq->req) ? EV_READ : 0) |
+            (http_want_write(treq->req) ? EV_WRITE : 0);
+        btpd_ev_new(&treq->ioev, sd, flags, sd_io_cb, treq);
     }
 }
 

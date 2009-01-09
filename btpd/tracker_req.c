@@ -2,8 +2,8 @@
 
 #define REQ_DELAY 1
 #define STOP_ERRORS 5
-#define REQ_TIMEOUT (& (struct timeval) { 120, 0 })
-#define RETRY_WAIT (& (struct timeval) { rand_between(35, 70), 0 })
+#define REQ_TIMEOUT (& (struct timespec) { 120, 0 })
+#define RETRY_WAIT (& (struct timespec) { rand_between(35, 70), 0 })
 
 long tr_key;
 
@@ -24,7 +24,7 @@ struct tracker {
     int tier, url;
     struct mi_announce *ann;
     void *req;
-    struct event timer;
+    struct timeout timer;
 };
 
 typedef struct _dummy *(*request_fun_t)(struct torrent *, enum tr_event,
@@ -97,7 +97,7 @@ static void
 tr_set_stopped(struct torrent *tp)
 {
     struct tracker *tr = tp->tr;
-    btpd_ev_del(&tr->timer);
+    btpd_timer_del(&tr->timer);
     tr->ttype = TIMER_NONE;
     if (tr->req != NULL)
         tr_cancel(tr);
@@ -116,8 +116,8 @@ tr_send(struct torrent *tp, enum tr_event event)
     if (m_tlast_req > btpd_seconds - REQ_DELAY) {
         m_tnext_req = max(m_tnext_req, m_tlast_req) + REQ_DELAY;
         tr->ttype = TIMER_RETRY;
-        btpd_ev_add(&tr->timer,
-            (& (struct timeval) { m_tnext_req - btpd_seconds, 0 }));
+        btpd_timer_add(&tr->timer,
+            (& (struct timespec) { m_tnext_req - btpd_seconds, 0 }));
         return;
     }
 
@@ -130,11 +130,11 @@ tr_send(struct torrent *tp, enum tr_event event)
         }
         next_url(tr);
         tr->ttype = TIMER_RETRY;
-        btpd_ev_add(&tr->timer, (& (struct timeval) { 5, 0 }));
+        btpd_timer_add(&tr->timer, (& (struct timespec) { 5, 0 }));
     } else {
         m_tlast_req = btpd_seconds;
         tr->ttype = TIMER_TIMEOUT;
-        btpd_ev_add(&tr->timer, REQ_TIMEOUT);
+        btpd_timer_add(&tr->timer, REQ_TIMEOUT);
     }
 }
 
@@ -151,11 +151,11 @@ tr_result(struct torrent *tp, enum tr_res res, int interval)
         tr->interval = interval;
         tr->nerrors = 0;
         tr->ttype = TIMER_INTERVAL;
-        btpd_ev_add(&tr->timer, (& (struct timeval) { tr->interval, 0}));
+        btpd_timer_add(&tr->timer, (& (struct timespec) { tr->interval, 0}));
     } else {
         tr->nerrors++;
         tr->ttype = TIMER_RETRY;
-        btpd_ev_add(&tr->timer, RETRY_WAIT);
+        btpd_timer_add(&tr->timer, RETRY_WAIT);
         next_url(tr);
     }
 }
@@ -193,7 +193,7 @@ tr_create(struct torrent *tp, const char *mi)
     tp->tr = btpd_calloc(1, sizeof(*tp->tr));
     if ((tp->tr->ann = mi_announce(mi)) == NULL)
         btpd_err("Out of memory.\n");
-    evtimer_set(&tp->tr->timer, timer_cb, tp);
+    timer_init(&tp->tr->timer, timer_cb, tp);
     return 0;
 }
 
@@ -202,7 +202,7 @@ tr_kill(struct torrent *tp)
 {
     struct tracker *tr = tp->tr;
     tp->tr = NULL;
-    btpd_ev_del(&tr->timer);
+    btpd_timer_del(&tr->timer);
     if (tr->req != NULL)
         tr_cancel(tr);
     mi_free_announce(tr->ann);

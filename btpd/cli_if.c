@@ -5,10 +5,10 @@
 
 struct cli {
     int sd;
-    struct event read;
+    struct fdev read;
 };
 
-static struct event m_cli_incoming;
+static struct fdev m_cli_incoming;
 
 static int
 write_buffer(struct cli *cli, struct iobuf *iob)
@@ -420,10 +420,10 @@ cli_read_cb(int sd, short type, void *arg)
         goto error;
 
     free(msg);
-    btpd_ev_add(&cli->read, NULL);
     return;
 
 error:
+    btpd_ev_del(&cli->read);
     close(cli->sd);
     free(cli);
     if (msg != NULL)
@@ -447,8 +447,7 @@ client_connection_cb(int sd, short type, void *arg)
 
     struct cli *cli = btpd_calloc(1, sizeof(*cli));
     cli->sd = nsd;
-    event_set(&cli->read, cli->sd, EV_READ, cli_read_cb, cli);
-    btpd_ev_add(&cli->read, NULL);
+    btpd_ev_new(&cli->read, cli->sd, EV_READ, cli_read_cb, cli);
 }
 
 void
@@ -478,7 +477,5 @@ ipc_init(void)
     listen(sd, 4);
     set_nonblocking(sd);
 
-    event_set(&m_cli_incoming, sd, EV_READ | EV_PERSIST,
-        client_connection_cb, NULL);
-    btpd_ev_add(&m_cli_incoming, NULL);
+    btpd_ev_new(&m_cli_incoming, sd, EV_READ, client_connection_cb, NULL);
 }

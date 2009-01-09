@@ -52,8 +52,7 @@ struct peer {
     size_t outq_off;
     struct nb_tq outq;
 
-    struct event in_ev;
-    struct event out_ev;
+    struct fdev ioev;
 
     unsigned long rate_up, rate_dwn;
     unsigned long count_up, count_dwn;

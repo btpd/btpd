@@ -23,8 +23,7 @@ peer_kill(struct peer *p)
     if (p->flags & PF_ON_WRITEQ)
         BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
 
-    btpd_ev_del(&p->in_ev);
-    btpd_ev_del(&p->out_ev);
+    btpd_ev_del(&p->ioev);
     close(p->sd);
 
     nl = BTPDQ_FIRST(&p->outq);
@@ -59,7 +58,7 @@ peer_send(struct peer *p, struct net_buf *nb)
 
     if (BTPDQ_EMPTY(&p->outq)) {
         assert(p->outq_off == 0);
-        btpd_ev_add(&p->out_ev, NULL);
+        btpd_ev_enable(&p->ioev, EV_WRITE);
         p->t_wantwrite = btpd_seconds;
     }
     BTPDQ_INSERT_TAIL(&p->outq, nl, entry);
@@ -88,7 +87,7 @@ peer_unsend(struct peer *p, struct nb_link *nl)
                 BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
                 p->flags &= ~PF_ON_WRITEQ;
             } else
-                btpd_ev_del(&p->out_ev);
+                btpd_ev_disable(&p->ioev, EV_WRITE);
         }
         return 1;
     } else
@@ -275,9 +274,7 @@ peer_create_common(int sd)
 
     peer_set_in_state(p, SHAKE_PSTR, 28);
 
-    event_set(&p->out_ev, p->sd, EV_WRITE, net_write_cb, p);
-    event_set(&p->in_ev, p->sd, EV_READ, net_read_cb, p);
-    btpd_ev_add(&p->in_ev, NULL);
+    btpd_ev_new(&p->ioev, p->sd, EV_READ, net_io_cb, p);
 
     BTPDQ_INSERT_TAIL(&net_unattached, p, p_entry);
     net_npeers++;

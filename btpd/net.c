@@ -9,7 +9,7 @@ static unsigned long m_bw_bytes_out;
 static unsigned long m_rate_up;
 static unsigned long m_rate_dwn;
 
-static struct event m_net_incoming;
+static struct fdev m_net_incoming;
 
 unsigned net_npeers;
 
@@ -154,7 +154,6 @@ net_write(struct peer *p, unsigned long wmax)
     nwritten = writev(p->sd, iov, niov);
     if (nwritten < 0) {
         if (errno == EAGAIN) {
-            btpd_ev_add(&p->out_ev, NULL);
             p->t_wantwrite = btpd_seconds;
             return 0;
         } else {
@@ -194,10 +193,10 @@ net_write(struct peer *p, unsigned long wmax)
             bcount = 0;
         }
     }
-    if (!BTPDQ_EMPTY(&p->outq)) {
-        btpd_ev_add(&p->out_ev, NULL);
+    if (!BTPDQ_EMPTY(&p->outq))
         p->t_wantwrite = btpd_seconds;
-    }
+    else
+        btpd_ev_disable(&p->ioev, EV_WRITE);
     p->t_lastwrite = btpd_seconds;
 
     return nwritten;
@@ -435,7 +434,6 @@ net_read(struct peer *p, unsigned long rmax)
     }
 
 out:
-    btpd_ev_add(&p->in_ev, NULL);
     return nread > 0 ? nread : 0;
 }
 
@@ -557,12 +555,14 @@ net_bw_tick(void)
     if (net_bw_limit_in > 0) {
         while ((p = BTPDQ_FIRST(&net_bw_readq)) != NULL && m_bw_bytes_in > 0) {
             BTPDQ_REMOVE(&net_bw_readq, p, rq_entry);
+            btpd_ev_enable(&p->ioev, EV_READ);
             p->flags &= ~PF_ON_READQ;
             m_bw_bytes_in -= net_read(p, m_bw_bytes_in);
         }
     } else {
         while ((p = BTPDQ_FIRST(&net_bw_readq)) != NULL) {
             BTPDQ_REMOVE(&net_bw_readq, p, rq_entry);
+            btpd_ev_enable(&p->ioev, EV_READ);
             p->flags &= ~PF_ON_READQ;
             net_read(p, 0);
         }
@@ -572,12 +572,14 @@ net_bw_tick(void)
         while (((p = BTPDQ_FIRST(&net_bw_writeq)) != NULL
                    && m_bw_bytes_out > 0)) {
             BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
+            btpd_ev_enable(&p->ioev, EV_WRITE);
             p->flags &= ~PF_ON_WRITEQ;
             m_bw_bytes_out -=  net_write(p, m_bw_bytes_out);
         }
     } else {
         while ((p = BTPDQ_FIRST(&net_bw_writeq)) != NULL) {
             BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
+            btpd_ev_enable(&p->ioev, EV_WRITE);
             p->flags &= ~PF_ON_WRITEQ;
             net_write(p, 0);
         }
@@ -606,31 +608,46 @@ net_on_tick(void)
     net_bw_tick();
 }
 
-void
-net_read_cb(int sd, short type, void *arg)
+static void
+net_read_cb(struct peer *p)
 {
-    struct peer *p = (struct peer *)arg;
     if (net_bw_limit_in == 0)
         net_read(p, 0);
     else if (m_bw_bytes_in > 0)
         m_bw_bytes_in -= net_read(p, m_bw_bytes_in);
     else {
+        btpd_ev_disable(&p->ioev, EV_READ);
         p->flags |= PF_ON_READQ;
         BTPDQ_INSERT_TAIL(&net_bw_readq, p, rq_entry);
     }
 }
 
-void
-net_write_cb(int sd, short type, void *arg)
+static void
+net_write_cb(struct peer *p)
 {
-    struct peer *p = (struct peer *)arg;
     if (net_bw_limit_out == 0)
         net_write(p, 0);
     else if (m_bw_bytes_out > 0)
         m_bw_bytes_out -= net_write(p, m_bw_bytes_out);
     else {
+        btpd_ev_disable(&p->ioev, EV_WRITE);
         p->flags |= PF_ON_WRITEQ;
         BTPDQ_INSERT_TAIL(&net_bw_writeq, p, wq_entry);
+    }
+}
+
+void
+net_io_cb(int sd, short type, void *arg)
+{
+    switch (type) {
+    case EV_READ:
+        net_read_cb(arg);
+        break;
+    case EV_WRITE:
+        net_write_cb(arg);
+        break;
+    default:
+        abort();
     }
 }
 
@@ -641,8 +658,6 @@ net_init(void)
     m_bw_bytes_in = net_bw_limit_in;
 
     int safe_fds = getdtablesize() * 4 / 5;
-    if (strcmp(event_get_method(), "select") == 0)
-        safe_fds = min(safe_fds, FD_SETSIZE * 4 / 5);
     if (net_max_peers == 0 || net_max_peers > safe_fds)
         net_max_peers = safe_fds;
 
@@ -661,7 +676,5 @@ net_init(void)
     listen(sd, 10);
     set_nonblocking(sd);
 
-    event_set(&m_net_incoming, sd, EV_READ | EV_PERSIST,
-        net_connection_cb, NULL);
-    btpd_ev_add(&m_net_incoming, NULL);
+    btpd_ev_new(&m_net_incoming, sd, EV_READ, net_connection_cb, NULL);
 }
