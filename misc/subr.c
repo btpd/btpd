@@ -13,6 +13,21 @@
 #include <string.h>
 #include <unistd.h>
 
+void *
+memfind(const void *sub, size_t sublen, const void *mem, size_t memlen)
+{
+    size_t i, j;
+    const uint8_t *s = sub, *m = mem;
+    for (i = 0; i < memlen - sublen + 1; i++) {
+        for (j = 0; j < sublen; j++)
+            if (m[i+j] != s[j])
+                break;
+        if (j == sublen)
+            return (void *)(m + i);
+    }
+    return NULL;
+}
+
 void
 enc_be32(void *buf, uint32_t num)
 {

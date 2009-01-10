@@ -9,6 +9,8 @@
 
 #define SHAHEXSIZE 41
 
+void *memfind(const void *sub, size_t sublen, const void *mem, size_t memlen);
+
 uint32_t dec_be32(const void *buf);
 uint64_t dec_be64(const void *buf);
 void enc_be32(void *buf, uint32_t num);
