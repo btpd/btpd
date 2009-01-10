@@ -156,9 +156,9 @@ save_info(struct tlib *tl)
 {
     FILE *fp;
     char relpath[SHAHEXSIZE], path[PATH_MAX], wpath[PATH_MAX];
-    struct io_buffer iob = buf_init(1 << 10);
+    struct iobuf iob = iobuf_init(1 << 10);
 
-    buf_print(&iob,
+    iobuf_print(&iob,
         "d4:infod"
         "12:content havei%llde12:content sizei%llde"
         "3:dir%d:%s4:name%d:%s"
@@ -177,7 +177,7 @@ save_info(struct tlib *tl)
     if ((fp = fopen(wpath, "w")) == NULL)
         btpd_err("failed to open '%s' (%s).\n", wpath, strerror(errno));
     dct_subst_save(fp, "de", iob.buf);
-    buf_free(&iob);
+    iobuf_free(&iob);
     if ((fflush(fp) == EOF || fsync(fileno(fp)) != 0
             || ferror(fp) || fclose(fp) != 0))
         btpd_err("failed to write '%s'.\n", wpath);

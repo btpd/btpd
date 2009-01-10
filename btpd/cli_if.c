@@ -11,7 +11,7 @@ struct cli {
 static struct event m_cli_incoming;
 
 static int
-write_buffer(struct cli *cli, struct io_buffer *iob)
+write_buffer(struct cli *cli, struct iobuf *iob)
 {
     int err = 0;
     if (!iob->error) {
@@ -20,107 +20,107 @@ write_buffer(struct cli *cli, struct io_buffer *iob)
         err = write_fully(cli->sd, iob->buf, iob->off);
     } else
         btpd_err("Out of memory.\n");
-    buf_free(iob);
+    iobuf_free(iob);
     return err;
 }
 
 static int
 write_code_buffer(struct cli *cli, enum ipc_err code)
 {
-    struct io_buffer iob = buf_init(16);
-    buf_print(&iob, "d4:codei%uee", code);
+    struct iobuf iob = iobuf_init(16);
+    iobuf_print(&iob, "d4:codei%uee", code);
     return write_buffer(cli, &iob);
 }
 
 static int
 write_add_buffer(struct cli *cli, unsigned num)
 {
-    struct io_buffer iob = buf_init(32);
-    buf_print(&iob, "d4:codei%ue3:numi%uee", IPC_OK, num);
+    struct iobuf iob = iobuf_init(32);
+    iobuf_print(&iob, "d4:codei%ue3:numi%uee", IPC_OK, num);
     return write_buffer(cli, &iob);
 }
 
 static void
-write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
+write_ans(struct iobuf *iob, struct tlib *tl, enum ipc_tval val)
 {
     enum ipc_tstate ts = IPC_TSTATE_INACTIVE;
     switch (val) {
     case IPC_TVAL_CGOT:
-        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+        iobuf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
             tl->tp == NULL ? tl->content_have : (long long)cm_content(tl->tp));
         return;
     case IPC_TVAL_CSIZE:
-        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+        iobuf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
             (long long)tl->content_size);
         return;
     case IPC_TVAL_PCCOUNT:
         if (tl->tp == NULL)
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+            iobuf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
         else
-            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
+            iobuf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
                 (unsigned long)tl->tp->npieces);
         return;
     case IPC_TVAL_PCGOT:
         if (tl->tp == NULL)
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
+            iobuf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ETINACTIVE);
         else
-            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
+            iobuf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
                 (unsigned long)cm_pieces(tl->tp));
         return;
     case IPC_TVAL_PCSEEN:
         if (tl->tp == NULL)
-            buf_print(iob, "i%dei%de", IPC_TYPE_NUM, 0);
+            iobuf_print(iob, "i%dei%de", IPC_TYPE_NUM, 0);
         else {
             unsigned long pcseen = 0;
             for (unsigned long i = 0; i < tl->tp->npieces; i++)
                 if (tl->tp->net->piece_count[i] > 0)
                     pcseen++;
-            buf_print(iob, "i%dei%lue", IPC_TYPE_NUM, pcseen);
+            iobuf_print(iob, "i%dei%lue", IPC_TYPE_NUM, pcseen);
         }
         return;
     case IPC_TVAL_RATEDWN:
-        buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
+        iobuf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
             tl->tp == NULL ? 0UL : tl->tp->net->rate_dwn / RATEHISTORY);
         return;
     case IPC_TVAL_RATEUP:
-        buf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
+        iobuf_print(iob, "i%dei%lue", IPC_TYPE_NUM,
             tl->tp == NULL ? 0UL : tl->tp->net->rate_up / RATEHISTORY);
         return;
     case IPC_TVAL_SESSDWN:
-        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+        iobuf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
             tl->tp == NULL ? 0LL : tl->tp->net->downloaded);
         return;
     case IPC_TVAL_SESSUP:
-        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
+        iobuf_print(iob, "i%dei%llde", IPC_TYPE_NUM,
             tl->tp == NULL ? 0LL : tl->tp->net->uploaded);
         return;
     case IPC_TVAL_DIR:
         if (tl->dir != NULL)
-            buf_print(iob, "i%de%d:%s", IPC_TYPE_STR, (int)strlen(tl->dir),
+            iobuf_print(iob, "i%de%d:%s", IPC_TYPE_STR, (int)strlen(tl->dir),
                 tl->dir);
         else
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_EBADTENT);
+            iobuf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_EBADTENT);
         return;
     case IPC_TVAL_NAME:
         if (tl->name != NULL)
-            buf_print(iob, "i%de%d:%s", IPC_TYPE_STR, (int)strlen(tl->name),
+            iobuf_print(iob, "i%de%d:%s", IPC_TYPE_STR, (int)strlen(tl->name),
                 tl->name);
         else
-            buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_EBADTENT);
+            iobuf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_EBADTENT);
         return;
     case IPC_TVAL_IHASH:
-        buf_print(iob, "i%de20:", IPC_TYPE_BIN);
-        buf_write(iob, tl->hash, 20);
+        iobuf_print(iob, "i%de20:", IPC_TYPE_BIN);
+        iobuf_write(iob, tl->hash, 20);
         return;
     case IPC_TVAL_NUM:
-        buf_print(iob, "i%dei%ue", IPC_TYPE_NUM, tl->num);
+        iobuf_print(iob, "i%dei%ue", IPC_TYPE_NUM, tl->num);
         return;
     case IPC_TVAL_PCOUNT:
-        buf_print(iob, "i%dei%ue", IPC_TYPE_NUM,
+        iobuf_print(iob, "i%dei%ue", IPC_TYPE_NUM,
             tl->tp == NULL ? 0 : tl->tp->net->npeers);
         return;
     case IPC_TVAL_STATE:
-        buf_print(iob, "i%de", IPC_TYPE_NUM);
+        iobuf_print(iob, "i%de", IPC_TYPE_NUM);
         if (tl->tp != NULL) {
             switch (tl->tp->state) {
             case T_STARTING:
@@ -137,24 +137,24 @@ write_ans(struct io_buffer *iob, struct tlib *tl, enum ipc_tval val)
                 break;
             }
         }
-        buf_print(iob, "i%de", ts);
+        iobuf_print(iob, "i%de", ts);
         return;
     case IPC_TVAL_TOTDWN:
-        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->tot_down +
+        iobuf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->tot_down +
             (tl->tp == NULL ? 0 : tl->tp->net->downloaded));
         return;
     case IPC_TVAL_TOTUP:
-        buf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->tot_up +
+        iobuf_print(iob, "i%dei%llde", IPC_TYPE_NUM, tl->tot_up +
             (tl->tp == NULL ? 0 : tl->tp->net->uploaded));
         return;
     case IPC_TVAL_TRERR:
-        buf_print(iob, "i%dei%ue", IPC_TYPE_NUM,
+        iobuf_print(iob, "i%dei%ue", IPC_TYPE_NUM,
             tl->tp == NULL ? 0 : tr_errors(tl->tp));
         return;
     case IPC_TVALCOUNT:
         break;
     }
-    buf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ENOKEY);
+    iobuf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_ENOKEY);
 }
 
 static int
@@ -166,7 +166,7 @@ cmd_tget(struct cli *cli, int argc, const char *args)
     size_t nkeys;
     const char *keys, *p;
     enum ipc_tval *opts;
-    struct io_buffer iob;
+    struct iobuf iob;
 
     if ((keys = benc_dget_lst(args, "keys")) == NULL)
         return IPC_COMMERR;
@@ -178,8 +178,8 @@ cmd_tget(struct cli *cli, int argc, const char *args)
     for (int i = 0; i < nkeys; i++)
         opts[i] = benc_int(p, &p);
 
-    iob = buf_init(1 << 15);
-    buf_swrite(&iob, "d4:codei0e6:resultl");
+    iob = iobuf_init(1 << 15);
+    iobuf_swrite(&iob, "d4:codei0e6:resultl");
     p = benc_dget_any(args, "from");
     if (benc_isint(p)) {
         enum ipc_twc from = benc_int(p, NULL);
@@ -189,10 +189,10 @@ cmd_tget(struct cli *cli, int argc, const char *args)
             if ((from == IPC_TWC_ALL ||
                     (tlv[i]->tp == NULL && from == IPC_TWC_INACTIVE) ||
                     (tlv[i]->tp != NULL && from == IPC_TWC_ACTIVE))) {
-                buf_swrite(&iob, "l");
+                iobuf_swrite(&iob, "l");
                 for (int k = 0; k < nkeys; k++)
                     write_ans(&iob, tlv[i], opts[k]);
-                buf_swrite(&iob, "e");
+                iobuf_swrite(&iob, "e");
             }
         }
     } else if (benc_islst(p)) {
@@ -203,20 +203,20 @@ cmd_tget(struct cli *cli, int argc, const char *args)
             else if (benc_isstr(p) && benc_strlen(p) == 20)
                 tl = tlib_by_hash(benc_mem(p, NULL, NULL));
             else {
-                buf_free(&iob);
+                iobuf_free(&iob);
                 free(opts);
                 return IPC_COMMERR;
             }
             if (tl != NULL) {
-                buf_swrite(&iob, "l");
+                iobuf_swrite(&iob, "l");
                 for (int i = 0; i < nkeys; i++)
                     write_ans(&iob, tl, opts[i]);
-                buf_swrite(&iob, "e");
+                iobuf_swrite(&iob, "e");
             } else
-                buf_print(&iob, "i%de", IPC_ENOTENT);
+                iobuf_print(&iob, "i%de", IPC_ENOTENT);
         }
     }
-    buf_swrite(&iob, "ee");
+    iobuf_swrite(&iob, "ee");
     free(opts);
     return write_buffer(cli, &iob);
 }

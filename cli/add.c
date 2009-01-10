@@ -74,21 +74,21 @@ cmd_add(int argc, char **argv)
     size_t mi_size;
     enum ipc_err code;
     char dpath[PATH_MAX];
-    struct io_buffer iob;
+    struct iobuf iob;
 
     if ((mi = mi_load(argv[0], &mi_size)) == NULL)
         err(1, "error loading '%s'", argv[0]);
 
-    iob = buf_init(PATH_MAX);
-    buf_write(&iob, dir, dirlen);
+    iob = iobuf_init(PATH_MAX);
+    iobuf_write(&iob, dir, dirlen);
     if (topdir && !mi_simple(mi)) {
         size_t tdlen;
         const char *td =
             benc_dget_mem(benc_dget_dct(mi, "info"), "name", &tdlen);
-        buf_swrite(&iob, "/");
-        buf_write(&iob, td, tdlen);
+        iobuf_swrite(&iob, "/");
+        iobuf_write(&iob, td, tdlen);
     }
-    buf_swrite(&iob, "\0");
+    iobuf_swrite(&iob, "\0");
     if ((errno = make_abs_path(iob.buf, dpath)) != 0)
         err(1, "make_abs_path '%s'", dpath);
     code = btpd_add(ipc, mi, mi_size, dpath, name);

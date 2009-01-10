@@ -129,7 +129,7 @@ ipc_req_res(struct ipc *ipc, const char *req, uint32_t qlen, char **res,
 }
 
 static enum ipc_err
-ipc_buf_req_res(struct ipc *ipc, struct io_buffer *iob, char **res,
+ipc_buf_req_res(struct ipc *ipc, struct iobuf *iob, char **res,
     uint32_t *rlen)
 {
     enum ipc_err err;
@@ -137,12 +137,12 @@ ipc_buf_req_res(struct ipc *ipc, struct io_buffer *iob, char **res,
         err = IPC_COMMERR;
     else
         err = ipc_req_res(ipc, iob->buf, iob->off, res, rlen);
-    buf_free(iob);
+    iobuf_free(iob);
     return err;
 }
 
 static enum ipc_err
-ipc_buf_req_code(struct ipc *ipc, struct io_buffer *iob)
+ipc_buf_req_code(struct ipc *ipc, struct iobuf *iob)
 {
     enum ipc_err err;
     char *res;
@@ -158,11 +158,11 @@ ipc_buf_req_code(struct ipc *ipc, struct io_buffer *iob)
 enum ipc_err
 btpd_die(struct ipc *ipc, int seconds)
 {
-    struct io_buffer iob = buf_init(16);
+    struct iobuf iob = iobuf_init(16);
     if (seconds >= 0)
-        buf_print(&iob, "l3:diei%dee", seconds);
+        iobuf_print(&iob, "l3:diei%dee", seconds);
     else
-        buf_swrite(&iob, "l3:diee");
+        iobuf_swrite(&iob, "l3:diee");
     return ipc_buf_req_code(ipc, &iob);
 }
 
@@ -219,24 +219,24 @@ btpd_tget(struct ipc *ipc, struct ipc_torrent *tps, size_t ntps,
     char *res;
     uint32_t rlen;
     enum ipc_err err;
-    struct io_buffer iob;
+    struct iobuf iob;
 
     if (nkeys == 0 || ntps == 0)
         return IPC_COMMERR;
 
-    iob = buf_init(1 << 14);
-    buf_swrite(&iob, "l4:tgetd4:froml");
+    iob = iobuf_init(1 << 14);
+    iobuf_swrite(&iob, "l4:tgetd4:froml");
     for (int i = 0; i < ntps; i++) {
         if (tps[i].by_hash) {
-            buf_swrite(&iob, "20:");
-            buf_write(&iob, tps[i].u.hash, 20);
+            iobuf_swrite(&iob, "20:");
+            iobuf_write(&iob, tps[i].u.hash, 20);
         } else
-            buf_print(&iob, "i%ue", tps[i].u.num);
+            iobuf_print(&iob, "i%ue", tps[i].u.num);
     }
-    buf_swrite(&iob, "e4:keysl");
+    iobuf_swrite(&iob, "e4:keysl");
     for (int k = 0; k < nkeys; k++)
-        buf_print(&iob, "i%de", keys[k]);
-    buf_swrite(&iob, "eee");
+        iobuf_print(&iob, "i%de", keys[k]);
+    iobuf_swrite(&iob, "eee");
 
     if ((err = ipc_buf_req_res(ipc, &iob, &res, &rlen)) == 0)
         err = tget_common(res, keys, nkeys, cb, arg);
@@ -249,17 +249,17 @@ btpd_tget_wc(struct ipc *ipc, enum ipc_twc twc, enum ipc_tval *keys,
 {
     char *res;
     uint32_t rlen;
-    struct io_buffer iob;
+    struct iobuf iob;
     enum ipc_err err;
 
     if (nkeys == 0)
         return IPC_COMMERR;
 
-    iob = buf_init(1 << 14);
-    buf_print(&iob, "l4:tgetd4:fromi%de4:keysl", twc);
+    iob = iobuf_init(1 << 14);
+    iobuf_print(&iob, "l4:tgetd4:fromi%de4:keysl", twc);
     for (int i = 0; i < nkeys; i++)
-        buf_print(&iob, "i%de", keys[i]);
-    buf_swrite(&iob, "eee");
+        iobuf_print(&iob, "i%de", keys[i]);
+    iobuf_swrite(&iob, "eee");
 
     if ((err = ipc_buf_req_res(ipc, &iob, &res, &rlen)) == 0)
         err = tget_common(res, keys, nkeys, cb, arg);
@@ -270,27 +270,27 @@ enum ipc_err
 btpd_add(struct ipc *ipc, const char *mi, size_t mi_size, const char *content,
     const char *name)
 {
-    struct io_buffer iob = buf_init(1 << 10);
-    buf_print(&iob, "l3:addd7:content%d:%s", (int)strlen(content),
+    struct iobuf iob = iobuf_init(1 << 10);
+    iobuf_print(&iob, "l3:addd7:content%d:%s", (int)strlen(content),
         content);
     if (name != NULL)
-        buf_print(&iob, "4:name%d:%s", (int)strlen(name), name);
-    buf_print(&iob, "7:torrent%lu:", (unsigned long)mi_size);
-    buf_write(&iob, mi, mi_size);
-    buf_swrite(&iob, "ee");
+        iobuf_print(&iob, "4:name%d:%s", (int)strlen(name), name);
+    iobuf_print(&iob, "7:torrent%lu:", (unsigned long)mi_size);
+    iobuf_write(&iob, mi, mi_size);
+    iobuf_swrite(&iob, "ee");
     return ipc_buf_req_code(ipc, &iob);
 }
 
 static enum ipc_err
 simple_treq(struct ipc *ipc, char *cmd, struct ipc_torrent *tp)
 {
-    struct io_buffer iob = buf_init(32);
+    struct iobuf iob = iobuf_init(32);
     if (tp->by_hash) {
-        buf_print(&iob, "l%d:%s20:", (int)strlen(cmd), cmd);
-        buf_write(&iob, tp->u.hash, 20);
-        buf_swrite(&iob, "e");
+        iobuf_print(&iob, "l%d:%s20:", (int)strlen(cmd), cmd);
+        iobuf_write(&iob, tp->u.hash, 20);
+        iobuf_swrite(&iob, "e");
     } else
-        buf_print(&iob, "l%d:%si%uee", (int)strlen(cmd), cmd, tp->u.num);
+        iobuf_print(&iob, "l%d:%si%uee", (int)strlen(cmd), cmd, tp->u.num);
     return ipc_buf_req_code(ipc, &iob);
 }
 
@@ -315,7 +315,7 @@ btpd_stop(struct ipc *ipc, struct ipc_torrent *tp)
 enum ipc_err
 btpd_stop_all(struct ipc *ipc)
 {
-    struct io_buffer iob = buf_init(16);
-    buf_swrite(&iob, "l8:stop-alle");
+    struct iobuf iob = iobuf_init(16);
+    iobuf_swrite(&iob, "l8:stop-alle");
     return ipc_buf_req_code(ipc, &iob);
 }
