@@ -1,48 +1,78 @@
 AC_INIT(btpd, 0.13, btpd@murmeldjur.se)
 
-AM_INIT_AUTOMAKE([foreign])
+AM_INIT_AUTOMAKE([foreign subdir-objects])
 
-AC_CONFIG_FILES([Makefile btpd/Makefile misc/Makefile cli/Makefile])
+AC_CONFIG_FILES([Makefile])
 
 AC_PROG_CC
+AC_PROG_CC_C_O
 AC_PROG_RANLIB
-
-CFLAGS="$CFLAGS -std=c99"
-CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64"
 
 AC_ARG_WITH(openssl,
 [  --with-openssl=dir      use openssl installed in dir],
-[
-        AC_SUBST(openssl_LDFLAGS,["-L${withval}/lib -Wl,-rpath=${withval}/lib"])
-        AC_SUBST(openssl_CPPFLAGS,"-I${withval}/include")
-],
-[])
+    AC_SUBST(openssl_LDFLAGS,["-L${withval}/lib -Wl,-rpath=${withval}/lib"])
+    AC_SUBST(openssl_CPPFLAGS,"-I${withval}/include"))
 
-AC_ARG_WITH(warn,
-[  --with-warn=level       select warning preset (no,all,allerr)],
-[
-    case $withval in
-    no)
-	;;
-    all)
-	CFLAGS="$CFLAGS -Wall -Wno-pointer-sign"
-	;;
-    allerr)
-	CFLAGS="$CFLAGS -Wall -Wno-pointer-sign -Werror"
-	;;
-    *)
-	echo "Warning preset \"$withval\" not recognized. See --help."
-	exit 1
-	;;
-    esac
-],
-[])
+AC_ARG_WITH(evloop-method,
+[  --with-evloop-method    select evloop method (epoll,poll,kqueue)],
+    evloop_methods=$withval,
+    evloop_methods="epoll kqueue poll")
+
+AC_SEARCH_LIBS(clock_gettime, rt,
+    AC_SUBST(CLOCKLIB, $LIBS)
+    LIBS=""
+,
+    echo btpd needs clock_gettime.
+    exit 1)
+
+echo -n "checking whether compiler accepts -Wno-pointer-sign... "
+old_CFLAGS=$CFLAGS
+CFLAGS="-Wno-pointer-sign"
+AC_COMPILE_IFELSE(int main(void) { return 0; },
+    AC_SUBST(WARNNPS,"-Wno-pointer-sign")
+    echo yes
+,
+    echo no)
+CFLAGS=$old_CFLAGS
 
 old_LDFLAGS="$LDFLAGS"
 LDFLAGS="$LDFLAGS $openssl_LDFLAGS"
-AC_CHECK_LIB(crypto, SHA1_Final, :, echo Must have openssl; exit 1)
+AC_CHECK_LIB(crypto, SHA1_Final,, echo "btpd needs openssl's libraries and headers."; exit 1)
 LDFLAGS=$old_LDFLAGS
+LIBS=""
 
-AC_CONFIG_SUBDIRS([libevent])
+for m in $evloop_methods; do
+    case $m in
+    epoll)
+        AC_CHECK_FUNC(epoll_wait,[
+            AC_SUBST(EVLOOP_IMPL,"evloop/epoll.${OBJEXT}")
+            AC_SUBST(EVLOOP_METHOD,EVLOOP_EPOLL)
+            break],)
+        ;;
+    kqueue)
+        AC_CHECK_FUNC(kqueue,[
+            AC_SUBST(EVLOOP_IMPL,"evloop/kqueue.${OBJEXT}")
+            AC_SUBST(EVLOOP_METHOD,EVLOOP_KQUEUE)
+            break],)
+        ;;
+    poll)
+        AC_CHECK_FUNC(poll,[
+            AC_SUBST(EVLOOP_IMPL,"evloop/poll.${OBJEXT}")
+            AC_SUBST(EVLOOP_METHOD,EVLOOP_POLL)
+            break],)
+        break
+        ;;
+    *)
+        echo "$m is not a valid evloop method. See --help."
+        exit 1
+        ;;
+    esac
+done
+if test x$EVLOOP_METHOD == x; then
+    echo "no suitable evloop method found."
+    exit 1
+else
+    echo selected evloop method $EVLOOP_METHOD.
+fi
 
 AC_OUTPUT
