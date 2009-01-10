@@ -3,6 +3,7 @@
 #include <sys/file.h>
 #include <err.h>
 #include <getopt.h>
+#include <time.h>
 
 static void
 writepid(int pidfd)
@@ -16,6 +17,11 @@ static void
 setup_daemon(int daemonize, const char *dir, const char *log)
 {
     int pidfd;
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+        errx(1, "clock_gettime(CLOCK_MONOTONIC, ...) error (%s).",
+            strerror(errno));
 
     if (log == NULL)
         log = "log";
@@ -221,13 +227,14 @@ args_done:
 
     setup_daemon(daemonize, dir, log);
 
-    evloop_init();
+    if (evloop_init() != 0)
+        btpd_err("Failed to initialize evloop (%s).\n", strerror(errno));
 
     btpd_init();
 
     evloop();
 
-    btpd_err("Unexpected exit from evloop.\n");
+    btpd_err("Exit from evloop with error (%s).\n", strerror(errno));
 
     return 1;
 }
