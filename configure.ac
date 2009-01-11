@@ -10,8 +10,10 @@ AC_PROG_RANLIB
 
 AC_ARG_WITH(openssl,
 [  --with-openssl=dir      use openssl installed in dir],
-    AC_SUBST(openssl_LDFLAGS,["-L${withval}/lib -Wl,-rpath=${withval}/lib"])
-    AC_SUBST(openssl_CPPFLAGS,"-I${withval}/include"))
+[
+    AC_SUBST(openssl_LDFLAGS,["-L${withval}/lib -Wl,-R,${withval}/lib"])
+    AC_SUBST(openssl_CPPFLAGS,"-I${withval}/include")
+])
 
 AC_ARG_WITH(evloop-method,
 [  --with-evloop-method    select evloop method (epoll,poll,kqueue)],
