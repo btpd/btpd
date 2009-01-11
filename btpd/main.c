@@ -9,7 +9,7 @@ static void
 writepid(int pidfd)
 {
     FILE *fp = fdopen(dup(pidfd), "w");
-    fprintf(fp, "%d", getpid());
+    fprintf(fp, "%ld", (long)getpid());
     fclose(fp);
 }
 
