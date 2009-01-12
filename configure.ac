@@ -7,6 +7,7 @@ AC_CONFIG_FILES([Makefile])
 AC_PROG_CC
 AC_PROG_CC_C_O
 AC_PROG_RANLIB
+AC_USE_SYSTEM_EXTENSIONS
 
 AC_ARG_WITH(openssl,
 [  --with-openssl=dir      use openssl installed in dir],
@@ -20,28 +21,31 @@ AC_ARG_WITH(evloop-method,
     evloop_methods=$withval,
     evloop_methods="epoll kqueue poll")
 
-AC_SEARCH_LIBS(clock_gettime, rt,
-    AC_SUBST(CLOCKLIB, $LIBS)
-    LIBS=""
-,
-    echo btpd needs clock_gettime.
-    exit 1)
+old_LIBS=$LIBS
+LIBS=""
+AC_SEARCH_LIBS(clock_gettime, rt,,AC_MSG_FAILURE(btpd needs clock_gettime))
+AC_SUBST(CLOCKLIB,$LIBS)
+LIBS=""
+AC_SEARCH_LIBS(inet_ntop, nsl,,AC_MSG_FAILURE(btpd needs inet_ntop))
+AC_SEARCH_LIBS(bind, socket,,AC_MSG_FAILURE(btpd needs bind))
+AC_SUBST(INETLIBS,$LIBS)
+LIBS=$old_LIBS
+AC_CHECK_FUNCS(asprintf)
 
-echo -n "checking whether compiler accepts -Wno-pointer-sign... "
+AC_MSG_CHECKING(whether compiler accepts -Wno-pointer-sign)
 old_CFLAGS=$CFLAGS
 CFLAGS="-Wno-pointer-sign"
 AC_COMPILE_IFELSE(int main(void) { return 0; },
     AC_SUBST(WARNNPS,"-Wno-pointer-sign")
-    echo yes
+    AC_MSG_RESULT(yes)
 ,
-    echo no)
+    AC_MSG_RESULT(no))
 CFLAGS=$old_CFLAGS
 
 old_LDFLAGS="$LDFLAGS"
 LDFLAGS="$LDFLAGS $openssl_LDFLAGS"
-AC_CHECK_LIB(crypto, SHA1_Final,, echo "btpd needs openssl's libraries and headers."; exit 1)
+AC_CHECK_LIB(crypto, SHA1_Final,:,AC_MSG_FAILURE(btpd needs openssl's libraries and headers))
 LDFLAGS=$old_LDFLAGS
-LIBS=""
 
 for m in $evloop_methods; do
     case $m in
@@ -49,32 +53,72 @@ for m in $evloop_methods; do
         AC_CHECK_FUNC(epoll_wait,[
             AC_SUBST(EVLOOP_IMPL,"evloop/epoll.${OBJEXT}")
             AC_SUBST(EVLOOP_METHOD,EVLOOP_EPOLL)
-            break],)
+            break])
         ;;
     kqueue)
         AC_CHECK_FUNC(kqueue,[
             AC_SUBST(EVLOOP_IMPL,"evloop/kqueue.${OBJEXT}")
             AC_SUBST(EVLOOP_METHOD,EVLOOP_KQUEUE)
-            break],)
+            break])
         ;;
     poll)
         AC_CHECK_FUNC(poll,[
             AC_SUBST(EVLOOP_IMPL,"evloop/poll.${OBJEXT}")
             AC_SUBST(EVLOOP_METHOD,EVLOOP_POLL)
-            break],)
+            break])
         break
         ;;
     *)
-        echo "$m is not a valid evloop method. See --help."
+        AC_MSG_ERROR($m is not a valid evloop method)
         exit 1
         ;;
     esac
 done
 if test x$EVLOOP_METHOD == x; then
-    echo "no suitable evloop method found."
+    AC_MSG_FAILURE(no suitable evloop method found)
     exit 1
 else
-    echo selected evloop method $EVLOOP_METHOD.
+    AC_MSG_NOTICE(selected evloop method $EVLOOP_METHOD)
 fi
+
+for i in 0 1 2 3 4 5 6; do
+    case $i in
+    0) if test x$TD_CFLAGS$TD_LIBS == x; then continue; fi;;
+    1) TD_CFLAGS=-pthread;;
+    2) TD_CFLAGS=-pthreads;;
+    3) TD_CFLAGS=-kthread;;
+    4) TD_CFLAGS=-mt;;
+    5) TD_LIBS=-lpthread;;
+    6) AC_MSG_FAILURE(how do you build with pthreads on this system?);;
+    esac
+    old_CFLAGS=$CFLAGS; CFLAGS="$TD_CFLAGS $CFLAGS"
+    old_LIBS=$LIBS; LIBS="$TD_LIBS $LIBS"
+    AC_MSG_CHECKING(whether pthreads compiles with flags \"$TD_CFLAGS $TD_LIBS\")
+    AC_LANG_CONFTEST([int foo(void) { return 12; }])
+    $CC $CFLAGS $CPPFLAGS -c conftest.c >conftest.stdout 2>conftest.stderr
+    if test -s conftest.stdout -o -s conftest.stderr; then
+        AC_MSG_RESULT(no)
+        TD_CFLAGS=""; TD_LIBS=""
+        CFLAGS=$old_CFLAGS; LIBS=$old_LIBS
+        rm -f conftest.c conftest.o conftest.stdout conftest.stderr
+        continue
+    fi
+    rm -f conftest.c conftest.o conftest.stdout conftest.stderr
+
+    AC_LINK_IFELSE([
+        #include <pthread.h>
+        int main(void) { return pthread_create(0,0,0,0);}
+    ], [
+        AC_MSG_RESULT(yes)
+        CFLAGS=$old_CFLAGS; LIBS=$old_LIBS
+        break
+    ], [
+        AC_MSG_RESULT(no)
+        TD_CFLAGS=""; TD_LIBS=""
+        CFLAGS=$old_CFLAGS; LIBS=$old_LIBS
+    ])
+done
+AC_SUBST(TD_CFLAGS)
+AC_SUBST(TD_LIBS)
 
 AC_OUTPUT
