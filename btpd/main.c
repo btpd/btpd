@@ -32,6 +32,9 @@ setup_daemon(int daemonize, const char *dir)
     pid_t pid;
     struct timespec ts;
 
+    if (snprintf(NULL, 0, "btpd") != 4)
+        btpd_err("snprintf doesn't work.\n");
+
     if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
         btpd_err("clock_gettime(CLOCK_MONOTONIC, ...) failed (%s).\n",
             strerror(errno));
