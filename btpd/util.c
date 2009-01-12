@@ -91,14 +91,23 @@ log_common(uint32_t type, const char *fmt, va_list ap)
     }
 }
 
+extern int btpd_daemon_phase;
+extern void first_btpd_exit(char);
+
 void
 btpd_err(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    log_common(BTPD_L_ERROR, fmt, ap);
-    va_end(ap);
-    exit(1);
+    if (btpd_daemon_phase > 0) {
+        vprintf(fmt, ap);
+        if (btpd_daemon_phase == 1)
+            first_btpd_exit(1);
+        exit(1);
+    } else {
+        log_common(BTPD_L_ERROR, fmt, ap);
+        abort();
+    }
 }
 
 void

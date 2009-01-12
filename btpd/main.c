@@ -1,72 +1,92 @@
 #include "btpd.h"
 
-#include <sys/file.h>
-#include <err.h>
 #include <getopt.h>
 #include <time.h>
+
+int btpd_daemon_phase = 2;
+int first_btpd_comm[2];
+
+void
+first_btpd_exit(char code)
+{
+    write(first_btpd_comm[1], &code, 1);
+    close(first_btpd_comm[0]);
+    close(first_btpd_comm[1]);
+}
 
 static void
 writepid(int pidfd)
 {
-    FILE *fp = fdopen(dup(pidfd), "w");
-    fprintf(fp, "%ld", (long)getpid());
-    fclose(fp);
+    int nw;
+    char pidtxt[100];
+    nw = snprintf(pidtxt, sizeof(pidtxt), "%ld", (long)getpid);
+    ftruncate(pidfd, 0);
+    write(pidfd, pidtxt, nw);
 }
 
 static void
-setup_daemon(int daemonize, const char *dir, const char *log)
+setup_daemon(int daemonize, const char *dir)
 {
+    char c;
     int pidfd;
+    pid_t pid;
     struct timespec ts;
 
     if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
-        errx(1, "clock_gettime(CLOCK_MONOTONIC, ...) error (%s).",
+        btpd_err("clock_gettime(CLOCK_MONOTONIC, ...) failed (%s).\n",
             strerror(errno));
-
-    if (log == NULL)
-        log = "log";
 
     if (dir == NULL) {
         if ((dir = find_btpd_dir()) == NULL)
-            errx(1, "Cannot find the btpd directory");
-        else if (dir[0] != '/')
-            errx(1, "got non absolute path '%s' from system environment.",
+            btpd_err("Cannot find the btpd directory.\n");
+        if (dir[0] != '/')
+            btpd_err("Got non absolute path '%s' from system environment.\n",
                 dir);
         btpd_dir = dir;
     }
 
     if (mkdir(dir, 0777) == -1 && errno != EEXIST)
-        err(1, "Couldn't create home '%s'", dir);
+        btpd_err("Couldn't create home '%s' (%s).\n", dir, strerror(errno));
 
     if (chdir(dir) != 0)
-        err(1, "Couldn't change working directory to '%s'", dir);
+        btpd_err("Couldn't change working directory to '%s' (%s).\n", dir,
+            strerror(errno));
 
     if (mkdir("torrents", 0777) == -1 && errno != EEXIST)
-        err(1, "Couldn't create torrents subdir");
-
-    if ((pidfd = open("pid", O_CREAT|O_TRUNC|O_WRONLY, 0666)) == -1)
-        err(1, "Couldn't open 'pid'");
-
-    if (flock(pidfd, LOCK_NB|LOCK_EX) == -1)
-        errx(1, "Another instance of btpd is probably running in %s.", dir);
+        btpd_err("Couldn't create torrents subdir (%s).\n", strerror(errno));
 
     if (btpd_dir == NULL) {
         char wd[PATH_MAX];
         if (getcwd(wd, PATH_MAX) == NULL)
-            err(1, "couldn't get working directory");
-        btpd_dir = strdup(wd);
+            btpd_err("Couldn't get working directory (%s).\n",
+                strerror(errno));
+        if ((btpd_dir = strdup(wd)) == NULL)
+            btpd_err("Out of memory.\n");
     }
 
     if (daemonize) {
-        if (daemon(1, 1) != 0)
-            err(1, "Failed to daemonize");
-        freopen("/dev/null", "r", stdin);
-        if (freopen(log, "a", stdout) == NULL)
-            err(1, "Couldn't open '%s'", log);
-        dup2(fileno(stdout), fileno(stderr));
-        setlinebuf(stdout);
-        setlinebuf(stderr);
+        if (pipe(first_btpd_comm) < 0)
+            btpd_err("Failed to create pipe (%s).\n", strerror(errno));
+        if ((pid = fork()) < 0)
+            btpd_err("fork() failed (%s).\n", strerror(errno));
+        if (pid != 0) {
+            read(first_btpd_comm[0], &c, 1);
+            exit(c);
+        }
+        btpd_daemon_phase--;
+        if (setsid() < 0)
+            btpd_err("setsid() failed (%s).\n", strerror(errno));
+        if ((pid = fork()) < 0)
+            btpd_err("fork() failed (%s).\n", strerror(errno));
+        if (pid != 0)
+            exit(0);
     }
+
+    if ((pidfd = open("pid", O_CREAT|O_WRONLY, 0666)) == -1)
+        btpd_err("Couldn't open 'pid' (%s).\n", strerror(errno));
+
+    if (lockf(pidfd, F_TLOCK, 0) == -1)
+        btpd_err("Another instance of btpd is probably running in %s.\n", dir);
 
     writepid(pidfd);
 }
@@ -203,10 +223,11 @@ main(int argc, char **argv)
                 case 1:
                     break;
                 case 0:
-                    errx(1, "You must specify a dotted IPv4 address.\n");
+                    btpd_err("You must specify a dotted IPv4 address.\n");
                     break;
                 default:
-                    err(1, "inet_ntop %s", optarg);
+                    btpd_err("inet_ntop for '%s' failed (%s).\n", optarg,
+                        strerror(errno));
                 }
                 break;
             default:
@@ -225,13 +246,26 @@ args_done:
     if (argc > 0)
         usage();
 
-    setup_daemon(daemonize, dir, log);
+    setup_daemon(daemonize, dir);
 
     if (evloop_init() != 0)
         btpd_err("Failed to initialize evloop (%s).\n", strerror(errno));
 
     btpd_init();
 
+    if (daemonize) {
+        if (freopen("/dev/null", "r", stdin) == NULL)
+            btpd_err("freopen of stdin failed (%s).\n", strerror(errno));
+        if (freopen(log == NULL ? "log" : log, "a", stderr) == NULL)
+            btpd_err("Couldn't open '%s' (%s).\n", log, strerror(errno));
+        if (dup2(fileno(stderr), fileno(stdout)) < 0)
+            btpd_err("dup2 failed (%s).\n", strerror(errno));
+        first_btpd_exit(0);
+    }
+    setlinebuf(stdout);
+    setlinebuf(stderr);
+
+    btpd_daemon_phase = 0;
     evloop();
 
     btpd_err("Exit from evloop with error (%s).\n", strerror(errno));
