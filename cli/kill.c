@@ -33,5 +33,5 @@ cmd_kill(int argc, char **argv)
 
     btpd_connect();
     if ((code = btpd_die(ipc, seconds)) != 0)
-        errx(1, "%s", ipc_strerror(code));
+        diemsg("command failed (%s).\n", ipc_strerror(code));
 }

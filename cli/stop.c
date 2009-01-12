@@ -51,7 +51,7 @@ cmd_stop(int argc, char **argv)
     if (all) {
         enum ipc_err code = btpd_stop_all(ipc);
         if (code != IPC_OK)
-            errx(1, "%s", ipc_strerror(code));
+            diemsg("command failed (%s).\n", ipc_strerror(code));
     } else {
         for (int i = 0; i < argc; i++)
             if (torrent_spec(argv[i], &t))

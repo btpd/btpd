@@ -136,7 +136,7 @@ again:
     else
         err = btpd_tget(ipc, tps, ntps, stkeys, nstkeys, stat_cb, &cba);
     if (err != IPC_OK)
-        errx(1, ipc_strerror(err));
+        diemsg("command failed (%s).\n", ipc_strerror(err));
     if (names)
         printf("-------\n");
     if (individual)

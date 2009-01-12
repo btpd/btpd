@@ -60,7 +60,7 @@ list_cb(int obji, enum ipc_err objerr, struct ipc_get_res *res, void *arg)
     struct items *itms = arg;
     struct item *itm = calloc(1, sizeof(*itm));
     if (objerr != IPC_OK)
-        errx(1, "list failed for '%s' (%s)", itms->argv[obji],
+        diemsg("list failed for '%s' (%s).\n", itms->argv[obji],
             ipc_strerror(objerr));
     itms->count++;
     itm->num = (unsigned)res[IPC_TVAL_NUM].v.num;
@@ -148,7 +148,7 @@ cmd_list(int argc, char **argv)
     else
         code = btpd_tget(ipc, itms.tps, itms.ntps, keys, nkeys, list_cb, &itms);
     if (code != IPC_OK)
-        errx(1, "%s", ipc_strerror(code));
+        diemsg("command failed (%s).\n", ipc_strerror(code));
     printf("%-40.40s  NUM ST   HAVE    SIZE   RATIO\n", "NAME");
     print_items(&itms);
 }

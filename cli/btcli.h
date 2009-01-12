@@ -1,7 +1,6 @@
 #ifndef BTCLI_H
 #define BTCLI_H
 
-#include <err.h>
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
@@ -23,6 +22,8 @@
 extern const char *btpd_dir;
 extern struct ipc *ipc;
 
+__attribute__((noreturn))
+void diemsg(const char *fmt, ...);
 void btpd_connect(void);
 enum ipc_err handle_ipc_res(enum ipc_err err, const char *cmd,
     const char *target);

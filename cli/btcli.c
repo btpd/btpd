@@ -1,13 +1,26 @@
+#include <stdarg.h>
+
 #include "btcli.h"
 
 const char *btpd_dir;
 struct ipc *ipc;
 
 void
+diemsg(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    exit(1);
+}
+
+void
 btpd_connect(void)
 {
     if ((errno = ipc_open(btpd_dir, &ipc)) != 0)
-        err(1, "cannot open connection to btpd in %s", btpd_dir);
+        diemsg("cannot open connection to btpd in %s (%s).\n", btpd_dir,
+            strerror(errno));
 }
 
 enum ipc_err
@@ -17,9 +30,10 @@ handle_ipc_res(enum ipc_err code, const char *cmd, const char *target)
     case IPC_OK:
         break;
     case IPC_COMMERR:
-        errx(1, "%s", ipc_strerror(code));
+        diemsg("error in communication with btpd.\n");
     default:
-        warnx("%s '%s': %s", cmd, target, ipc_strerror(code));
+        fprintf(stderr, "btcli %s '%s': %s.\n", cmd, target,
+            ipc_strerror(code));
     }
     return code;
 }
@@ -68,7 +82,7 @@ tstate_char(enum ipc_tstate ts)
     case IPC_TSTATE_SEED:
         return 'S';
     }
-    errx(1, "bad state");
+    diemsg("unrecognized torrent state.\n");
 }
 
 int
@@ -81,7 +95,8 @@ torrent_spec(char *arg, struct ipc_torrent *tp)
         return 1;
     }
     if ((p = mi_load(arg, NULL)) == NULL) {
-        warnx("bad torrent '%s' (%s)", arg, strerror(errno));
+        fprintf(stderr, "btcli: bad torrent '%s' (%s).'n", arg,
+            strerror(errno));
         return 0;
     }
     tp->by_hash = 1;
@@ -170,7 +185,7 @@ main(int argc, char **argv)
 
     if (btpd_dir == NULL)
         if ((btpd_dir = find_btpd_dir()) == NULL)
-            errx(1, "cannot find the btpd directory");
+            diemsg("cannot find the btpd directory.\n");
 
     optind = 0;
     int found = 0;

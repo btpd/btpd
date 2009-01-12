@@ -54,7 +54,7 @@ cmd_add(int argc, char **argv)
         case 'd':
             dir = optarg;
             if ((dirlen = strlen(dir)) == 0)
-                errx(1, "bad option value for -d");
+                diemsg("bad option value for -d.\n");
             break;
         case 'n':
             name = optarg;
@@ -77,7 +77,7 @@ cmd_add(int argc, char **argv)
     struct iobuf iob;
 
     if ((mi = mi_load(argv[0], &mi_size)) == NULL)
-        err(1, "error loading '%s'", argv[0]);
+        diemsg("error loading '%s' (%s).\n", argv[0], strerror(errno));
 
     iob = iobuf_init(PATH_MAX);
     iobuf_write(&iob, dir, dirlen);
@@ -90,7 +90,7 @@ cmd_add(int argc, char **argv)
     }
     iobuf_swrite(&iob, "\0");
     if ((errno = make_abs_path(iob.buf, dpath)) != 0)
-        err(1, "make_abs_path '%s'", dpath);
+        diemsg("make_abs_path '%s' failed (%s).\n", dpath, strerror(errno));
     code = btpd_add(ipc, mi, mi_size, dpath, name);
     if (code == 0 && start) {
         struct ipc_torrent tspec;
@@ -99,6 +99,6 @@ cmd_add(int argc, char **argv)
         code = btpd_start(ipc, &tspec);
     }
     if (code != IPC_OK)
-        errx(1, "%s", ipc_strerror(code));
+        diemsg("command failed (%s).\n", ipc_strerror(code));
     return;
 }

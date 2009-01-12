@@ -1,11 +1,11 @@
 #include <sys/types.h>
 
-#include <err.h>
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include "metainfo.h"
@@ -75,8 +75,11 @@ main(int argc, char **argv)
     while (argc > 0) {
         char *mi = NULL;
 
-        if ((mi = mi_load(*argv, NULL)) == NULL)
-            err(1, "mi_load: %s", *argv);
+        if ((mi = mi_load(*argv, NULL)) == NULL) {
+            fprintf(stderr, "failed to load torrent file '%s' (%s).\n",
+                *argv, strerror(errno));
+            exit(1);
+        }
 
         print_metainfo(mi);
         free(mi);
