@@ -14,6 +14,8 @@
 #include <strings.h>
 #include <unistd.h>
 
+#include "subr.h"
+
 void *
 memfind(const void *sub, size_t sublen, const void *mem, size_t memlen)
 {
@@ -443,3 +445,21 @@ end:
     out[oi] = '\0';
     return 0;
 }
+
+#ifndef HAVE_ASPRINTF
+int
+asprintf(char **strp, const char *fmt, ...)
+{
+    int np;
+    va_list ap;
+    va_start(ap, fmt);
+    np = vsnprintf(NULL, 0, fmt, ap);
+    va_end(ap);
+    if ((*strp = malloc(np + 1)) == NULL)
+        return -1;
+    va_start(ap, fmt);
+    vsnprintf(*strp, np + 1, fmt, ap);
+    va_end(ap);
+    return np;
+}
+#endif

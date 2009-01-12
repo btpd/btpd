@@ -1,8 +1,9 @@
 #ifndef BTPD_SUBR_H
 #define BTPD_SUBR_H
 
-#include <stdio.h>
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdint.h>
 
 #define max(x, y) ((x) >= (y) ? (x) : (y))
 #define min(x, y) ((x) <= (y) ? (x) : (y))
@@ -46,5 +47,10 @@ void *read_file(const char *path, void *buf, size_t *size);
 
 char *find_btpd_dir(void);
 int make_abs_path(const char *in, char *out);
+
+#ifndef HAVE_ASPRINTF
+__attribute__((format (printf, 2, 3)))
+int asprintf(char **strp, const char *fmt, ...);
+#endif
 
 #endif
