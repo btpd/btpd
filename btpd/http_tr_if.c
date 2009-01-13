@@ -62,6 +62,7 @@ parse_reply(struct torrent *tp, const char *content, size_t size, int parse,
     const char *buf;
     size_t len;
     const char *peers;
+    const char *v6key[] = {"peers6", "peers_ipv6"};
 
     if (benc_validate(content, size) != 0)
         goto bad_data;
@@ -92,12 +93,24 @@ parse_reply(struct torrent *tp, const char *content, size_t size, int parse,
              peers = benc_next(peers))
             maybe_connect_to(tp, peers);
     } else if (benc_isstr(peers)) {
-        peers = benc_dget_mem(content, "peers", &len);
-        for (size_t i = 0; i < len && net_npeers < net_max_peers; i += 6)
-            peer_create_out_compact(tp->net, peers + i);
+        if (net_ipv4) {
+            peers = benc_dget_mem(content, "peers", &len);
+            for (size_t i = 0; i < len && net_npeers < net_max_peers; i += 6)
+                peer_create_out_compact(tp->net, AF_INET, peers + i);
+        }
     } else
         goto bad_data;
 
+    if (!net_ipv6)
+        return 0;
+    for (int k = 0; k < 2; k++) {
+        peers = benc_dget_any(content, v6key[k]);
+        if (peers != NULL && benc_isstr(peers)) {
+            peers = benc_dget_mem(content, v6key[k], &len);
+            for (size_t i = 0; i < len && net_npeers < net_max_peers; i += 18)
+                peer_create_out_compact(tp->net, AF_INET6, peers + i);
+        }
+    }
     return 0;
 
 bad_data:
@@ -178,7 +191,7 @@ nc_cb(void *arg, int error, int sd)
 struct http_tr_req *
 http_tr_req(struct torrent *tp, enum tr_event event, const char *aurl)
 {
-    char e_hash[61], e_id[61], ip_arg[INET_ADDRSTRLEN + 4], url[512], qc;
+    char e_hash[61], e_id[61], url[512], qc;
     const uint8_t *peer_id = btpd_get_peer_id();
     struct http_url *http_url;
 
@@ -189,18 +202,12 @@ http_tr_req(struct torrent *tp, enum tr_event event, const char *aurl)
     for (int i = 0; i < 20; i++)
         snprintf(e_id + i * 3, 4, "%%%.2x", peer_id[i]);
 
-    if (tr_ip_arg == INADDR_ANY)
-        ip_arg[0] = '\0';
-    else {
-        bcopy("&ip=", ip_arg, 4);
-        inet_ntop(AF_INET, &tr_ip_arg, ip_arg + 4, sizeof(ip_arg) - 4);
-    }
-
     snprintf(url, sizeof(url),
-        "%s%cinfo_hash=%s&peer_id=%s&key=%ld%s&port=%d&uploaded=%llu"
+        "%s%cinfo_hash=%s&peer_id=%s&key=%ld%s%s&port=%d&uploaded=%llu"
         "&downloaded=%llu&left=%llu&compact=1%s%s",
-        aurl, qc, e_hash, e_id, tr_key, ip_arg, net_port,
-        tp->net->uploaded, tp->net->downloaded,
+        aurl, qc, e_hash, e_id, tr_key,
+        tr_ip_arg == NULL ? "" : "&ip=", tr_ip_arg == NULL ? "" : tr_ip_arg,
+        net_port, tp->net->uploaded, tp->net->downloaded,
         (long long)tp->total_length - cm_content(tp),
         event == TR_EV_EMPTY ? "" : "&event=", m_tr_events[event]);
 

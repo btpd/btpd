@@ -33,7 +33,10 @@ int net_torrent_has_peer(struct net *n, const uint8_t *id);
 
 void net_io_cb(int sd, short type, void *arg);
 
-int net_connect2(struct sockaddr *sa, socklen_t salen, int *sd);
-int net_connect(const char *ip, int port, int *sd);
+int net_connect_addr(int family, struct sockaddr *sa, socklen_t salen,
+    int *sd);
+int net_connect_name(const char *ip, int port, int *sd);
+
+int net_af_spec(void);
 
 #endif

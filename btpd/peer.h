@@ -35,7 +35,7 @@ int peer_requested(struct peer *p, uint32_t piece, uint32_t block);
 void peer_create_in(int sd);
 void peer_create_out(struct net *n, const uint8_t *id,
     const char *ip, int port);
-void peer_create_out_compact(struct net *n, const char *compact);
+void peer_create_out_compact(struct net *n, int family, const char *compact);
 void peer_kill(struct peer *p);
 
 void peer_on_no_reqs(struct peer *p);

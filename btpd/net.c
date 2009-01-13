@@ -9,7 +9,12 @@ static unsigned long m_bw_bytes_out;
 static unsigned long m_rate_up;
 static unsigned long m_rate_dwn;
 
-static struct fdev m_net_incoming;
+struct net_listener {
+    int sd;
+    struct fdev ev;
+};
+
+static struct net_listener *m_net_listeners;
 
 unsigned net_npeers;
 
@@ -438,9 +443,9 @@ out:
 }
 
 int
-net_connect2(struct sockaddr *sa, socklen_t salen, int *sd)
+net_connect_addr(int family, struct sockaddr *sa, socklen_t salen, int *sd)
 {
-    if ((*sd = socket(PF_INET, SOCK_STREAM, 0)) == -1)
+    if ((*sd = socket(family, SOCK_STREAM, 0)) == -1)
         return errno;
 
     set_nonblocking(*sd);
@@ -456,7 +461,7 @@ net_connect2(struct sockaddr *sa, socklen_t salen, int *sd)
 }
 
 int
-net_connect(const char *ip, int port, int *sd)
+net_connect_name(const char *ip, int port, int *sd)
 {
     struct addrinfo hints, *res;
     char portstr[6];
@@ -466,13 +471,14 @@ net_connect(const char *ip, int port, int *sd)
     if (snprintf(portstr, sizeof(portstr), "%d", port) >= sizeof(portstr))
         return EINVAL;
     bzero(&hints, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = net_af_spec();
     hints.ai_flags = AI_NUMERICHOST;
     hints.ai_socktype = SOCK_STREAM;
     if (getaddrinfo(ip, portstr, &hints, &res) != 0)
         return errno;
 
-    int error = net_connect2(res->ai_addr, res->ai_addrlen, sd);
+    int error =
+        net_connect_addr(res->ai_family, res->ai_addr, res->ai_addrlen, sd);
     freeaddrinfo(res);
     return error;
 }
@@ -487,7 +493,7 @@ net_connection_cb(int sd, short type, void *arg)
         if (errno == EWOULDBLOCK || errno == ECONNABORTED)
             return;
         else
-            btpd_err("accept4: %s\n", strerror(errno));
+            btpd_err("accept: %s\n", strerror(errno));
     }
 
     if (set_nonblocking(nsd) != 0) {
@@ -651,6 +657,17 @@ net_io_cb(int sd, short type, void *arg)
     }
 }
 
+int
+net_af_spec(void)
+{
+    if (net_ipv4 && net_ipv6)
+        return AF_UNSPEC;
+    else if (net_ipv4)
+        return AF_INET;
+    else
+        return AF_INET6;
+}
+
 void
 net_init(void)
 {
@@ -661,20 +678,44 @@ net_init(void)
     if (net_max_peers == 0 || net_max_peers > safe_fds)
         net_max_peers = safe_fds;
 
-    int sd;
-    int flag = 1;
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(net_port);
-
-    if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-        btpd_err("socket: %s\n", strerror(errno));
-    setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
-    if (bind(sd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
-        btpd_err("bind: %s\n", strerror(errno));
-    listen(sd, 10);
-    set_nonblocking(sd);
-
-    btpd_ev_new(&m_net_incoming, sd, EV_READ, net_connection_cb, NULL);
+    int count = 0, flag = 1, found_ipv4 = 0, found_ipv6 = 0, sd;
+    char portstr[6];
+    struct addrinfo hints, *res, *ai;
+    bzero(&hints, sizeof(hints));
+    hints.ai_flags = AI_ADDRCONFIG | AI_PASSIVE | AI_NUMERICSERV;
+    hints.ai_family = net_af_spec();
+    hints.ai_socktype = SOCK_STREAM;
+    snprintf(portstr, sizeof(portstr), "%hd", net_port);
+    if ((errno = getaddrinfo(NULL, portstr, &hints, &res)) != 0)
+        btpd_err("getaddrinfo failed (%s).\n", gai_strerror(errno));
+    for (ai = res; ai != NULL; ai = ai->ai_next) {
+        count++;
+        if (ai->ai_family == AF_INET)
+            found_ipv4 = 1;
+        else
+            found_ipv6 = 1;
+    }
+    net_ipv4 = found_ipv4;
+    net_ipv6 = found_ipv6;
+    if (!net_ipv4 && !net_ipv6)
+        btpd_err("no usable address found. wrong use of -4/-6 perhaps.\n");
+    m_net_listeners = btpd_calloc(count, sizeof(*m_net_listeners));
+    for (ai = res; ai != NULL; ai = ai->ai_next) {
+        count--;
+        if ((sd = socket(ai->ai_family, ai->ai_socktype, 0)) == -1)
+            btpd_err("failed to create socket (%s).\n", strerror(errno));
+        setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
+#ifdef IPV6_V6ONLY
+        if (ai->ai_family == AF_INET6)
+            setsockopt(sd, IPPROTO_IPV6, IPV6_V6ONLY, &flag, sizeof(flag));
+#endif
+        if (bind(sd, ai->ai_addr, ai->ai_addrlen) == -1)
+            btpd_err("bind failed (%s).\n", strerror(errno));
+        listen(sd, 10);
+        set_nonblocking(sd);
+        m_net_listeners[count].sd = sd;
+        btpd_ev_new(&m_net_listeners[count].ev, sd, EV_READ,
+            net_connection_cb, NULL);
+    }
+    freeaddrinfo(res);
 }

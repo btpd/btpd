@@ -295,7 +295,7 @@ peer_create_out(struct net *n, const uint8_t *id,
     int sd;
     struct peer *p;
 
-    if (net_connect(ip, port, &sd) != 0)
+    if (net_connect_name(ip, port, &sd) != 0)
         return;
 
     p = peer_create_common(sd);
@@ -304,17 +304,36 @@ peer_create_out(struct net *n, const uint8_t *id,
 }
 
 void
-peer_create_out_compact(struct net *n, const char *compact)
+peer_create_out_compact(struct net *n, int family, const char *compact)
 {
     int sd;
     struct peer *p;
-    struct sockaddr_in addr;
-
-    addr.sin_family = AF_INET;
-    bcopy(compact, &addr.sin_addr.s_addr, 4);
-    bcopy(compact + 4, &addr.sin_port, 2);
-
-    if (net_connect2((struct sockaddr *)&addr, sizeof(addr), &sd) != 0)
+    struct sockaddr_storage addr;
+    struct sockaddr_in *a4;
+    struct sockaddr_in6 *a6;
+    
+    switch (family) {
+    case AF_INET:
+        if (!net_ipv4)
+            return;
+        a4 = (struct sockaddr_in *)&addr;
+        a4->sin_family = AF_INET;
+        bcopy(compact, &a4->sin_addr.s_addr, 4);
+        bcopy(compact + 4, &a4->sin_port, 2);
+        break;
+    case AF_INET6:
+        if (!net_ipv6)
+            return;
+        a6 = (struct sockaddr_in6 *)&addr;
+        a6->sin6_family = AF_INET6;
+        bcopy(compact, &a6->sin6_addr, 16);
+        bcopy(compact + 16, &a6->sin6_port, 2);
+        break;
+    default:
+        abort();
+    }
+    if (net_connect_addr(family, (struct sockaddr *)&addr,
+            sizeof(addr), &sd) != 0)
         return;
 
     p = peer_create_common(sd);

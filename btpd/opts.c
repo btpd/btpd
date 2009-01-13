@@ -14,4 +14,6 @@ int net_port = 6881;
 off_t cm_alloc_size = 2048 * 1024;
 int ipcprot = 0600;
 int empty_start = 0;
-uint32_t tr_ip_arg = INADDR_ANY;
+const char *tr_ip_arg;
+int net_ipv4 = 1;
+int net_ipv6 = 1;

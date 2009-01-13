@@ -98,7 +98,7 @@ btpd_name_connect(const char *name, short port, void (*cb)(void *, int, int),
     nc->sd = -1;
     bzero(&hints, sizeof(hints));
     hints.ai_flags = AI_ADDRCONFIG;
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = net_af_spec();
     hints.ai_socktype = SOCK_STREAM;
     nc->ai_handle = btpd_addrinfo(name, port, &hints, nc_ai_cb, nc);
     return nc;

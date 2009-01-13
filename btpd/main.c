@@ -103,6 +103,12 @@ usage(void)
         "Usage: btpd [-d dir] [-p port] [more options...]\n"
         "\n"
         "Options:\n"
+        "-4\n"
+        "\tToggle use of IPv4. It's enabled by default.\n"
+        "\n"
+        "-6\n"
+        "\tToggle use of IPv6. It's enabled by default.\n"
+        "\n"
         "--bw-in n\n"
         "\tLimit incoming BitTorrent traffic to n kB/s.\n"
         "\tDefault is 0 which means unlimited.\n"
@@ -121,9 +127,8 @@ usage(void)
         "\tShow this text.\n"
         "\n"
         "--ip addr\n"
-        "\tMake other peers use the given address, instead of the one\n"
-        "\tthe tracker perceives as this peer's address, when contacting\n"
-        "\tthis peer.\n"
+        "\tLet the tracker distribute the given address instead of the one\n"
+        "\tit sees btpd connect from.\n"
         "\n"
         "--ipcprot mode\n"
         "\tSet the protection mode of the command socket.\n"
@@ -183,9 +188,15 @@ main(int argc, char **argv)
     int daemonize = 1;
 
     for (;;) {
-        switch (getopt_long(argc, argv, "d:p:", longopts, NULL)) {
+        switch (getopt_long(argc, argv, "46d:p:", longopts, NULL)) {
         case -1:
             goto args_done;
+        case '6':
+            net_ipv6 ^= 1;
+            break;
+        case '4':
+            net_ipv4 ^= 1;
+            break;
         case 'd':
             dir = optarg;
             break;
@@ -222,16 +233,7 @@ main(int argc, char **argv)
                 empty_start = 1;
                 break;
             case 10:
-                switch (inet_pton(AF_INET, optarg, &tr_ip_arg)) {
-                case 1:
-                    break;
-                case 0:
-                    btpd_err("You must specify a dotted IPv4 address.\n");
-                    break;
-                default:
-                    btpd_err("inet_ntop for '%s' failed (%s).\n", optarg,
-                        strerror(errno));
-                }
+                tr_ip_arg = optarg;
                 break;
             default:
                 usage();
@@ -245,6 +247,9 @@ main(int argc, char **argv)
 args_done:
     argc -= optind;
     argv += optind;
+
+    if (!net_ipv4 && !net_ipv6)
+        btpd_err("You need to enable at least one ip version.\n");
 
     if (argc > 0)
         usage();
