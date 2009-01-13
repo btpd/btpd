@@ -9,6 +9,23 @@ AC_PROG_CC_C_O
 AC_PROG_RANLIB
 AC_USE_SYSTEM_EXTENSIONS
 
+AC_DEFUN([PROG_SILENT_IFELSE],
+ac_output=`$1 2>&1`
+if test x"$ac_output" != x; then
+[$3]
+else
+[$2]
+fi)
+AC_DEFUN([CC_ARGS_OK_IFELSE],
+AC_LANG_PUSH(C)
+AC_LANG_CONFTEST([int foo(void) { return 12; }])
+AC_LANG_POP(C)
+PROG_SILENT_IFELSE([$CC $1 -c conftest.c],
+rm -f conftest.c conftest.$OBJEXT
+[$2],
+rm -f conftest.c conftest.$OBJEXT
+[$3]))
+
 AC_ARG_WITH(openssl,
 [  --with-openssl=dir      use openssl installed in dir],
 [
@@ -33,14 +50,11 @@ LIBS=$old_LIBS
 AC_CHECK_FUNCS(asprintf)
 
 AC_MSG_CHECKING(whether compiler accepts -Wno-pointer-sign)
-old_CFLAGS=$CFLAGS
-CFLAGS="-Wno-pointer-sign"
-AC_COMPILE_IFELSE(int main(void) { return 0; },
+CC_ARGS_OK_IFELSE(-Wno-pointer-sign,
     AC_SUBST(WARNNPS,"-Wno-pointer-sign")
     AC_MSG_RESULT(yes)
 ,
     AC_MSG_RESULT(no))
-CFLAGS=$old_CFLAGS
 
 old_LDFLAGS="$LDFLAGS"
 LDFLAGS="$LDFLAGS $openssl_LDFLAGS"
@@ -74,7 +88,7 @@ for m in $evloop_methods; do
         ;;
     esac
 done
-if test x$EVLOOP_METHOD == x; then
+if test x"$EVLOOP_METHOD" == x; then
     AC_MSG_FAILURE(no suitable evloop method found)
     exit 1
 else
@@ -83,7 +97,7 @@ fi
 
 for i in 0 1 2 3 4 5 6; do
     case $i in
-    0) if test x$TD_CFLAGS$TD_LIBS == x; then continue; fi;;
+    0) if test x"$TD_CFLAGS$TD_LIBS" == x; then continue; fi;;
     1) TD_CFLAGS=-pthread;;
     2) TD_CFLAGS=-pthreads;;
     3) TD_CFLAGS=-kthread;;
@@ -91,20 +105,14 @@ for i in 0 1 2 3 4 5 6; do
     5) TD_LIBS=-lpthread;;
     6) AC_MSG_FAILURE(how do you build with pthreads on this system?);;
     esac
-    old_CFLAGS=$CFLAGS; CFLAGS="$TD_CFLAGS $CFLAGS"
-    old_LIBS=$LIBS; LIBS="$TD_LIBS $LIBS"
     AC_MSG_CHECKING(whether pthreads compiles with flags \"$TD_CFLAGS $TD_LIBS\")
-    AC_LANG_CONFTEST([int foo(void) { return 12; }])
-    $CC $CFLAGS $CPPFLAGS -c conftest.c >conftest.stdout 2>conftest.stderr
-    if test -s conftest.stdout -o -s conftest.stderr; then
+    CC_ARGS_OK_IFELSE($TD_CFLAGS $CFLAGS $TD_LIBS $LIBS,,
         AC_MSG_RESULT(no)
         TD_CFLAGS=""; TD_LIBS=""
-        CFLAGS=$old_CFLAGS; LIBS=$old_LIBS
-        rm -f conftest.c conftest.o conftest.stdout conftest.stderr
-        continue
-    fi
-    rm -f conftest.c conftest.o conftest.stdout conftest.stderr
+        continue)
 
+    old_CFLAGS=$CFLAGS; old_LIBS=$LIBS
+    CFLAGS="$TD_CFLAGS $CFLAGS"; LIBS="$TD_LIBS $LIBS"
     AC_LINK_IFELSE([
         #include <pthread.h>
         int main(void) { return pthread_create(0,0,0,0);}
