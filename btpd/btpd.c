@@ -126,9 +126,4 @@ btpd_init(void)
     timer_init(&m_grace_timer, grace_cb, NULL);
     timer_init(&m_heartbeat, heartbeat_cb, NULL);
     btpd_timer_add(&m_heartbeat, (& (struct timespec) { 1, 0 }));
-
-    if (!empty_start)
-        active_start();
-    else
-        active_clear();
 }

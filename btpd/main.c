@@ -269,6 +269,12 @@ args_done:
     setlinebuf(stderr);
 
     btpd_daemon_phase = 0;
+
+    if (!empty_start)
+        active_start();
+    else
+        active_clear();
+
     evloop();
 
     btpd_err("Exit from evloop with error (%s).\n", strerror(errno));
