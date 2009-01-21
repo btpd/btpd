@@ -148,8 +148,7 @@ write_ans(struct iobuf *iob, struct tlib *tl, enum ipc_tval val)
             (tl->tp == NULL ? 0 : tl->tp->net->uploaded));
         return;
     case IPC_TVAL_TRERR:
-        iobuf_print(iob, "i%dei%ue", IPC_TYPE_NUM,
-            tl->tp == NULL ? 0 : tr_errors(tl->tp));
+        iobuf_print(iob, "i%dei%ue", IPC_TYPE_NUM, 0);
         return;
     case IPC_TVALCOUNT:
         break;

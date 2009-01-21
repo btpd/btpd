@@ -7,23 +7,26 @@
 
 static const char *m_tr_events[] = { "started", "stopped", "completed", "" };
 
-struct http_tr_req {
+struct httptr_req {
     struct torrent *tp;
+    struct tr_tier *tr;
     struct http_req *req;
     struct iobuf buf;
     struct fdev ioev;
+    struct timeout timer;
     nameconn_t nc;
     int sd;
     enum tr_event event;
 };
 
 static void
-http_tr_free(struct http_tr_req *treq)
+httptr_free(struct httptr_req *treq)
 {
     if (treq->sd != -1) {
         btpd_ev_del(&treq->ioev);
         close(treq->sd);
     }
+    btpd_timer_del(&treq->timer);
     iobuf_free(&treq->buf);
     free(treq);
 }
@@ -55,9 +58,9 @@ maybe_connect_to(struct torrent *tp, const char *pinfo)
         free(ip);
 }
 
-static int
-parse_reply(struct torrent *tp, const char *content, size_t size, int parse,
-    int *interval)
+static void
+parse_reply(struct torrent *tp, struct tr_response *res, const char *content,
+    size_t size)
 {
     const char *buf;
     size_t len;
@@ -67,25 +70,20 @@ parse_reply(struct torrent *tp, const char *content, size_t size, int parse,
     if (benc_validate(content, size) != 0)
         goto bad_data;
 
-    if ((buf = benc_dget_mem(content, "failure reason", &len)) != NULL) {
-        btpd_log(BTPD_L_ERROR, "Tracker failure: '%.*s' for '%s'.\n",
-            (int)len, buf, torrent_name(tp));
-        return 1;
+    if ((buf = benc_dget_any(content, "failure reason")) != NULL) {
+        if (!benc_isstr(buf))
+            goto bad_data;
+        res->type = TR_RES_FAIL;
+        res->mi_failure = buf;
+        return;
     }
 
-    if (!parse) {
-        *interval = -1;
-        return 0;
-    }
+    buf = benc_dget_any(content, "interval");
+    if (buf != NULL && benc_isint(buf))
+        res->interval = benc_int(buf, NULL);
 
-    if (!benc_dct_chk(content, 2, BE_INT, 1, "interval", BE_ANY, 1, "peers"))
-        goto bad_data;
-
-    *interval = benc_dget_int(content, "interval");
-    if (*interval < 1)
-        goto bad_data;
-
-    peers = benc_dget_any(content, "peers");
+    if ((peers = benc_dget_any(content, "peers")) == NULL)
+        goto after_peers;
 
     if (benc_islst(peers)) {
         for (peers = benc_first(peers);
@@ -101,8 +99,9 @@ parse_reply(struct torrent *tp, const char *content, size_t size, int parse,
     } else
         goto bad_data;
 
+after_peers:
     if (!net_ipv6)
-        return 0;
+        goto after_peers6;
     for (int k = 0; k < 2; k++) {
         peers = benc_dget_any(content, v6key[k]);
         if (peers != NULL && benc_isstr(peers)) {
@@ -111,42 +110,44 @@ parse_reply(struct torrent *tp, const char *content, size_t size, int parse,
                 peer_create_out_compact(tp->net, AF_INET6, peers + i);
         }
     }
-    return 0;
+after_peers6:
+    res->type = TR_RES_OK;
+    return;
 
 bad_data:
-    btpd_log(BTPD_L_ERROR, "Bad data from tracker for '%s'.\n",
-        torrent_name(tp));
-    return 1;
+    res->type = TR_RES_BAD;
 }
 
 static void
 http_cb(struct http_req *req, struct http_response *res, void *arg)
 {
-    int interval;
-    struct http_tr_req *treq = arg;
+    struct httptr_req *treq = arg;
+    struct tr_response tres = {0, NULL, -1 };
     switch (res->type) {
     case HTTP_T_ERR:
-        btpd_log(BTPD_L_ERROR, "http request failed for '%s'.\n",
-            torrent_name(treq->tp));
-        tr_result(treq->tp, TR_RES_FAIL, -1);
-        http_tr_free(treq);
+        tres.type = TR_RES_BAD;
+        tr_result(treq->tr, &tres);
+        httptr_free(treq);
         break;
     case HTTP_T_DATA:
         if (treq->buf.off + res->v.data.l > MAX_DOWNLOAD) {
-            tr_result(treq->tp, TR_RES_FAIL, -1);
-            http_tr_cancel(treq);
+            tres.type = TR_RES_BAD;
+            tr_result(treq->tr, &tres);
+            httptr_cancel(treq);
             break;
         }
         if (!iobuf_write(&treq->buf, res->v.data.p, res->v.data.l))
             btpd_err("Out of memory.\n");
         break;
     case HTTP_T_DONE:
-        if (parse_reply(treq->tp, treq->buf.buf, treq->buf.off,
-                treq->event != TR_EV_STOPPED, &interval) == 0)
-            tr_result(treq->tp, TR_RES_OK, interval);
-        else
-            tr_result(treq->tp, TR_RES_FAIL, -1);
-        http_tr_free(treq);
+        if (treq->event == TR_EV_STOPPED) {
+            tres.type = TR_RES_OK;
+            tr_result(treq->tr, &tres);
+        } else {
+            parse_reply(treq->tp, &tres, treq->buf.buf, treq->buf.off);
+            tr_result(treq->tr, &tres);
+        }
+        httptr_free(treq);
         break;
     default:
         break;
@@ -154,9 +155,10 @@ http_cb(struct http_req *req, struct http_response *res, void *arg)
 }
 
 static void
-sd_io_cb(int sd, short type, void *arg)
+httptr_io_cb(int sd, short type, void *arg)
 {
-    struct http_tr_req *treq = arg;
+    struct tr_response res;
+    struct httptr_req *treq = arg;
     switch (type) {
     case EV_READ:
         if (http_read(treq->req, sd) && !http_want_read(treq->req))
@@ -166,30 +168,39 @@ sd_io_cb(int sd, short type, void *arg)
         if (http_write(treq->req, sd) && !http_want_write(treq->req))
             btpd_ev_disable(&treq->ioev, EV_WRITE);
         break;
+    case EV_TIMEOUT:
+        res.type = TR_RES_CONN;
+        tr_result(treq->tr, &res);
+        httptr_cancel(treq);
+        break;
     default:
         abort();
     }
 }
 
 static void
-nc_cb(void *arg, int error, int sd)
+httptr_nc_cb(void *arg, int error, int sd)
 {
-    struct http_tr_req *treq = arg;
+    struct tr_response res;
+    struct httptr_req *treq = arg;
     if (error) {
-        tr_result(treq->tp, TR_RES_FAIL, -1);
+        res.type = TR_RES_CONN;
+        tr_result(treq->tr, &res);
         http_cancel(treq->req);
-        http_tr_free(treq);
+        httptr_free(treq);
     } else {
         treq->sd = sd;
         uint16_t flags =
             (http_want_read(treq->req) ? EV_READ : 0) |
             (http_want_write(treq->req) ? EV_WRITE : 0);
-        btpd_ev_new(&treq->ioev, sd, flags, sd_io_cb, treq);
+        btpd_ev_new(&treq->ioev, sd, flags, httptr_io_cb, treq);
+        btpd_timer_add(&treq->timer, (& (struct timespec) { 30, 0 }));
     }
 }
 
-struct http_tr_req *
-http_tr_req(struct torrent *tp, enum tr_event event, const char *aurl)
+struct httptr_req *
+httptr_req(struct torrent *tp, struct tr_tier *tr, const char *aurl,
+    enum tr_event event)
 {
     char e_hash[61], e_id[61], url[512], qc;
     const uint8_t *peer_id = btpd_get_peer_id();
@@ -211,28 +222,33 @@ http_tr_req(struct torrent *tp, enum tr_event event, const char *aurl)
         (long long)tp->total_length - cm_content(tp),
         event == TR_EV_EMPTY ? "" : "&event=", m_tr_events[event]);
 
-    struct http_tr_req *treq = btpd_calloc(1, sizeof(*treq));
+    struct httptr_req *treq = btpd_calloc(1, sizeof(*treq));
     if (!http_get(&treq->req, url, "User-Agent: " BTPD_VERSION "\r\n",
             http_cb, treq)) {
         free(treq);
         return NULL;
     }
+    treq->tp = tp;
+    treq->tr = tr;
+    treq->event = event;
     treq->buf = iobuf_init(4096);
     if (treq->buf.error)
         btpd_err("Out of memory.\n");
-    treq->tp = tp;
-    treq->event = event;
+    treq->tr = tr;
     treq->sd = -1;
     http_url = http_url_get(treq->req);
-    treq->nc = btpd_name_connect(http_url->host, http_url->port, nc_cb, treq);
+    treq->nc = btpd_name_connect(http_url->host, http_url->port,
+        httptr_nc_cb, treq);
+    timer_init(&treq->timer, httptr_io_cb, treq);
+    btpd_timer_add(&treq->timer, (& (struct timespec) { 60, 0 }));
     return treq;
 }
 
 void
-http_tr_cancel(struct http_tr_req *treq)
+httptr_cancel(struct httptr_req *treq)
 {
     if (treq->sd == -1)
         btpd_name_connect_cancel(treq->nc);
     http_cancel(treq->req);
-    http_tr_free(treq);
+    httptr_free(treq);
 }

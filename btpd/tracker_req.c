@@ -1,251 +1,309 @@
 #include "btpd.h"
+#include "http_client.h"
 
 #define REQ_DELAY 1
-#define STOP_ERRORS 5
-#define REQ_TIMEOUT (& (struct timespec) { 120, 0 })
-#define RETRY_WAIT (& (struct timespec) { rand_between(35, 70), 0 })
+#define DEFAULT_INTERVAL rand_between(25 * 60, 30 * 60)
+#define RETRY1_TIMEOUT (& (struct timespec) {240 + rand_between(0, 120), 0})
+#define RETRY2_TIMEOUT (& (struct timespec) {900 + rand_between(0, 300), 0})
 
 long tr_key;
 
 static long m_tlast_req, m_tnext_req;
 
-enum timer_type {
-    TIMER_NONE,
-    TIMER_TIMEOUT,
-    TIMER_INTERVAL,
-    TIMER_RETRY
+struct tr_entry {
+    BTPDQ_ENTRY(tr_entry) entry;
+    char *url;
+    enum tr_type type;
 };
 
-struct tracker {
-    enum timer_type ttype;
-    enum tr_event event;
-    int interval;
-    unsigned nerrors;
-    int tier, url;
-    struct mi_announce *ann;
-    void *req;
+BTPDQ_HEAD(tr_entry_tq, tr_entry);
+
+struct tr_tier {
+    struct torrent *tp;
+    struct tr_entry *cur;
+    struct tr_entry_tq trackers;
     struct timeout timer;
+    BTPDQ_ENTRY(tr_tier) entry;
+    void *req;
+    char *failure;
+    int interval;
+    int bad_conns;
+    int active;
+    int has_responded;
+    enum tr_event event;
 };
 
-typedef struct _dummy *(*request_fun_t)(struct torrent *, enum tr_event,
-    const char *);
-typedef void (*cancel_fun_t)(struct _dummy *);
+BTPDQ_HEAD(tr_tier_tq, tr_tier);
 
-struct tr_op {
-    int len;
-    const char *scheme;
-    request_fun_t request;
-    cancel_fun_t cancel;
+struct trackers {
+    struct tr_tier_tq trackers;
 };
 
-static struct tr_op m_http_op = {
-    7, "http://", (request_fun_t)http_tr_req, (cancel_fun_t)http_tr_cancel
-};
-
-static struct tr_op *m_tr_ops[] = {
-    &m_http_op, NULL
-};
-
-static char *
-get_url(struct tracker *tr)
+static void *
+req_send(struct tr_tier *t)
 {
-    return tr->ann->tiers[tr->tier].urls[tr->url];
-}
-
-static void
-good_url(struct tracker *tr)
-{
-    char *set = tr->ann->tiers[tr->tier].urls[tr->url], *hold;
-    for (int i = 0; i <= tr->url; i++) {
-        hold = tr->ann->tiers[tr->tier].urls[i];
-        tr->ann->tiers[tr->tier].urls[i] = set;
-        set = hold;
-    }
-    tr->tier = 0;
-    tr->url = 0;
-}
-
-static void
-next_url(struct tracker *tr)
-{
-    tr->url = (tr->url + 1) % tr->ann->tiers[tr->tier].nurls;
-    if (tr->url == 0)
-        tr->tier = (tr->tier + 1) % tr->ann->ntiers;
-}
-
-struct tr_op *
-get_op(struct tracker *tr)
-{
-    struct tr_op **opp;
-    char *url = get_url(tr);
-    for (opp = m_tr_ops; *opp != NULL; opp++)
-        if (strncasecmp((*opp)->scheme, url, (*opp)->len) == 0)
-            return *opp;
-    return NULL;
-}
-
-static void
-tr_cancel(struct tracker *tr)
-{
-    struct tr_op *op = get_op(tr);
-    assert(op != NULL);
-    op->cancel(tr->req);
-    tr->req = NULL;
-}
-
-static void
-tr_set_stopped(struct torrent *tp)
-{
-    struct tracker *tr = tp->tr;
-    btpd_timer_del(&tr->timer);
-    tr->ttype = TIMER_NONE;
-    if (tr->req != NULL)
-        tr_cancel(tr);
-}
-
-static void
-tr_send(struct torrent *tp, enum tr_event event)
-{
-    struct tracker *tr = tp->tr;
-    struct tr_op *op = get_op(tr);
-
-    tr->event = event;
-    if (tr->req != NULL)
-        tr_cancel(tr);
-
-    if (m_tlast_req > btpd_seconds - REQ_DELAY) {
-        m_tnext_req = max(m_tnext_req, m_tlast_req) + REQ_DELAY;
-        tr->ttype = TIMER_RETRY;
-        btpd_timer_add(&tr->timer,
-            (& (struct timespec) { m_tnext_req - btpd_seconds, 0 }));
-        return;
-    }
-
-    if ((op == NULL ||
-            (tr->req = op->request(tp, event, get_url(tr))) == NULL)) {
-        tr->nerrors++;
-        if (tr->event == TR_EV_STOPPED && tr->nerrors >= STOP_ERRORS) {
-            tr_set_stopped(tp);
-            return;
-        }
-        next_url(tr);
-        tr->ttype = TIMER_RETRY;
-        btpd_timer_add(&tr->timer, (& (struct timespec) { 5, 0 }));
-    } else {
-        m_tlast_req = btpd_seconds;
-        tr->ttype = TIMER_TIMEOUT;
-        btpd_timer_add(&tr->timer, REQ_TIMEOUT);
-    }
-}
-
-void
-tr_result(struct torrent *tp, enum tr_res res, int interval)
-{
-    struct tracker *tr = tp->tr;
-    tr->req = NULL;
-    if (tr->event == TR_EV_STOPPED &&
-            (res == TR_RES_OK || tr->nerrors >= STOP_ERRORS - 1))
-        tr_set_stopped(tp);
-    else if (res == TR_RES_OK) {
-        good_url(tr);
-        tr->interval = interval;
-        tr->nerrors = 0;
-        tr->ttype = TIMER_INTERVAL;
-        btpd_timer_add(&tr->timer, (& (struct timespec) { tr->interval, 0}));
-    } else {
-        tr->nerrors++;
-        tr->ttype = TIMER_RETRY;
-        btpd_timer_add(&tr->timer, RETRY_WAIT);
-        next_url(tr);
-    }
-}
-
-static void
-timer_cb(int fd, short type, void *arg)
-{
-    struct torrent *tp = arg;
-    struct tracker *tr = tp->tr;
-    switch (tr->ttype) {
-    case TIMER_TIMEOUT:
-        btpd_log(BTPD_L_ERROR, "Tracker request timed out for '%s'.\n",
-            torrent_name(tp));
-        tr->nerrors++;
-        if (tr->event == TR_EV_STOPPED && tr->nerrors >= STOP_ERRORS) {
-            tr_set_stopped(tp);
-            break;
-        }
-        tr_cancel(tr);
-        next_url(tr);
-    case TIMER_RETRY:
-        tr_send(tp, tr->event);
-        break;
-    case TIMER_INTERVAL:
-        tr_send(tp, TR_EV_EMPTY);
-        break;
+    switch (t->cur->type) {
+    case TR_HTTP:
+        return httptr_req(t->tp, t, t->cur->url, t->event);
     default:
         abort();
     }
 }
 
-int
+static void
+req_cancel(struct tr_tier *t)
+{
+    switch (t->cur->type) {
+    case TR_HTTP:
+        httptr_cancel(t->req);
+        break;
+    default:
+        abort();
+    }
+    t->req = NULL;
+}
+
+static void
+entry_send(struct tr_tier *t, struct tr_entry *e, enum tr_event event)
+{
+    if (t->req != NULL)
+        req_cancel(t);
+    t->event = event;
+    t->cur = e;
+    if (m_tlast_req > btpd_seconds - REQ_DELAY) {
+        m_tnext_req = max(m_tnext_req, m_tlast_req) + REQ_DELAY;
+        btpd_timer_add(&t->timer,
+            (& (struct timespec) { m_tnext_req - btpd_seconds, 0 }));
+        return;
+    }
+    btpd_timer_del(&t->timer);
+    if ((t->req = req_send(t)) == NULL) {
+        asprintf(&t->failure, "failed to create tracker message to '%s' (%s).",
+            e->url, strerror(errno));
+        t->active = 0;
+        return;
+    }
+    m_tlast_req = btpd_seconds;
+}
+
+static int
+tier_active(struct tr_tier *t)
+{
+    return t->active;
+}
+
+static void
+tier_timer_cb(int fd, short type, void *arg)
+{
+    struct tr_tier *t = arg;
+    assert(tier_active(t));
+    entry_send(t, BTPDQ_FIRST(&t->trackers), t->event);
+}
+
+static void
+tier_start(struct tr_tier *t)
+{
+    assert(!tier_active(t) || t->event == TR_EV_STOPPED);
+    if (t->failure != NULL) {
+        free(t->failure);
+        t->failure = NULL;
+    }
+    t->has_responded = 0;
+    t->bad_conns = 0;
+    t->active = 1;
+    entry_send(t, BTPDQ_FIRST(&t->trackers), TR_EV_STARTED);
+}
+
+static void
+tier_stop(struct tr_tier *t)
+{
+    if (!tier_active(t) || t->event == TR_EV_STOPPED)
+        return;
+
+    if (!t->has_responded && t->bad_conns > 1) {
+        btpd_timer_del(&t->timer);
+        if (t->req != NULL)
+            req_cancel(t);
+        t->active = 0;
+    } else
+        entry_send(t, BTPDQ_FIRST(&t->trackers), TR_EV_STOPPED);
+}
+
+static void
+tier_complete(struct tr_tier *t)
+{
+    if (tier_active(t) && t->event == TR_EV_EMPTY)
+        entry_send(t, BTPDQ_FIRST(&t->trackers), TR_EV_COMPLETED);
+}
+
+static void
+add_tracker(struct tr_tier *t, const char *url)
+{
+    struct tr_entry *e;
+    struct http_url *hu;
+    if ((hu = http_url_parse(url)) != NULL) {
+        http_url_free(hu);
+        e = btpd_calloc(1, sizeof(*e));
+        if ((e->url = strdup(url)) == NULL)
+            btpd_err("Out of memory.\n");
+        e->type = TR_HTTP;
+    } else
+        return;
+    BTPDQ_INSERT_TAIL(&t->trackers, e, entry);
+}
+
+static struct tr_tier *
+tier_create(struct torrent *tp, struct mi_tier *tier)
+{
+    struct tr_tier *t = btpd_calloc(1, sizeof(*t));
+    BTPDQ_INIT(&t->trackers);
+    for (int i = 0; i < tier->nurls; i++)
+        add_tracker(t, tier->urls[i]);
+    if (!BTPDQ_EMPTY(&t->trackers)) {
+        t->tp = tp;
+        t->interval = -1;
+        t->event = TR_EV_STOPPED;
+        timer_init(&t->timer, tier_timer_cb, t);
+        return t;
+    } else {
+        free(t);
+        return NULL;
+    }
+}
+
+static void
+tier_kill(struct tr_tier *t)
+{
+    struct tr_entry *e, *next;
+    if (t->failure != NULL)
+        free(t->failure);
+    btpd_timer_del(&t->timer);
+    if (t->req != NULL)
+        req_cancel(t);
+    BTPDQ_FOREACH_MUTABLE(e, &t->trackers, entry , next) {
+        free(e->url);
+        free(e);
+    }
+    free(t);
+}
+
+void
 tr_create(struct torrent *tp, const char *mi)
 {
+    int i;
+    struct tr_tier *t;
+    struct mi_announce *ann;
     tp->tr = btpd_calloc(1, sizeof(*tp->tr));
-    if ((tp->tr->ann = mi_announce(mi)) == NULL)
+    BTPDQ_INIT(&tp->tr->trackers);
+    if ((ann = mi_announce(mi)) == NULL)
         btpd_err("Out of memory.\n");
-    timer_init(&tp->tr->timer, timer_cb, tp);
-    return 0;
+    for (i = 0; i < ann->ntiers; i++)
+        if ((t = tier_create(tp, &ann->tiers[i])) != NULL)
+            BTPDQ_INSERT_TAIL(&tp->tr->trackers, t, entry);
+    mi_free_announce(ann);
 }
 
 void
 tr_kill(struct torrent *tp)
 {
-    struct tracker *tr = tp->tr;
+    struct tr_tier *t, *next;
+    BTPDQ_FOREACH_MUTABLE(t, &tp->tr->trackers, entry, next)
+        tier_kill(t);
+    free(tp->tr);
     tp->tr = NULL;
-    btpd_timer_del(&tr->timer);
-    if (tr->req != NULL)
-        tr_cancel(tr);
-    mi_free_announce(tr->ann);
-    free(tr);
 }
 
 void
 tr_start(struct torrent *tp)
 {
-    tr_send(tp, TR_EV_STARTED);
-}
-
-void
-tr_refresh(struct torrent *tp)
-{
-    tr_send(tp, TR_EV_EMPTY);
-}
-
-void
-tr_complete(struct torrent *tp)
-{
-    tr_send(tp, TR_EV_COMPLETED);
+    struct tr_tier *t;
+    BTPDQ_FOREACH(t, &tp->tr->trackers, entry)
+        tier_start(t);
 }
 
 void
 tr_stop(struct torrent *tp)
 {
-    if (tp->tr->event == TR_EV_STOPPED)
-        tr_set_stopped(tp);
-    else
-        tr_send(tp, TR_EV_STOPPED);
+    struct tr_tier *t;
+    BTPDQ_FOREACH(t, &tp->tr->trackers, entry)
+        tier_stop(t);
+}
+
+void
+tr_complete(struct torrent *tp)
+{
+    struct tr_tier *t;
+    BTPDQ_FOREACH(t, &tp->tr->trackers, entry)
+        tier_complete(t);
 }
 
 int
 tr_active(struct torrent *tp)
 {
-    return tp->tr->ttype != TIMER_NONE;
+    struct tr_tier *t;
+    BTPDQ_FOREACH(t, &tp->tr->trackers, entry)
+        if (tier_active(t))
+            return 1;
+    return 0;
 }
 
-unsigned
-tr_errors(struct torrent *tp)
+int
+tr_good_count(struct torrent *tp)
 {
-    return tp->tr->nerrors;
+    int count = 0;
+    struct tr_tier *t;
+    BTPDQ_FOREACH(t, &tp->tr->trackers, entry)
+        if (tier_active(t) && t->bad_conns == 0)
+            count++;
+    return count;
+}
+
+void
+tr_result(struct tr_tier *t, struct tr_response *res)
+{
+    struct tr_entry *e;
+    t->req = NULL;
+    switch (res->type) {
+    case TR_RES_FAIL:
+        t->active = 0;
+        t->failure = benc_str(res->mi_failure, NULL, NULL);
+        btpd_log(BTPD_L_ERROR, "tracker at '%s' failed (%s).\n",
+            t->cur->url, t->failure);
+        break;
+    case TR_RES_CONN:
+        if ((e = BTPDQ_NEXT(t->cur, entry)) != NULL) {
+            entry_send(t, e, t->event);
+            break;
+        }
+        t->bad_conns++;
+        if (t->event == TR_EV_STOPPED && t->bad_conns > 1)
+            t->active = 0;
+        else if (t->bad_conns == 1)
+            entry_send(t, BTPDQ_FIRST(&t->trackers), t->event);
+        else if (t->bad_conns == 2)
+            btpd_timer_add(&t->timer, RETRY1_TIMEOUT);
+        else
+            btpd_timer_add(&t->timer, RETRY2_TIMEOUT);
+        break;
+    case TR_RES_BAD:
+    case TR_RES_OK:
+        if (t->event == TR_EV_STOPPED)
+            t->active = 0;
+        else {
+            t->event = TR_EV_EMPTY;
+            if (res->interval > 0)
+                t->interval = res->interval;
+            btpd_timer_add(&t->timer, (& (struct timespec) {
+                t->interval > 0 ? t->interval : DEFAULT_INTERVAL, 0 }));
+        }
+        t->bad_conns = 0;
+        t->has_responded = 1;
+        BTPDQ_REMOVE(&t->trackers, t->cur, entry);
+        BTPDQ_INSERT_HEAD(&t->trackers, t->cur, entry);
+        break;
+    default:
+        abort();
+    }
 }
 
 void

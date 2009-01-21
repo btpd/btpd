@@ -96,25 +96,19 @@ torrent_start(struct tlib *tl)
         benc_dget_mem(benc_dget_dct(mi, "info"), "pieces", NULL) - mi;
 
     btpd_log(BTPD_L_BTPD, "Starting torrent '%s'.\n", torrent_name(tp));
-    if (tr_create(tp, mi) == 0) {
-        tl->tp = tp;
-        net_create(tp);
-        cm_create(tp, mi);
-        BTPDQ_INSERT_TAIL(&m_torrents, tp, entry);
-        m_ntorrents++;
-        cm_start(tp, 0);
-        free(mi);
-        if (m_ntorrents == 1) {
-            m_tsave = btpd_seconds + SAVE_INTERVAL;
-            m_savetp = tp;
-        }
-        return IPC_OK;
-    } else {
-        mi_free_files(tp->nfiles, tp->files);
-        free(tp);
-        free(mi);
-        return IPC_EBADTRACKER;
+    tr_create(tp, mi);
+    tl->tp = tp;
+    net_create(tp);
+    cm_create(tp, mi);
+    BTPDQ_INSERT_TAIL(&m_torrents, tp, entry);
+    m_ntorrents++;
+    cm_start(tp, 0);
+    free(mi);
+    if (m_ntorrents == 1) {
+        m_tsave = btpd_seconds + SAVE_INTERVAL;
+        m_savetp = tp;
     }
+    return IPC_OK;
 }
 
 static void
@@ -158,8 +152,6 @@ torrent_stop(struct torrent *tp, int delete)
             tlib_update_info(tp->tl, 0);
         break;
     case T_STOPPING:
-        if (tr_active(tp))
-            tr_stop(tp);
         break;
     }
 }

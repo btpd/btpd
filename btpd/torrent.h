@@ -18,7 +18,7 @@ struct torrent {
     int delete;
 
     struct content *cm;
-    struct tracker *tr;
+    struct trackers *tr;
     struct net *net;
 
     off_t total_length;

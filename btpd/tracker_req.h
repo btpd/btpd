@@ -8,28 +8,31 @@ enum tr_event {
     TR_EV_EMPTY
 };
 
-enum tr_res {
-    TR_RES_OK,
-    TR_RES_FAIL
-};
-
 extern long tr_key;
 
-int tr_create(struct torrent *tp, const char *mi);
+enum tr_type { TR_HTTP };
+
+struct tr_response {
+    enum {
+        TR_RES_FAIL, TR_RES_CONN, TR_RES_BAD, TR_RES_OK
+    } type;
+    const char *mi_failure;
+    int interval;
+};
+
+struct tr_tier;
+
+void tr_create(struct torrent *tp, const char *mi);
 void tr_kill(struct torrent *tp);
 void tr_start(struct torrent *tp);
 void tr_stop(struct torrent *tp);
-void tr_refresh(struct torrent *tp);
 void tr_complete(struct torrent *tp);
-unsigned tr_errors(struct torrent *tp);
 int tr_active(struct torrent *tp);
+void tr_result(struct tr_tier *t, struct tr_response *res);
+int tr_good_count(struct torrent *tp);
 
-void tr_result(struct torrent *tp, enum tr_res res, int interval);
-
-struct http_tr_req;
-
-struct http_tr_req *http_tr_req(struct torrent *tp, enum tr_event event,
-    const char *aurl);
-void http_tr_cancel(struct http_tr_req *treq);
+struct httptr_req *httptr_req(struct torrent *tp, struct tr_tier *tr,
+    const char *url, enum tr_event event);
+void httptr_cancel(struct httptr_req *req);
 
 #endif
