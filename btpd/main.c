@@ -19,7 +19,7 @@ writepid(int pidfd)
 {
     int nw;
     char pidtxt[100];
-    nw = snprintf(pidtxt, sizeof(pidtxt), "%ld", (long)getpid);
+    nw = snprintf(pidtxt, sizeof(pidtxt), "%ld", (long)getpid());
     ftruncate(pidfd, 0);
     write(pidfd, pidtxt, nw);
 }
