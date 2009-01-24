@@ -95,7 +95,7 @@ torrent_spec(char *arg, struct ipc_torrent *tp)
         return 1;
     }
     if ((p = mi_load(arg, NULL)) == NULL) {
-        fprintf(stderr, "btcli: bad torrent '%s' (%s).'n", arg,
+        fprintf(stderr, "btcli: bad torrent '%s' (%s).\n", arg,
             strerror(errno));
         return 0;
     }
