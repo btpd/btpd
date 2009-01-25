@@ -8,6 +8,7 @@ struct cli {
     struct fdev read;
 };
 
+static int m_listen_sd;
 static struct fdev m_cli_incoming;
 
 static int
@@ -135,6 +136,8 @@ write_ans(struct iobuf *iob, struct tlib *tl, enum ipc_tval val)
             case T_LEECH:
                 ts = IPC_TSTATE_LEECH;
                 break;
+            case T_GHOST:
+                break;
             }
         }
         iobuf_print(iob, "i%de", ts);
@@ -185,9 +188,10 @@ cmd_tget(struct cli *cli, int argc, const char *args)
         struct tlib *tlv[tlib_count()];
         tlib_put_all(tlv);
         for (int i = 0; i < sizeof(tlv) / sizeof(tlv[0]); i++) {
-            if ((from == IPC_TWC_ALL ||
-                    (tlv[i]->tp == NULL && from == IPC_TWC_INACTIVE) ||
-                    (tlv[i]->tp != NULL && from == IPC_TWC_ACTIVE))) {
+            if (!torrent_haunting(tlv[i]) && (
+                    from == IPC_TWC_ALL ||
+                    (!torrent_active(tlv[i]) && from == IPC_TWC_INACTIVE) ||
+                    (torrent_active(tlv[i]) && from == IPC_TWC_ACTIVE))) {
                 iobuf_swrite(&iob, "l");
                 for (int k = 0; k < nkeys; k++)
                     write_ans(&iob, tlv[i], opts[k]);
@@ -206,7 +210,7 @@ cmd_tget(struct cli *cli, int argc, const char *args)
                 free(opts);
                 return IPC_COMMERR;
             }
-            if (tl != NULL) {
+            if (tl != NULL && !torrent_haunting(tl)) {
                 iobuf_swrite(&iob, "l");
                 for (int i = 0; i < nkeys; i++)
                     write_ans(&iob, tl, opts[i]);
@@ -248,10 +252,15 @@ cmd_add(struct cli *cli, int argc, const char *args)
     content[csize] = '\0';
 
     tl = tlib_by_hash(mi_info_hash(mi, hash));
-    if (tl != NULL)
+    if (tl != NULL && !torrent_haunting(tl))
         return write_code_buffer(cli, IPC_ETENTEXIST);
-    tl = tlib_add(hash, mi, mi_size, content,
-        benc_dget_str(args, "name", NULL));
+    if (tl != NULL) {
+        tl = tlib_readd(tl, hash, mi, mi_size, content,
+            benc_dget_str(args, "name", NULL));
+    } else {
+        tl = tlib_add(hash, mi, mi_size, content,
+            benc_dget_str(args, "name", NULL));
+    }
     return write_add_buffer(cli, tl->num);
 }
 
@@ -270,7 +279,7 @@ cmd_del(struct cli *cli, int argc, const char *args)
     else
         return IPC_COMMERR;
 
-    if (tl == NULL)
+    if (tl == NULL || torrent_haunting(tl))
         ret = write_code_buffer(cli, IPC_ENOTENT);
     else {
         ret = write_code_buffer(cli, IPC_OK);
@@ -300,9 +309,9 @@ cmd_start(struct cli *cli, int argc, const char *args)
     else
         return IPC_COMMERR;
 
-    if (tl == NULL)
+    if (tl == NULL || torrent_haunting(tl))
         code = IPC_ENOTENT;
-    else if (tl->tp != NULL)
+    else if (!torrent_startable(tl))
         code = IPC_ETACTIVE;
     else
         if ((code = torrent_start(tl)) == IPC_OK)
@@ -324,9 +333,9 @@ cmd_stop(struct cli *cli, int argc, const char *args)
     else
         return IPC_COMMERR;
 
-    if (tl == NULL)
+    if (tl == NULL || torrent_haunting(tl))
         return write_code_buffer(cli, IPC_ENOTENT);
-    else if (tl->tp == NULL)
+    else if (!torrent_active(tl))
         return write_code_buffer(cli, IPC_ETINACTIVE);
     else  {
         // Stopping a torrent may trigger exit so we need to reply before.
@@ -340,12 +349,11 @@ cmd_stop(struct cli *cli, int argc, const char *args)
 static int
 cmd_stop_all(struct cli *cli, int argc, const char *args)
 {
-    struct torrent *tp;
+    struct torrent *tp, *next;
     int ret = write_code_buffer(cli, IPC_OK);
     active_clear();
-    BTPDQ_FOREACH(tp, torrent_get_all(), entry)
-        if (tp->state != T_STOPPING)
-            torrent_stop(tp, 0);
+    BTPDQ_FOREACH_MUTABLE(tp, torrent_get_all(), entry, next)
+        torrent_stop(tp, 0);
     return ret;
 }
 
@@ -354,11 +362,8 @@ cmd_die(struct cli *cli, int argc, const char *args)
 {
     int err = write_code_buffer(cli, IPC_OK);
     if (!btpd_is_stopping()) {
-        int grace_seconds = -1;
-        if (argc == 1 && benc_isint(args))
-            grace_seconds = benc_int(args, NULL);
         btpd_log(BTPD_L_BTPD, "Someone wants me dead.\n");
-        btpd_shutdown(grace_seconds);
+        btpd_shutdown();
     }
     return err;
 }
@@ -450,6 +455,13 @@ client_connection_cb(int sd, short type, void *arg)
 }
 
 void
+ipc_shutdown(void)
+{
+    btpd_ev_del(&m_cli_incoming);
+    close(m_listen_sd);
+}
+
+void
 ipc_init(void)
 {
     int sd;
@@ -477,4 +489,5 @@ ipc_init(void)
     set_nonblocking(sd);
 
     btpd_ev_new(&m_cli_incoming, sd, EV_READ, client_connection_cb, NULL);
+    m_listen_sd = sd;
 }

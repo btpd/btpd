@@ -155,13 +155,10 @@ ipc_buf_req_code(struct ipc *ipc, struct iobuf *iob)
 }
 
 enum ipc_err
-btpd_die(struct ipc *ipc, int seconds)
+btpd_die(struct ipc *ipc)
 {
     struct iobuf iob = iobuf_init(16);
-    if (seconds >= 0)
-        iobuf_print(&iob, "l3:diei%dee", seconds);
-    else
-        iobuf_swrite(&iob, "l3:diee");
+    iobuf_swrite(&iob, "l3:diee");
     return ipc_buf_req_code(ipc, &iob);
 }
 

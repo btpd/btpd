@@ -14,6 +14,7 @@ struct net_listener {
     struct fdev ev;
 };
 
+static int m_nlisteners;
 static struct net_listener *m_net_listeners;
 
 unsigned net_npeers;
@@ -669,6 +670,15 @@ net_af_spec(void)
 }
 
 void
+net_shutdown(void)
+{
+    for (int i = 0; i < m_nlisteners; i++) {
+        btpd_ev_del(&m_net_listeners[i].ev);
+        close(m_net_listeners[i].sd);
+    }
+}
+
+void
 net_init(void)
 {
     m_bw_bytes_out = net_bw_limit_out;
@@ -699,6 +709,7 @@ net_init(void)
     net_ipv6 = found_ipv6;
     if (!net_ipv4 && !net_ipv6)
         btpd_err("no usable address found. wrong use of -4/-6 perhaps.\n");
+    m_nlisteners = count;
     m_net_listeners = btpd_calloc(count, sizeof(*m_net_listeners));
     for (ai = res; ai != NULL; ai = ai->ai_next) {
         count--;

@@ -5,6 +5,7 @@
 
 int btpd_daemon_phase = 2;
 int first_btpd_comm[2];
+int pidfd;
 
 void
 first_btpd_exit(char code)
@@ -15,7 +16,7 @@ first_btpd_exit(char code)
 }
 
 static void
-writepid(int pidfd)
+writepid(void)
 {
     int nw;
     char pidtxt[100];
@@ -28,7 +29,6 @@ static void
 setup_daemon(int daemonize, const char *dir)
 {
     char c;
-    int pidfd;
     pid_t pid;
     struct timespec ts;
 
@@ -91,7 +91,7 @@ setup_daemon(int daemonize, const char *dir)
     if (lockf(pidfd, F_TLOCK, 0) == -1)
         btpd_err("Another instance of btpd is probably running in %s.\n", dir);
 
-    writepid(pidfd);
+    writepid();
 }
 
 static void

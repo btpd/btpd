@@ -4,6 +4,7 @@
 
 #define SAVE_INTERVAL 300
 
+static unsigned m_nghosts;
 static unsigned m_ntorrents;
 static struct torrent_tq m_torrents = BTPDQ_HEAD_INITIALIZER(m_torrents);
 
@@ -20,6 +21,12 @@ unsigned
 torrent_count(void)
 {
     return m_ntorrents;
+}
+
+unsigned
+torrent_ghosts(void)
+{
+    return m_nghosts;
 }
 
 struct torrent *
@@ -71,11 +78,40 @@ torrent_block_size(struct torrent *tp, uint32_t piece, uint32_t nblocks,
     }
 }
 
+static void
+torrent_kill(struct torrent *tp)
+{
+    assert(m_ntorrents > 0);
+    assert(!(net_active(tp) || cm_active(tp)));
+    if (tp->state == T_GHOST)
+        m_nghosts--;
+    m_ntorrents--;
+    BTPDQ_REMOVE(&m_torrents, tp, entry);
+    if (tp->delete)
+        tlib_kill(tp->tl);
+    else
+        tp->tl->tp = NULL;
+    tr_kill(tp);
+    net_kill(tp);
+    cm_kill(tp);
+    mi_free_files(tp->nfiles, tp->files);
+    if (m_savetp == tp)
+        if ((m_savetp = BTPDQ_NEXT(tp, entry)) == NULL)
+            m_savetp = BTPDQ_FIRST(&m_torrents);
+    free(tp);
+}
+
 enum ipc_err
 torrent_start(struct tlib *tl)
 {
     struct torrent *tp;
     char *mi;
+
+    if (tl->tp != NULL) {
+        assert(torrent_startable(tl));
+        torrent_kill(tl->tp);
+        tl->tp = NULL;
+    }
 
     if (tl->dir == NULL)
         return IPC_EBADTENT;
@@ -111,25 +147,16 @@ torrent_start(struct tlib *tl)
     return IPC_OK;
 }
 
-static void
-torrent_kill(struct torrent *tp)
+static
+void become_ghost(struct torrent *tp)
 {
     btpd_log(BTPD_L_BTPD, "Stopped torrent '%s'.\n", torrent_name(tp));
-    assert(m_ntorrents > 0);
-    assert(!(tr_active(tp) || net_active(tp) || cm_active(tp)));
-    m_ntorrents--;
-    BTPDQ_REMOVE(&m_torrents, tp, entry);
-    tp->tl->tp = NULL;
+    tp->state = T_GHOST;
     if (tp->delete)
         tlib_del(tp->tl);
-    tr_kill(tp);
-    net_kill(tp);
-    cm_kill(tp);
-    mi_free_files(tp->nfiles, tp->files);
-    if (m_savetp == tp)
-        if ((m_savetp = BTPDQ_NEXT(tp, entry)) == NULL)
-            m_savetp = BTPDQ_FIRST(&m_torrents);
-    free(tp);
+    else
+        tlib_update_info(tp->tl, 0);
+    m_nghosts++;
 }
 
 void
@@ -148,10 +175,13 @@ torrent_stop(struct torrent *tp, int delete)
             tr_stop(tp);
         if (cm_active(tp))
             cm_stop(tp);
-        if (!delete)
-            tlib_update_info(tp->tl, 0);
+        if (!cm_active(tp)) {
+            become_ghost(tp);
+            if (!tr_active(tp))
+                torrent_kill(tp);
+        }
         break;
-    case T_STOPPING:
+    default:
         break;
     }
 }
@@ -187,7 +217,11 @@ torrent_on_tick(struct torrent *tp)
         }
         break;
     case T_STOPPING:
-        if (!(cm_active(tp) || tr_active(tp)))
+        if (cm_active(tp))
+            break;
+        become_ghost(tp);
+    case T_GHOST:
+        if (!tr_active(tp))
             torrent_kill(tp);
         break;
     default:
@@ -212,4 +246,22 @@ torrent_on_tick_all(void)
                     max(m_ntorrents, SAVE_INTERVAL) / m_ntorrents;
         }
     }
+}
+
+int
+torrent_active(struct tlib *tl)
+{
+    return tl->tp != NULL && tl->tp->state != T_GHOST;
+}
+
+int
+torrent_startable(struct tlib *tl)
+{
+    return tl->tp == NULL || (tl->tp->state == T_GHOST && !tl->tp->delete);
+}
+
+int
+torrent_haunting(struct tlib *tl)
+{
+    return tl->tp != NULL && tl->tp->delete && tl->tp->state == T_GHOST;
 }

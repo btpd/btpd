@@ -65,7 +65,7 @@ tlib_del(struct tlib *tl)
     char path[PATH_MAX];
     DIR *dir;
     struct dirent *de;
-    assert(tl->tp == NULL);
+    assert(tl->tp == NULL || tl->tp->state == T_GHOST);
     snprintf(path, PATH_MAX, "torrents/%s", bin2hex(tl->hash, relpath, 20));
     if ((dir = opendir(path)) != NULL) {
         while ((de = readdir(dir)) != NULL) {
@@ -78,7 +78,8 @@ tlib_del(struct tlib *tl)
     }
     snprintf(path, PATH_MAX, "torrents/%s", relpath);
     remove(path);
-    tlib_kill(tl);
+    if (tl->tp == NULL)
+        tlib_kill(tl);
     return 0;
 }
 
@@ -255,6 +256,19 @@ tlib_add(const uint8_t *hash, const char *mi, size_t mi_size,
     write_torrent(mi, mi_size, file);
     save_info(tl);
     return tl;
+}
+
+struct tlib *
+tlib_readd(struct tlib *tl, const uint8_t *hash, const char *mi,
+    size_t mi_size, const char *content, char *name)
+{
+    struct tlib *tln;
+    struct torrent *tp = tl->tp;
+    tp->delete = 0;
+    tlib_kill(tl);
+    tln = tlib_add(hash, mi, mi_size, content, name);
+    tln->tp = tp;
+    return tln;
 }
 
 static int

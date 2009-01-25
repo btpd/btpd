@@ -82,7 +82,7 @@ void btpd_ev_disable(struct fdev *ev, uint16_t flags);
 void btpd_timer_add(struct timeout *to, struct timespec *ts);
 void btpd_timer_del(struct timeout *to);
 
-void btpd_shutdown(int grace_seconds);
+void btpd_shutdown(void);
 int btpd_is_stopping(void);
 
 const uint8_t *btpd_get_peer_id(void);

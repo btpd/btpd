@@ -5,9 +5,9 @@
 
 static uint8_t m_peer_id[20];
 static struct timeout m_heartbeat;
-static struct timeout m_grace_timer;
 static int m_signal;
 static int m_shutdown;
+static int m_ghost;
 
 long btpd_seconds;
 
@@ -18,29 +18,35 @@ btpd_exit(int code)
     exit(code);
 }
 
+extern int pidfd;
+void ipc_shutdown(void);
+void net_shutdown(void);
+
 static void
-grace_cb(int fd, short type, void *arg)
+death_procedure(void)
 {
-    struct torrent *tp;
-    BTPDQ_FOREACH(tp, torrent_get_all(), entry)
-        torrent_stop(tp, 0);
+    assert(m_shutdown);
+    if (torrent_count() == 0)
+        btpd_exit(0);
+    if (!m_ghost && torrent_count() == torrent_ghosts()) {
+        btpd_log(BTPD_L_BTPD, "Entering pre exit mode. Bye!\n");
+        fclose(stderr);
+        fclose(stdout);
+        net_shutdown();
+        ipc_shutdown();
+        close(pidfd);
+        m_ghost = 1;
+    }
 }
 
 void
-btpd_shutdown(int grace_seconds)
+btpd_shutdown(void)
 {
-    if (torrent_count() == 0)
-        btpd_exit(0);
-    else {
-        struct torrent *tp;
-        m_shutdown = 1;
-        BTPDQ_FOREACH(tp, torrent_get_all(), entry)
-            if (tp->state != T_STOPPING)
-                torrent_stop(tp, 0);
-        if (grace_seconds >= 0)
-            btpd_timer_add(&m_grace_timer,
-                (& (struct timespec){ grace_seconds, 0 }));
-    }
+    m_shutdown = 1;
+    struct torrent *tp, *next;
+    BTPDQ_FOREACH_MUTABLE(tp, torrent_get_all(), entry, next)
+        torrent_stop(tp, 0);
+    death_procedure();
 }
 
 int btpd_is_stopping(void)
@@ -69,11 +75,12 @@ heartbeat_cb(int fd, short type, void *arg)
     torrent_on_tick_all();
     if (m_signal) {
         btpd_log(BTPD_L_BTPD, "Got signal %d.\n", m_signal);
-        btpd_shutdown(30);
         m_signal = 0;
+        if (!m_shutdown)
+            btpd_shutdown();
     }
-    if (m_shutdown && torrent_count() == 0)
-        btpd_exit(0);
+    if (m_shutdown)
+        death_procedure();
 }
 
 void tr_init(void);
@@ -123,7 +130,6 @@ btpd_init(void)
     tr_init();
     tlib_init();
 
-    timer_init(&m_grace_timer, grace_cb, NULL);
     timer_init(&m_heartbeat, heartbeat_cb, NULL);
     btpd_timer_add(&m_heartbeat, (& (struct timespec) { 1, 0 }));
 }
