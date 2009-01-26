@@ -1,6 +1,7 @@
 *.in
 aclocal.m4
 autom4te.cache
+compile
 configure
 config.guess
 config.sub
