@@ -104,10 +104,10 @@ usage(void)
         "\n"
         "Options:\n"
         "-4\n"
-        "\tToggle use of IPv4. It's enabled by default.\n"
+        "\tOnly use IPv4. Both IPv4 and IPv6 are enabled by default.\n"
         "\n"
         "-6\n"
-        "\tToggle use of IPv6. It's enabled by default.\n"
+        "\tOnly use IPv6. Both IPv4 and IPv6 are enabled by default.\n"
         "\n"
         "--bw-in n\n"
         "\tLimit incoming BitTorrent traffic to n kB/s.\n"
@@ -192,10 +192,10 @@ main(int argc, char **argv)
         case -1:
             goto args_done;
         case '6':
-            net_ipv6 ^= 1;
+            net_ipv4 = 0;
             break;
         case '4':
-            net_ipv4 ^= 1;
+            net_ipv6 = 0;
             break;
         case 'd':
             dir = optarg;
