@@ -28,7 +28,7 @@ usage_stat(void)
 struct btstat {
     unsigned num;
     enum ipc_tstate state;
-    unsigned peers, tr_errors;
+    unsigned peers, tr_good;
     long long content_got, content_size, downloaded, uploaded, rate_up,
         rate_down, tot_up;
     uint32_t pieces_seen, torrent_pieces;
@@ -44,7 +44,7 @@ static enum ipc_tval stkeys[] = {
     IPC_TVAL_NUM,
     IPC_TVAL_NAME,
     IPC_TVAL_PCOUNT,
-    IPC_TVAL_TRERR,
+    IPC_TVAL_TRGOOD,
     IPC_TVAL_PCCOUNT,
     IPC_TVAL_PCSEEN,
     IPC_TVAL_SESSUP,
@@ -69,8 +69,7 @@ print_stat(struct btstat *st)
     print_ratio(st->tot_up, st->content_size);
     printf("%4u ", st->peers);
     print_percent(st->pieces_seen, st->torrent_pieces);
-    if (st->tr_errors > 0)
-        printf("E%u", st->tr_errors);
+    printf("%3u", st->tr_good);
     printf("\n");
 }
 
@@ -94,8 +93,7 @@ stat_cb(int obji, enum ipc_err objerr, struct ipc_get_res *res, void *arg)
     tot->rate_up += (st.rate_up = res[IPC_TVAL_RATEUP].v.num);
     tot->peers += (st.peers = res[IPC_TVAL_PCOUNT].v.num);
     tot->tot_up += (st.tot_up = res[IPC_TVAL_TOTUP].v.num);
-    if ((st.tr_errors = res[IPC_TVAL_TRERR].v.num) > 0)
-        tot->tr_errors++;
+    tot->tr_good += (st.tr_good = res[IPC_TVAL_TRGOOD].v.num);
     if (cba->individual) {
         if (cba->names)
             printf("%.*s\n", (int)res[IPC_TVAL_NAME].v.str.l,
@@ -125,7 +123,7 @@ again:
         } else
             header = 20;
         printf("  HAVE   DLOAD      RTDWN   ULOAD       RTUP   RATIO CONN"
-            "  AVAIL\n");
+            "  AVAIL  TR\n");
     }
 
     bzero(&cba.tot, sizeof(cba.tot));
