@@ -107,8 +107,8 @@ btpd_init(void)
     sigaction(SIGINT, &sa, NULL);
 
     gettimeofday(&now, NULL);
-    n = snprintf(idcon, sizeof(idcon), "%ld%ld%d", now.tv_sec, now.tv_usec,
-        net_port);
+    n = snprintf(idcon, sizeof(idcon), "%ld%ld%d", (long)now.tv_sec,
+        (long)now.tv_usec, net_port);
     if (n < sizeof(idcon))
         gethostname(idcon + n, sizeof(idcon) - n);
     idcon[sizeof(idcon) - 1] = '\0';
