@@ -38,7 +38,7 @@ subtime(struct timespec a, struct timespec b)
 }
 
 void
-timer_init(struct timeout *h, evloop_cb_t cb, void *arg)
+evtimer_init(struct timeout *h, evloop_cb_t cb, void *arg)
 {
     h->cb = cb;
     h->arg = arg;
@@ -47,7 +47,7 @@ timer_init(struct timeout *h, evloop_cb_t cb, void *arg)
 }
 
 int
-timer_add(struct timeout *h, struct timespec *t)
+evtimer_add(struct timeout *h, struct timespec *t)
 {
     struct timespec now, sum;
     clock_gettime(TIMER_CLOCK, &now);
@@ -61,7 +61,7 @@ timer_add(struct timeout *h, struct timespec *t)
 }
 
 void
-timer_del(struct timeout *h)
+evtimer_del(struct timeout *h)
 {
     if (h->th.i >= 0) {
         timeheap_remove(&h->th);
@@ -70,7 +70,7 @@ timer_del(struct timeout *h)
 }
 
 void
-timers_run(void)
+evtimers_run(void)
 {
     struct timespec now;
     clock_gettime(TIMER_CLOCK, &now);
@@ -86,7 +86,7 @@ timers_run(void)
 }
 
 struct timespec
-timer_delay(void)
+evtimer_delay(void)
 {
     struct timespec now, diff;
     if (timeheap_size() == 0) {

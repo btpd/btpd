@@ -89,8 +89,8 @@ evloop(void)
     int nev, i;
     struct timespec delay;
     while (1) {
-        timers_run();
-        delay = timer_delay();
+        evtimers_run();
+        delay = evtimer_delay();
 
         if ((nev = kevent(m_kq, NULL, 0, m_evs, 100, &delay)) < 0) {
             if (errno == EINTR)

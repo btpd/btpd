@@ -539,5 +539,5 @@ cm_start(struct torrent *tp, int force_test)
 void
 cm_init(void)
 {
-    timer_init(&m_workev, worker_cb, NULL);
+    evtimer_init(&m_workev, worker_cb, NULL);
 }

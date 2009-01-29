@@ -239,7 +239,7 @@ httptr_req(struct torrent *tp, struct tr_tier *tr, const char *aurl,
     http_url = http_url_get(treq->req);
     treq->nc = btpd_name_connect(http_url->host, http_url->port,
         httptr_nc_cb, treq);
-    timer_init(&treq->timer, httptr_io_cb, treq);
+    evtimer_init(&treq->timer, httptr_io_cb, treq);
     btpd_timer_add(&treq->timer, (& (struct timespec) { 60, 0 }));
     return treq;
 }

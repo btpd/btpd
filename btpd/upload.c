@@ -190,6 +190,6 @@ ul_init(void)
             m_max_uploads = 5 + (net_bw_limit_out / (100 << 10));
     }
 
-    timer_init(&m_choke_timer, choke_cb, NULL);
+    evtimer_init(&m_choke_timer, choke_cb, NULL);
     btpd_timer_add(&m_choke_timer, CHOKE_INTERVAL);
 }

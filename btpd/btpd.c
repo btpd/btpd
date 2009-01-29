@@ -130,6 +130,6 @@ btpd_init(void)
     tr_init();
     tlib_init();
 
-    timer_init(&m_heartbeat, heartbeat_cb, NULL);
+    evtimer_init(&m_heartbeat, heartbeat_cb, NULL);
     btpd_timer_add(&m_heartbeat, (& (struct timespec) { 1, 0 }));
 }

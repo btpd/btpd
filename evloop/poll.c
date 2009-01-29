@@ -107,9 +107,9 @@ evloop(void)
     int millisecs;
     struct timespec delay;
     while (1) {
-        timers_run();
+        evtimers_run();
 
-        delay = timer_delay();
+        delay = evtimer_delay();
         if (delay.tv_sec >= 0)
             millisecs = delay.tv_sec * 1000 + delay.tv_nsec / 1000000;
         else

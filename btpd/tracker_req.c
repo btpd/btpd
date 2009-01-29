@@ -163,7 +163,7 @@ tier_create(struct torrent *tp, struct mi_tier *tier)
         t->tp = tp;
         t->interval = -1;
         t->event = TR_EV_STOPPED;
-        timer_init(&t->timer, tier_timer_cb, t);
+        evtimer_init(&t->timer, tier_timer_cb, t);
         return t;
     } else {
         free(t);

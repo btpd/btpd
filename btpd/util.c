@@ -52,14 +52,14 @@ btpd_ev_disable(struct fdev *ev, uint16_t flags)
 void
 btpd_timer_add(struct timeout *to, struct timespec *ts)
 {
-    if (timer_add(to, ts) != 0)
+    if (evtimer_add(to, ts) != 0)
         btpd_err("Failed to add timeout (%s).\n", strerror(errno));
 }
 
 void
 btpd_timer_del(struct timeout *to)
 {
-    timer_del(to);
+    evtimer_del(to);
 }
 
 static const char *
