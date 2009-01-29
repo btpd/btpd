@@ -1,6 +1,7 @@
+AC_PREREQ(2.61)
 AC_INIT(btpd, 0.13+, btpd@murmeldjur.se)
 
-AM_INIT_AUTOMAKE([foreign subdir-objects])
+AM_INIT_AUTOMAKE([1.10 foreign subdir-objects])
 
 AC_CONFIG_FILES([Makefile])
 
