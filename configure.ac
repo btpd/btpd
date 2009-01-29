@@ -41,14 +41,31 @@ AC_ARG_WITH(evloop-method,
 
 old_LIBS=$LIBS
 LIBS=""
-AC_SEARCH_LIBS(clock_gettime, rt,,AC_MSG_FAILURE(btpd needs clock_gettime))
-AC_SUBST(CLOCKLIB,$LIBS)
-LIBS=""
 AC_SEARCH_LIBS(inet_ntop, nsl,,AC_MSG_FAILURE(btpd needs inet_ntop))
 AC_SEARCH_LIBS(bind, socket,,AC_MSG_FAILURE(btpd needs bind))
 AC_SUBST(INETLIBS,$LIBS)
 LIBS=$old_LIBS
 AC_CHECK_FUNCS(asprintf)
+
+AC_MSG_CHECKING(for CLOCK_MONOTONIC)
+AC_COMPILE_IFELSE([
+    #include <sys/time.h>
+    #include <time.h>
+    int main(void) { return clock_gettime(CLOCK_MONOTONIC, (void *)0); }
+],  clock_gettime=yes, clock_gettime=no)
+AC_MSG_RESULT($clock_gettime)
+if test $clock_gettime == yes; then
+    old_LIBS=$LIBS
+    LIBS=""
+    AC_SEARCH_LIBS(clock_gettime,rt,clock_gettime=yes,clock_gettime=no)
+    AC_SUBST(CLOCKLIB,$LIBS)
+    LIBS=$old_LIBS
+    AC_DEFINE(HAVE_CLOCK_MONOTONIC)
+fi
+if test $clock_gettime == no; then
+    AC_CHECK_FUNCS(mach_absolute_time,,
+        AC_MSG_FAILURE(no supported time mechanism found))
+fi
 
 AC_MSG_CHECKING(whether compiler accepts -Wno-pointer-sign)
 CC_ARGS_OK_IFELSE(-Wno-pointer-sign,

@@ -35,9 +35,8 @@ setup_daemon(int daemonize, const char *dir)
     if (snprintf(NULL, 0, "btpd") != 4)
         btpd_err("snprintf doesn't work.\n");
 
-    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
-        btpd_err("clock_gettime(CLOCK_MONOTONIC, ...) failed (%s).\n",
-            strerror(errno));
+    if (evtimer_gettime(&ts) != 0)
+        btpd_err("evtimer_gettime failed (%s).\n", strerror(errno));
 
     if (dir == NULL) {
         if ((dir = find_btpd_dir()) == NULL)

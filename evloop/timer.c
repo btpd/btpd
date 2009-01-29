@@ -3,12 +3,39 @@
 #include "evloop.h"
 #include "timeheap.h"
 
-#if defined(CLOCK_MONOTONIC_FAST)
+#if defined(HAVE_CLOCK_MONOTONIC)
+
+#ifdef CLOCK_MONOTONIC_FAST
 #define TIMER_CLOCK CLOCK_MONOTONIC_FAST
-#elif defined(CLOCK_MONOTONIC)
-#define TIMER_CLOCK CLOCK_MONOTONIC
 #else
-#error CLOCK_MONOTONIC needed!
+#define TIMER_CLOCK CLOCK_MONOTONIC
+#endif
+
+int
+evtimer_gettime(struct timespec *ts)
+{
+    return clock_gettime(TIMER_CLOCK, ts);
+}
+
+#elif defined(HAVE_MACH_ABSOLUTE_TIME)
+
+#include <mach/mach_time.h>
+
+int
+evtimer_gettime(struct timespec *ts)
+{
+    uint64_t nsecs;
+    static mach_timebase_info_data_t nsratio = { 0, 0 };
+    if (nsratio.denom == 0)
+        mach_timebase_info(&nsratio);
+    nsecs = mach_absolute_time() * nsratio.numer / nsratio.denom;
+    ts->tv_sec = nsecs / 1000000000;
+    ts->tv_nsec = nsecs - ts->tv_sec * 1000000000;
+    return 0;
+}
+
+#else
+#error No supported time mechanism
 #endif
 
 static struct timespec
@@ -50,7 +77,7 @@ int
 evtimer_add(struct timeout *h, struct timespec *t)
 {
     struct timespec now, sum;
-    clock_gettime(TIMER_CLOCK, &now);
+    evtimer_gettime(&now);
     sum = addtime(now, *t);
     if (h->th.i == -1)
         return timeheap_insert(&h->th, &sum);
@@ -73,7 +100,7 @@ void
 evtimers_run(void)
 {
     struct timespec now;
-    clock_gettime(TIMER_CLOCK, &now);
+    evtimer_gettime(&now);
     while (timeheap_size() > 0) {
         struct timespec diff = subtime(timeheap_top(), now);
         if (diff.tv_sec < 0) {
@@ -93,7 +120,7 @@ evtimer_delay(void)
         diff.tv_sec = -1;
         diff.tv_nsec = 0;
     } else {
-        clock_gettime(TIMER_CLOCK, &now);
+        evtimer_gettime(&now);
         diff = subtime(timeheap_top(), now);
         if (diff.tv_sec < 0) {
             diff.tv_sec = 0;

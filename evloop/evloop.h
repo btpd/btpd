@@ -53,5 +53,6 @@ void evtimer_del(struct timeout *);
 
 void evtimers_run(void);
 struct timespec evtimer_delay(void);
+int evtimer_gettime(struct timespec *);
 
 #endif
