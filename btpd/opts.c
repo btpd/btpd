@@ -16,4 +16,4 @@ int ipcprot = 0600;
 int empty_start = 0;
 const char *tr_ip_arg;
 int net_ipv4 = 1;
-int net_ipv6 = 1;
+int net_ipv6 = 0;

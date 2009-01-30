@@ -103,10 +103,11 @@ usage(void)
         "\n"
         "Options:\n"
         "-4\n"
-        "\tOnly use IPv4. Both IPv4 and IPv6 are enabled by default.\n"
+        "\tUse IPv4. If given in conjunction with -6, "
+        "both versions are used.\n"
         "\n"
         "-6\n"
-        "\tOnly use IPv6. Both IPv4 and IPv6 are enabled by default.\n"
+        "\tUse IPv6. By default IPv4 is used.\n"
         "\n"
         "--bw-in n\n"
         "\tLimit incoming BitTorrent traffic to n kB/s.\n"
@@ -184,17 +185,17 @@ int
 main(int argc, char **argv)
 {
     char *dir = NULL, *log = NULL;
-    int daemonize = 1;
+    int daemonize = 1, opt4 = 0, opt6 = 0;
 
     for (;;) {
         switch (getopt_long(argc, argv, "46d:p:", longopts, NULL)) {
         case -1:
             goto args_done;
-        case '6':
-            net_ipv4 = 0;
-            break;
         case '4':
-            net_ipv6 = 0;
+            opt4 = 1;
+            break;
+        case '6':
+            opt6 = 1;
             break;
         case 'd':
             dir = optarg;
@@ -247,8 +248,11 @@ args_done:
     argc -= optind;
     argv += optind;
 
-    if (!net_ipv4 && !net_ipv6)
-        btpd_err("You need to enable at least one ip version.\n");
+    if (opt6) {
+        net_ipv6 = 1;
+        if (!opt4)
+            net_ipv4 = 0;
+    }
 
     if (argc > 0)
         usage();
