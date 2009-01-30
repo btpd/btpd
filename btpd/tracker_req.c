@@ -12,6 +12,7 @@ static long m_tlast_req, m_tnext_req;
 
 struct tr_entry {
     BTPDQ_ENTRY(tr_entry) entry;
+    char *failure;
     char *url;
     enum tr_type type;
 };
@@ -25,7 +26,6 @@ struct tr_tier {
     struct timeout timer;
     BTPDQ_ENTRY(tr_tier) entry;
     void *req;
-    char *failure;
     int interval;
     int bad_conns;
     int active;
@@ -38,6 +38,26 @@ BTPDQ_HEAD(tr_tier_tq, tr_tier);
 struct trackers {
     struct tr_tier_tq trackers;
 };
+
+static struct tr_entry *
+first_nonfailed(struct tr_tier *t)
+{
+    struct tr_entry *e;
+    BTPDQ_FOREACH(e, &t->trackers, entry)
+        if (e->failure == NULL)
+            return e;
+    abort();
+}
+
+static int
+all_failed(struct tr_tier *t)
+{
+    struct tr_entry *e;
+    BTPDQ_FOREACH(e, &t->trackers, entry)
+        if (e->failure == NULL)
+            return 0;
+    return 1;
+}
 
 static void *
 req_send(struct tr_tier *t)
@@ -77,12 +97,9 @@ entry_send(struct tr_tier *t, struct tr_entry *e, enum tr_event event)
         return;
     }
     btpd_timer_del(&t->timer);
-    if ((t->req = req_send(t)) == NULL) {
-        asprintf(&t->failure, "failed to create tracker message to '%s' (%s).",
+    if ((t->req = req_send(t)) == NULL)
+        btpd_err("failed to create tracker message to '%s' (%s).",
             e->url, strerror(errno));
-        t->active = 0;
-        return;
-    }
     m_tlast_req = btpd_seconds;
 }
 
@@ -96,18 +113,20 @@ static void
 tier_timer_cb(int fd, short type, void *arg)
 {
     struct tr_tier *t = arg;
-    assert(tier_active(t));
-    entry_send(t, BTPDQ_FIRST(&t->trackers), t->event);
+    assert(tier_active(t) && !all_failed(t));
+    entry_send(t, first_nonfailed(t), t->event);
 }
 
 static void
 tier_start(struct tr_tier *t)
 {
+    struct tr_entry *e;
     assert(!tier_active(t) || t->event == TR_EV_STOPPED);
-    if (t->failure != NULL) {
-        free(t->failure);
-        t->failure = NULL;
-    }
+    BTPDQ_FOREACH(e, &t->trackers, entry)
+        if (e->failure != NULL) {
+            free(e->failure);
+            e->failure = NULL;
+        }
     t->has_responded = 0;
     t->bad_conns = 0;
     t->active = 1;
@@ -126,7 +145,7 @@ tier_stop(struct tr_tier *t)
             req_cancel(t);
         t->active = 0;
     } else
-        entry_send(t, BTPDQ_FIRST(&t->trackers), TR_EV_STOPPED);
+        entry_send(t, first_nonfailed(t), TR_EV_STOPPED);
 }
 
 static void
@@ -175,12 +194,12 @@ static void
 tier_kill(struct tr_tier *t)
 {
     struct tr_entry *e, *next;
-    if (t->failure != NULL)
-        free(t->failure);
     btpd_timer_del(&t->timer);
     if (t->req != NULL)
         req_cancel(t);
     BTPDQ_FOREACH_MUTABLE(e, &t->trackers, entry , next) {
+        if (e->failure != NULL)
+            free(e->failure);
         free(e->url);
         free(e);
     }
@@ -265,13 +284,18 @@ tr_result(struct tr_tier *t, struct tr_response *res)
     t->req = NULL;
     switch (res->type) {
     case TR_RES_FAIL:
-        t->active = 0;
-        t->failure = benc_str(res->mi_failure, NULL, NULL);
+        t->cur->failure = benc_str(res->mi_failure, NULL, NULL);
         btpd_log(BTPD_L_ERROR, "tracker at '%s' failed (%s).\n",
-            t->cur->url, t->failure);
-        break;
+            t->cur->url, t->cur->failure);
+        if (all_failed(t)) {
+            t->active = 0;
+            break;
+        }
     case TR_RES_CONN:
-        if ((e = BTPDQ_NEXT(t->cur, entry)) != NULL) {
+        e = t->cur;
+        while ((e = BTPDQ_NEXT(e, entry)) != NULL && e->failure != NULL)
+            ;
+        if (e != NULL) {
             entry_send(t, e, t->event);
             break;
         }
@@ -286,6 +310,8 @@ tr_result(struct tr_tier *t, struct tr_response *res)
             btpd_timer_add(&t->timer, RETRY2_TIMEOUT);
         break;
     case TR_RES_BAD:
+        btpd_log(BTPD_L_ERROR, "bad data from tracker '%s' for '%s'.\n",
+            t->cur->url, torrent_name(t->tp));
     case TR_RES_OK:
         if (t->event == TR_EV_STOPPED)
             t->active = 0;
