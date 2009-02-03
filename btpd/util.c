@@ -65,18 +65,14 @@ btpd_timer_del(struct timeout *to)
 static const char *
 logtype_str(uint32_t type)
 {
-    if (type & BTPD_L_BTPD)
-        return "btpd";
-    else if (type & BTPD_L_ERROR)
-        return "error";
-    else if (type & BTPD_L_CONN)
-        return "conn";
-    else if (type & BTPD_L_TRACKER)
-        return "tracker";
-    else if (type & BTPD_L_MSG)
-        return "msg";
-    else
-        return "";
+    switch (type) {
+    case BTPD_L_BTPD:  return "btpd";
+    case BTPD_L_ERROR: return "error";
+    case BTPD_L_CONN:  return "conn";
+    case BTPD_L_TR:    return "tracker";
+    case BTPD_L_MSG:   return "msg";
+    }
+    return "";
 }
 
 static void

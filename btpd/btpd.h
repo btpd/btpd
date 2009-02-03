@@ -53,7 +53,7 @@
 
 #define BTPD_L_ALL      0xffffffff
 #define BTPD_L_ERROR    0x00000001
-#define BTPD_L_TRACKER  0x00000002
+#define BTPD_L_TR       0x00000002
 #define BTPD_L_CONN     0x00000004
 #define BTPD_L_MSG      0x00000008
 #define BTPD_L_BTPD     0x00000010

@@ -62,6 +62,8 @@ all_failed(struct tr_tier *t)
 static void *
 req_send(struct tr_tier *t)
 {
+    btpd_log(BTPD_L_TR, "sending event %d to '%s' for '%s'.\n",
+        t->event, t->cur->url, torrent_name(t->tp));
     switch (t->cur->type) {
     case TR_HTTP:
         return httptr_req(t->tp, t, t->cur->url, t->event);
@@ -166,8 +168,11 @@ add_tracker(struct tr_tier *t, const char *url)
         if ((e->url = strdup(url)) == NULL)
             btpd_err("Out of memory.\n");
         e->type = TR_HTTP;
-    } else
+    } else {
+        btpd_log(BTPD_L_TR, "skipping unsupported tracker '%s' for '%s'.\n",
+            url, torrent_name(t->tp));
         return;
+    }
     BTPDQ_INSERT_TAIL(&t->trackers, e, entry);
 }
 
@@ -175,11 +180,11 @@ static struct tr_tier *
 tier_create(struct torrent *tp, struct mi_tier *tier)
 {
     struct tr_tier *t = btpd_calloc(1, sizeof(*t));
+    t->tp = tp;
     BTPDQ_INIT(&t->trackers);
     for (int i = 0; i < tier->nurls; i++)
         add_tracker(t, tier->urls[i]);
     if (!BTPDQ_EMPTY(&t->trackers)) {
-        t->tp = tp;
         t->interval = -1;
         t->event = TR_EV_STOPPED;
         evtimer_init(&t->timer, tier_timer_cb, t);
@@ -292,6 +297,8 @@ tr_result(struct tr_tier *t, struct tr_response *res)
             break;
         }
     case TR_RES_CONN:
+        btpd_log(BTPD_L_TR, "connection to '%s' failed for '%s'.\n",
+            t->cur->url, torrent_name(t->tp));
         e = t->cur;
         while ((e = BTPDQ_NEXT(e, entry)) != NULL && e->failure != NULL)
             ;
@@ -313,6 +320,9 @@ tr_result(struct tr_tier *t, struct tr_response *res)
         btpd_log(BTPD_L_ERROR, "bad data from tracker '%s' for '%s'.\n",
             t->cur->url, torrent_name(t->tp));
     case TR_RES_OK:
+        if (TR_RES_OK)
+            btpd_log(BTPD_L_TR, "response from '%s' for '%s'.\n",
+                t->cur->url, torrent_name(t->tp));
         if (t->event == TR_EV_STOPPED)
             t->active = 0;
         else {
