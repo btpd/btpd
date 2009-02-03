@@ -177,6 +177,7 @@ static struct option longopts[] = {
     { "ipcprot", required_argument,     &longval,       8 },
     { "empty-start", no_argument,       &longval,       9 },
     { "ip", required_argument,          &longval,       10 },
+    { "logmask", required_argument,     &longval,       11 },
     { "help",   no_argument,            &longval,       128 },
     { NULL,     0,                      NULL,           0 }
 };
@@ -234,6 +235,9 @@ main(int argc, char **argv)
                 break;
             case 10:
                 tr_ip_arg = optarg;
+                break;
+            case 11:
+                btpd_logmask = atoi(optarg);
                 break;
             default:
                 usage();
