@@ -41,23 +41,21 @@ net_torrent_has_peer(struct net *n, const uint8_t *id)
 void
 net_create(struct torrent *tp)
 {
-    size_t field_size = ceil(tp->npieces / 8.0);
-    size_t mem = sizeof(*(tp->net)) + field_size +
-        tp->npieces * sizeof(*(tp->net->piece_count));
-
-    struct net *n = btpd_calloc(1, mem);
+    struct net *n = btpd_calloc(1, sizeof(*n));
     n->tp = tp;
     tp->net = n;
 
     BTPDQ_INIT(&n->getlst);
-
-    n->busy_field = (uint8_t *)(n + 1);
-    n->piece_count = (unsigned *)(n->busy_field + field_size);
+    
+    n->busy_field = btpd_calloc(ceil(tp->npieces / 8.0), 1);
+    n->piece_count = btpd_calloc(tp->npieces, sizeof(*n->piece_count));
 }
 
 void
 net_kill(struct torrent *tp)
 {
+    free(tp->net->piece_count);
+    free(tp->net->busy_field);
     free(tp->net);
     tp->net = NULL;
 }
