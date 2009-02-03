@@ -95,7 +95,7 @@ void td_post_end();
 #define td_post_begin td_acquire_lock
 
 typedef struct ai_ctx * aictx_t;
-aictx_t btpd_addrinfo(const char *node, short port, struct addrinfo *hints,
+aictx_t btpd_addrinfo(const char *node, uint16_t port, struct addrinfo *hints,
     void (*cb)(void *, int, struct addrinfo *), void *arg);
 void btpd_addrinfo_cancel(aictx_t ctx); 
 

@@ -695,7 +695,7 @@ net_init(void)
     hints.ai_flags = AI_ADDRCONFIG | AI_PASSIVE;
     hints.ai_family = net_af_spec();
     hints.ai_socktype = SOCK_STREAM;
-    snprintf(portstr, sizeof(portstr), "%hd", net_port);
+    snprintf(portstr, sizeof(portstr), "%hu", net_port);
     if ((errno = getaddrinfo(NULL, portstr, &hints, &res)) != 0)
         btpd_err("getaddrinfo failed (%s).\n", gai_strerror(errno));
     for (ai = res; ai != NULL; ai = ai->ai_next) {
