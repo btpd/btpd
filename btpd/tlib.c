@@ -30,6 +30,18 @@ tlib_by_hash(const uint8_t *hash)
     return hashtbl_find(m_hashtbl, hash);
 }
 
+struct tlib *
+tlib_iter_first(struct htbl_iter *it)
+{
+    return numtbl_iter_first(m_numtbl, it);
+}
+
+struct tlib *
+tlib_iter_next(struct htbl_iter *it)
+{
+    return numtbl_iter_next(it);
+}
+
 void
 tlib_kill(struct tlib *tl)
 {
@@ -293,12 +305,6 @@ static uint32_t
 id_hash(const void *k)
 {
     return dec_be32(k + 16);
-}
-
-void
-tlib_put_all(struct tlib **v)
-{
-    hashtbl_tov(m_hashtbl, v);
 }
 
 void

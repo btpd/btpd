@@ -189,16 +189,16 @@ cmd_tget(struct cli *cli, int argc, const char *args)
     p = benc_dget_any(args, "from");
     if (benc_isint(p)) {
         enum ipc_twc from = benc_int(p, NULL);
-        struct tlib *tlv[tlib_count()];
-        tlib_put_all(tlv);
-        for (int i = 0; i < sizeof(tlv) / sizeof(tlv[0]); i++) {
-            if (!torrent_haunting(tlv[i]) && (
+        struct htbl_iter it;
+        struct tlib *tl;
+        for (tl = tlib_iter_first(&it); tl != NULL; tl = tlib_iter_next(&it)) {
+            if (!torrent_haunting(tl) && (
                     from == IPC_TWC_ALL ||
-                    (!torrent_active(tlv[i]) && from == IPC_TWC_INACTIVE) ||
-                    (torrent_active(tlv[i]) && from == IPC_TWC_ACTIVE))) {
+                    (!torrent_active(tl) && from == IPC_TWC_INACTIVE) ||
+                    (torrent_active(tl) && from == IPC_TWC_ACTIVE))) {
                 iobuf_swrite(&iob, "l");
                 for (int k = 0; k < nkeys; k++)
-                    write_ans(&iob, tlv[i], opts[k]);
+                    write_ans(&iob, tl, opts[k]);
                 iobuf_swrite(&iob, "e");
             }
         }

@@ -22,7 +22,9 @@ struct file_time_size {
 };
 
 void tlib_init(void);
-void tlib_put_all(struct tlib **v);
+
+struct tlib *tlib_iter_first(struct htbl_iter *it);
+struct tlib *tlib_iter_next(struct htbl_iter *it);
 
 struct tlib *tlib_add(const uint8_t *hash, const char *mi, size_t mi_size,
     const char *content, char *name);
