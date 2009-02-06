@@ -64,4 +64,6 @@ int peer_has(struct peer *p, uint32_t index);
 int peer_leech_ok(struct peer *p);
 int peer_full(struct peer *p);
 
+void mp_kill(struct meta_peer *mp);
+
 #endif

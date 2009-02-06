@@ -85,6 +85,9 @@ void btpd_timer_del(struct timeout *to);
 void btpd_shutdown(void);
 int btpd_is_stopping(void);
 
+int btpd_id_eq(const void *k1, const void *k2);
+uint32_t btpd_id_hash(const void *k);
+
 const uint8_t *btpd_get_peer_id(void);
 
 void td_acquire_lock(void);

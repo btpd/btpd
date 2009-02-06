@@ -2,6 +2,36 @@
 
 #include <ctype.h>
 
+struct meta_peer *
+mp_create(void)
+{
+    return btpd_calloc(1, sizeof(struct meta_peer));
+}
+
+void
+mp_kill(struct meta_peer *mp)
+{
+    free(mp);
+}
+
+void
+mp_hold(struct meta_peer *mp)
+{
+    mp->refs++;
+}
+
+void
+mp_drop(struct meta_peer *mp, struct net *n)
+{
+    assert(mp->refs > 0);
+    mp->refs--;
+    if (mp->refs == 0) {
+        if (mp->flags & PF_ATTACHED)
+            assert(mptbl_remove(n->mptbl, mp->id) == mp);
+        mp_kill(mp);
+    }
+}
+
 void
 peer_kill(struct peer *p)
 {
@@ -9,7 +39,7 @@ peer_kill(struct peer *p)
 
     btpd_log(BTPD_L_CONN, "killed peer %p\n", p);
 
-    if (p->flags & PF_ATTACHED) {
+    if (p->mp->flags & PF_ATTACHED) {
         BTPDQ_REMOVE(&p->n->peers, p, p_entry);
         p->n->npeers--;
         if (p->n->active) {
@@ -18,9 +48,9 @@ peer_kill(struct peer *p)
         }
     } else
         BTPDQ_REMOVE(&net_unattached, p, p_entry);
-    if (p->flags & PF_ON_READQ)
+    if (p->mp->flags & PF_ON_READQ)
         BTPDQ_REMOVE(&net_bw_readq, p, rq_entry);
-    if (p->flags & PF_ON_WRITEQ)
+    if (p->mp->flags & PF_ON_WRITEQ)
         BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
 
     btpd_ev_del(&p->ioev);
@@ -34,6 +64,8 @@ peer_kill(struct peer *p)
         nl = next;
     }
 
+    p->mp->p = NULL;
+    mp_drop(p->mp, p->n);
     if (p->in.buf != NULL)
         free(p->in.buf);
     if (p->piece_field != NULL)
@@ -83,9 +115,9 @@ peer_unsend(struct peer *p, struct nb_link *nl)
         nb_drop(nl->nb);
         free(nl);
         if (BTPDQ_EMPTY(&p->outq)) {
-            if (p->flags & PF_ON_WRITEQ) {
+            if (p->mp->flags & PF_ON_WRITEQ) {
                 BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
-                p->flags &= ~PF_ON_WRITEQ;
+                p->mp->flags &= ~PF_ON_WRITEQ;
             } else
                 btpd_ev_disable(&p->ioev, EV_WRITE);
         }
@@ -106,7 +138,7 @@ peer_sent(struct peer *p, struct net_buf *nb)
         break;
     case NB_UNCHOKE:
         btpd_log(BTPD_L_MSG, "sent unchoke to %p\n", p);
-        p->flags &= ~PF_NO_REQUESTS;
+        p->mp->flags &= ~PF_NO_REQUESTS;
         break;
     case NB_INTEREST:
         btpd_log(BTPD_L_MSG, "sent interest to %p\n", p);
@@ -199,7 +231,7 @@ peer_cancel(struct peer *p, struct block_request *req, struct net_buf *nb)
 void
 peer_unchoke(struct peer *p)
 {
-    p->flags &= ~PF_I_CHOKE;
+    p->mp->flags &= ~PF_I_CHOKE;
     peer_send(p, nb_create_unchoke());
 }
 
@@ -218,7 +250,7 @@ peer_choke(struct peer *p)
         nl = next;
     }
 
-    p->flags |= PF_I_CHOKE;
+    p->mp->flags |= PF_I_CHOKE;
     peer_send(p, nb_create_choke());
 }
 
@@ -229,7 +261,7 @@ peer_want(struct peer *p, uint32_t index)
     p->nwant++;
     if (p->nwant == 1) {
         if (p->nreqs_out == 0) {
-            assert((p->flags & PF_DO_UNWANT) == 0);
+            assert((p->mp->flags & PF_DO_UNWANT) == 0);
             int unsent = 0;
             struct nb_link *nl = BTPDQ_LAST(&p->outq, nb_tq);
             if (nl != NULL && nl->nb->type == NB_UNINTEREST)
@@ -237,10 +269,10 @@ peer_want(struct peer *p, uint32_t index)
             if (!unsent)
                 peer_send(p, nb_create_interest());
         } else {
-            assert((p->flags & PF_DO_UNWANT) != 0);
-            p->flags &= ~PF_DO_UNWANT;
+            assert((p->mp->flags & PF_DO_UNWANT) != 0);
+            p->mp->flags &= ~PF_DO_UNWANT;
         }
-        p->flags |= PF_I_WANT;
+        p->mp->flags |= PF_I_WANT;
     }
 }
 
@@ -250,12 +282,12 @@ peer_unwant(struct peer *p, uint32_t index)
     assert(p->nwant > 0);
     p->nwant--;
     if (p->nwant == 0) {
-        p->flags &= ~PF_I_WANT;
+        p->mp->flags &= ~PF_I_WANT;
         p->t_nointerest = btpd_seconds;
         if (p->nreqs_out == 0)
             peer_send(p, nb_create_uninterest());
         else
-            p->flags |= PF_DO_UNWANT;
+            p->mp->flags |= PF_DO_UNWANT;
     }
 }
 
@@ -264,8 +296,12 @@ peer_create_common(int sd)
 {
     struct peer *p = btpd_calloc(1, sizeof(*p));
 
+    p->mp = mp_create();
+    mp_hold(p->mp);
+    p->mp->p = p;
+
     p->sd = sd;
-    p->flags = PF_I_CHOKE | PF_P_CHOKE;
+    p->mp->flags = PF_I_CHOKE | PF_P_CHOKE;
     p->t_created = btpd_seconds;
     p->t_lastwrite = btpd_seconds;
     p->t_nointerest = btpd_seconds;
@@ -285,7 +321,7 @@ void
 peer_create_in(int sd)
 {
     struct peer *p = peer_create_common(sd);
-    p->flags |= PF_INCOMING;
+    p->mp->flags |= PF_INCOMING;
 }
 
 void
@@ -344,9 +380,9 @@ peer_create_out_compact(struct net *n, int family, const char *compact)
 void
 peer_on_no_reqs(struct peer *p)
 {
-    if ((p->flags & PF_DO_UNWANT) != 0) {
+    if ((p->mp->flags & PF_DO_UNWANT) != 0) {
         assert(p->nwant == 0);
-        p->flags &= ~PF_DO_UNWANT;
+        p->mp->flags &= ~PF_DO_UNWANT;
         peer_send(p, nb_create_uninterest());
     }
 }
@@ -362,8 +398,8 @@ peer_on_shake(struct peer *p)
 {
     uint8_t printid[21];
     int i;
-    for (i = 0; i < 20 && isprint(p->id[i]); i++)
-        printid[i] = p->id[i];
+    for (i = 0; i < 20 && isprint(p->mp->id[i]); i++)
+        printid[i] = p->mp->id[i];
     printid[i] = '\0';
     btpd_log(BTPD_L_MSG, "received shake(%s) from %p\n", printid, p);
     p->piece_field = btpd_calloc(1, (int)ceil(p->n->tp->npieces / 8.0));
@@ -377,9 +413,10 @@ peer_on_shake(struct peer *p)
         }
     }
 
+    mptbl_insert(p->n->mptbl, p->mp);
     BTPDQ_REMOVE(&net_unattached, p, p_entry);
     BTPDQ_INSERT_HEAD(&p->n->peers, p, p_entry);
-    p->flags |= PF_ATTACHED;
+    p->mp->flags |= PF_ATTACHED;
     p->n->npeers++;
 
     ul_on_new_peer(p);
@@ -390,10 +427,10 @@ void
 peer_on_choke(struct peer *p)
 {
     btpd_log(BTPD_L_MSG, "received choke from %p\n", p);
-    if ((p->flags & PF_P_CHOKE) != 0)
+    if ((p->mp->flags & PF_P_CHOKE) != 0)
         return;
     else {
-        p->flags |= PF_P_CHOKE;
+        p->mp->flags |= PF_P_CHOKE;
         dl_on_choke(p);
         struct nb_link *nl = BTPDQ_FIRST(&p->outq);
         while (nl != NULL) {
@@ -409,10 +446,10 @@ void
 peer_on_unchoke(struct peer *p)
 {
     btpd_log(BTPD_L_MSG, "received unchoke from %p\n", p);
-    if ((p->flags & PF_P_CHOKE) == 0)
+    if ((p->mp->flags & PF_P_CHOKE) == 0)
         return;
     else {
-        p->flags &= ~PF_P_CHOKE;
+        p->mp->flags &= ~PF_P_CHOKE;
         dl_on_unchoke(p);
     }
 }
@@ -421,10 +458,10 @@ void
 peer_on_interest(struct peer *p)
 {
     btpd_log(BTPD_L_MSG, "received interest from %p\n", p);
-    if ((p->flags & PF_P_WANT) != 0)
+    if ((p->mp->flags & PF_P_WANT) != 0)
         return;
     else {
-        p->flags |= PF_P_WANT;
+        p->mp->flags |= PF_P_WANT;
         ul_on_interest(p);
     }
 }
@@ -433,10 +470,10 @@ void
 peer_on_uninterest(struct peer *p)
 {
     btpd_log(BTPD_L_MSG, "received uninterest from %p\n", p);
-    if ((p->flags & PF_P_WANT) == 0)
+    if ((p->mp->flags & PF_P_WANT) == 0)
         return;
     else {
-        p->flags &= ~PF_P_WANT;
+        p->mp->flags &= ~PF_P_WANT;
         p->t_nointerest = btpd_seconds;
         ul_on_uninterest(p);
     }
@@ -497,14 +534,14 @@ peer_on_request(struct peer *p, uint32_t index, uint32_t begin,
 {
     btpd_log(BTPD_L_MSG, "received request(%u,%u,%u) from %p\n",
         index, begin, length, p);
-    if ((p->flags & PF_NO_REQUESTS) == 0) {
+    if ((p->mp->flags & PF_NO_REQUESTS) == 0) {
         peer_send(p, nb_create_piece(index, begin, length));
         peer_send(p, nb_create_torrentdata());
         p->npiece_msgs++;
         if (p->npiece_msgs >= MAXPIECEMSGS) {
             peer_send(p, nb_create_choke());
             peer_send(p, nb_create_unchoke());
-            p->flags |= PF_NO_REQUESTS;
+            p->mp->flags |= PF_NO_REQUESTS;
         }
     }
 }
@@ -531,7 +568,7 @@ peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
 void
 peer_on_tick(struct peer *p)
 {
-    if (p->flags & PF_ATTACHED) {
+    if (p->mp->flags & PF_ATTACHED) {
         if (BTPDQ_EMPTY(&p->outq)) {
             if (btpd_seconds - p->t_lastwrite >= 120)
                 peer_keepalive(p);
@@ -539,7 +576,7 @@ peer_on_tick(struct peer *p)
             btpd_log(BTPD_L_CONN, "write attempt timed out.\n");
             goto kill;
         }
-        if ((cm_full(p->n->tp) && !(p->flags & PF_P_WANT) &&
+        if ((cm_full(p->n->tp) && !(p->mp->flags & PF_P_WANT) &&
                 btpd_seconds - p->t_nointerest >= 600)) {
             btpd_log(BTPD_L_CONN, "no interest for 10 minutes.\n");
             goto kill;
@@ -556,7 +593,7 @@ kill:
 int
 peer_chokes(struct peer *p)
 {
-    return p->flags & PF_P_CHOKE;
+    return p->mp->flags & PF_P_CHOKE;
 }
 
 int
@@ -574,13 +611,13 @@ peer_laden(struct peer *p)
 int
 peer_wanted(struct peer *p)
 {
-    return (p->flags & PF_I_WANT) == PF_I_WANT;
+    return (p->mp->flags & PF_I_WANT) == PF_I_WANT;
 }
 
 int
 peer_leech_ok(struct peer *p)
 {
-    return (p->flags & (PF_I_WANT|PF_P_CHOKE)) == PF_I_WANT;
+    return (p->mp->flags & (PF_I_WANT|PF_P_CHOKE)) == PF_I_WANT;
 }
 
 int
@@ -592,7 +629,7 @@ peer_active_down(struct peer *p)
 int
 peer_active_up(struct peer *p)
 {
-    return (p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT
+    return (p->mp->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT
         || p->npiece_msgs > 0;
 }
 

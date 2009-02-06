@@ -33,12 +33,12 @@ choke_do(void)
     if (m_max_uploads < 0) {
         struct peer *p;
         BTPDQ_FOREACH(p, &m_peerq, ul_entry)
-            if (p->flags & PF_I_CHOKE)
+            if (p->mp->flags & PF_I_CHOKE)
                 peer_unchoke(p);
     } else if (m_max_uploads == 0) {
         struct peer *p;
         BTPDQ_FOREACH(p, &m_peerq, ul_entry)
-            if ((p->flags & PF_I_CHOKE) == 0)
+            if ((p->mp->flags & PF_I_CHOKE) == 0)
                 peer_choke(p);
     } else {
         struct peer_sort worthy[m_npeers];
@@ -68,9 +68,9 @@ choke_do(void)
 
         bzero(unchoked, sizeof(unchoked));
         for (i = nworthy - 1; i >= 0 && found < m_max_uploads - 1; i--) {
-            if ((worthy[i].p->flags & PF_P_WANT) != 0)
+            if ((worthy[i].p->mp->flags & PF_P_WANT) != 0)
                 found++;
-            if ((worthy[i].p->flags & PF_I_CHOKE) != 0)
+            if ((worthy[i].p->mp->flags & PF_I_CHOKE) != 0)
                 peer_unchoke(worthy[i].p);
             unchoked[worthy[i].i] = 1;
         }
@@ -79,12 +79,12 @@ choke_do(void)
         BTPDQ_FOREACH(p, &m_peerq, ul_entry) {
             if (!unchoked[i]) {
                 if (found < m_max_uploads && !peer_full(p)) {
-                    if (p->flags & PF_P_WANT)
+                    if (p->mp->flags & PF_P_WANT)
                         found++;
-                    if (p->flags & PF_I_CHOKE)
+                    if (p->mp->flags & PF_I_CHOKE)
                         peer_unchoke(p);
                 } else {
-                    if ((p->flags & PF_I_CHOKE) == 0)
+                    if ((p->mp->flags & PF_I_CHOKE) == 0)
                         peer_choke(p);
                 }
             }
@@ -98,7 +98,7 @@ shuffle_optimists(void)
 {
     for (int i = 0; i < m_npeers; i++) {
         struct peer *p = BTPDQ_FIRST(&m_peerq);
-        if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == (PF_P_WANT|PF_I_CHOKE)) {
+        if ((p->mp->flags & (PF_P_WANT|PF_I_CHOKE)) == (PF_P_WANT|PF_I_CHOKE)) {
             break;
         } else {
             BTPDQ_REMOVE(&m_peerq, p, ul_entry);
@@ -143,7 +143,7 @@ ul_on_lost_peer(struct peer *p)
     assert(m_npeers > 0);
     BTPDQ_REMOVE(&m_peerq, p, ul_entry);
     m_npeers--;
-    if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT)
+    if ((p->mp->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT)
         choke_do();
 }
 
@@ -161,14 +161,14 @@ ul_on_lost_torrent(struct net *n)
 void
 ul_on_interest(struct peer *p)
 {
-    if ((p->flags & PF_I_CHOKE) == 0)
+    if ((p->mp->flags & PF_I_CHOKE) == 0)
         choke_do();
 }
 
 void
 ul_on_uninterest(struct peer *p)
 {
-    if ((p->flags & PF_I_CHOKE) == 0)
+    if ((p->mp->flags & PF_I_CHOKE) == 0)
         choke_do();
 }
 

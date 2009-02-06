@@ -3,6 +3,18 @@
 #include <stdarg.h>
 #include <time.h>
 
+int
+btpd_id_eq(const void *k1, const void *k2)
+{
+    return bcmp(k1, k2, 20) == 0;
+}
+
+uint32_t
+btpd_id_hash(const void *k)
+{
+    return dec_be32(k + 16);
+}
+
 void *
 btpd_malloc(size_t size)
 {

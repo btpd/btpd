@@ -295,18 +295,6 @@ num_hash(const void *k)
     return *(const unsigned *)k;
 }
 
-static int
-id_test(const void *k1, const void *k2)
-{
-    return bcmp(k1, k2, 20) == 0;
-}
-
-static uint32_t
-id_hash(const void *k)
-{
-    return dec_be32(k + 16);
-}
-
 void
 tlib_init(void)
 {
@@ -316,7 +304,7 @@ tlib_init(void)
     char file[PATH_MAX];
 
     m_numtbl = numtbl_create(1, num_test, num_hash);
-    m_hashtbl = hashtbl_create(1, id_test, id_hash);
+    m_hashtbl = hashtbl_create(1, btpd_id_eq, btpd_id_hash);
     if (m_numtbl == NULL || m_hashtbl == NULL)
         btpd_err("Out of memory.\n");
 

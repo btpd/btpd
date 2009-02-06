@@ -26,16 +26,7 @@ struct peer_tq net_unattached = BTPDQ_HEAD_INITIALIZER(net_unattached);
 int
 net_torrent_has_peer(struct net *n, const uint8_t *id)
 {
-    int has = 0;
-    struct peer *p = BTPDQ_FIRST(&n->peers);
-    while (p != NULL) {
-        if (bcmp(p->id, id, 20) == 0) {
-            has = 1;
-            break;
-        }
-        p = BTPDQ_NEXT(p, p_entry);
-    }
-    return has;
+    return mptbl_find(n->mptbl, id) != NULL;
 }
 
 void
@@ -45,8 +36,11 @@ net_create(struct torrent *tp)
     n->tp = tp;
     tp->net = n;
 
+    if ((n->mptbl = mptbl_create(3, btpd_id_eq, btpd_id_hash)) == NULL)
+        btpd_err("Out of memory.\n");
+
     BTPDQ_INIT(&n->getlst);
-    
+
     n->busy_field = btpd_calloc(ceil(tp->npieces / 8.0), 1);
     n->piece_count = btpd_calloc(tp->npieces, sizeof(*n->piece_count));
 }
@@ -54,6 +48,14 @@ net_create(struct torrent *tp)
 void
 net_kill(struct torrent *tp)
 {
+    struct htbl_iter it;
+    struct meta_peer *mp = mptbl_iter_first(tp->net->mptbl, &it);
+    while (mp != NULL) {
+        struct meta_peer *mps = mp;
+        mp = mptbl_iter_del(&it);
+        mp_kill(mps);
+    }
+    mptbl_free(tp->net->mptbl);
     free(tp->net->piece_count);
     free(tp->net->busy_field);
     free(tp->net);
@@ -235,7 +237,7 @@ net_dispatch_msg(struct peer *p, const char *buf)
             res = 1;
         break;
     case MSG_REQUEST:
-        if ((p->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT) {
+        if ((p->mp->flags & (PF_P_WANT|PF_I_CHOKE)) == PF_P_WANT) {
             index = dec_be32(buf);
             begin = dec_be32(buf + 4);
             length = dec_be32(buf + 8);
@@ -310,7 +312,7 @@ net_state(struct peer *p, const char *buf)
         peer_set_in_state(p, SHAKE_INFO, 20);
         break;
     case SHAKE_INFO:
-        if (p->flags & PF_INCOMING) {
+        if (p->mp->flags & PF_INCOMING) {
             struct torrent *tp = torrent_by_hash(buf);
             if (tp == NULL || !net_active(tp))
                 goto bad;
@@ -324,7 +326,7 @@ net_state(struct peer *p, const char *buf)
         if ((net_torrent_has_peer(p->n, buf)
              || bcmp(buf, btpd_get_peer_id(), 20) == 0))
             goto bad;
-        bcopy(buf, p->id, 20);
+        bcopy(buf, p->mp->id, 20);
         peer_on_shake(p);
         peer_set_in_state(p, BTP_MSGSIZE, 4);
         break;
@@ -561,14 +563,14 @@ net_bw_tick(void)
         while ((p = BTPDQ_FIRST(&net_bw_readq)) != NULL && m_bw_bytes_in > 0) {
             BTPDQ_REMOVE(&net_bw_readq, p, rq_entry);
             btpd_ev_enable(&p->ioev, EV_READ);
-            p->flags &= ~PF_ON_READQ;
+            p->mp->flags &= ~PF_ON_READQ;
             m_bw_bytes_in -= net_read(p, m_bw_bytes_in);
         }
     } else {
         while ((p = BTPDQ_FIRST(&net_bw_readq)) != NULL) {
             BTPDQ_REMOVE(&net_bw_readq, p, rq_entry);
             btpd_ev_enable(&p->ioev, EV_READ);
-            p->flags &= ~PF_ON_READQ;
+            p->mp->flags &= ~PF_ON_READQ;
             net_read(p, 0);
         }
     }
@@ -578,14 +580,14 @@ net_bw_tick(void)
                    && m_bw_bytes_out > 0)) {
             BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
             btpd_ev_enable(&p->ioev, EV_WRITE);
-            p->flags &= ~PF_ON_WRITEQ;
+            p->mp->flags &= ~PF_ON_WRITEQ;
             m_bw_bytes_out -=  net_write(p, m_bw_bytes_out);
         }
     } else {
         while ((p = BTPDQ_FIRST(&net_bw_writeq)) != NULL) {
             BTPDQ_REMOVE(&net_bw_writeq, p, wq_entry);
             btpd_ev_enable(&p->ioev, EV_WRITE);
-            p->flags &= ~PF_ON_WRITEQ;
+            p->mp->flags &= ~PF_ON_WRITEQ;
             net_write(p, 0);
         }
     }
@@ -622,7 +624,7 @@ net_read_cb(struct peer *p)
         m_bw_bytes_in -= net_read(p, m_bw_bytes_in);
     else {
         btpd_ev_disable(&p->ioev, EV_READ);
-        p->flags |= PF_ON_READQ;
+        p->mp->flags |= PF_ON_READQ;
         BTPDQ_INSERT_TAIL(&net_bw_readq, p, rq_entry);
     }
 }
@@ -636,7 +638,7 @@ net_write_cb(struct peer *p)
         m_bw_bytes_out -= net_write(p, m_bw_bytes_out);
     else {
         btpd_ev_disable(&p->ioev, EV_WRITE);
-        p->flags |= PF_ON_WRITEQ;
+        p->mp->flags |= PF_ON_WRITEQ;
         BTPDQ_INSERT_TAIL(&net_bw_writeq, p, wq_entry);
     }
 }

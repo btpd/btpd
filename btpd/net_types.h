@@ -21,6 +21,7 @@ struct net {
 
     unsigned npeers;
     struct peer_tq peers;
+    struct mptbl *mptbl;
 };
 
 enum input_state {
@@ -33,16 +34,24 @@ enum input_state {
     BTP_MSGBODY
 };
 
+struct meta_peer {
+    struct peer *p;
+    HTBL_ENTRY(chain);
+    uint16_t flags;
+    uint16_t refs;
+    uint8_t id[20];
+};
+
+HTBL_TYPE(mptbl, meta_peer, uint8_t, id, chain);
+
 struct peer {
     int sd;
-    uint16_t flags;
     uint8_t *piece_field;
     uint32_t npieces;
     uint32_t nwant;
 
-    uint8_t id[20];
-
     struct net *n;
+    struct meta_peer *mp;
 
     struct block_request_tq my_reqs;
 
