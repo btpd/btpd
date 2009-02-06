@@ -11,13 +11,14 @@ struct _htbl {
     size_t size;
     size_t keyoff;
     size_t chainoff;
+    float ratio;
 };
 
 #define KEYP(tbl, o) ((void *)(o) + (tbl)->keyoff)
 #define CHAINP(tbl, o) *(struct _any **)((void *)(o) + (tbl)->chainoff)
 
 struct _htbl *
-_htbl_create(int (*eq)(const void *, const void *),
+_htbl_create(float ratio, int (*eq)(const void *, const void *),
     uint32_t (*hash)(const void *), size_t keyoff, size_t chainoff)
 {
     struct _htbl *tbl = calloc(1, sizeof(*tbl));
@@ -25,6 +26,7 @@ _htbl_create(int (*eq)(const void *, const void *),
         return NULL;
     tbl->size = 0;
     tbl->buckcnt = 1;
+    tbl->ratio = ratio;
     tbl->keyoff = keyoff;
     tbl->chainoff = chainoff;
     tbl->hash = hash;
@@ -94,7 +96,7 @@ _htbl_insert(struct _htbl *tbl, struct _any *o)
 {
     bucket_insert(tbl, o);
     tbl->size++;
-    if (tbl->size > tbl->buckcnt * 4 / 5)
+    if (tbl->size > tbl->buckcnt * tbl->ratio)
         _htbl_grow(tbl);
 }
 
@@ -113,23 +115,20 @@ struct _any *
 _htbl_remove(struct _htbl *tbl, const void *key)
 {
     size_t bi = tbl->hash(key) % tbl->buckcnt;
-    struct _any *p = NULL, *o = tbl->buckets[bi];
+    struct _any **p = &tbl->buckets[bi], *o = tbl->buckets[bi];
     while (o != NULL && !tbl->eq(KEYP(tbl, o), key)) {
-        p = o;
-        o = CHAINP(tbl, o);
+        p = &CHAINP(tbl, o);
+        o = *p;
     }
     if (o != NULL) {
-        if (p == NULL)
-            tbl->buckets[bi] = CHAINP(tbl, o);
-        else
-            CHAINP(tbl, p) = CHAINP(tbl, o);
+        *p = CHAINP(tbl, o);
         tbl->size--;
     }
     return o;
 }
 
 void
-_htbl_tov(struct _htbl *tbl, struct _any **v)
+_htbl_fillv(struct _htbl *tbl, struct _any **v)
 {
     size_t vi = 0;
     size_t bi = 0;
@@ -145,32 +144,81 @@ _htbl_tov(struct _htbl *tbl, struct _any **v)
     }
 }
 
+struct _any **
+_htbl_tov(struct _htbl *tbl)
+{
+    struct _any **v = malloc(sizeof(*v));
+    if (v != NULL)
+        _htbl_fillv(tbl, v);
+    return v;
+}
+
 size_t
 _htbl_size(struct _htbl *tbl)
 {
     return tbl->size;
 }
 
-void
-_htbl_iter_init(struct _htbl *tbl, struct htbl_iter *it)
+static void
+iter_next_bucket(struct htbl_iter *it)
 {
+    while (it->tbl->buckets[it->bi] == NULL)
+        it->bi++;
+    it->obj = it->tbl->buckets[it->bi];
+    it->ptr = &it->tbl->buckets[it->bi];
+}
+
+struct _any *
+_htbl_iter_first(struct _htbl *tbl, struct htbl_iter *it)
+{
+    if (tbl->size == 0)
+        return NULL;
+
     it->tbl = tbl;
+    it->cnt = 1;
     it->bi = 0;
-    it->cnt = 0;
-    it->obj = NULL;
+    iter_next_bucket(it);
+    return it->obj;
 }
 
 struct _any *
 _htbl_iter_next(struct htbl_iter *it)
 {
+    struct _any *tmp;
     if (it->cnt == it->tbl->size)
         return NULL;
-    it->obj = it->cnt == 0 ?
-        it->tbl->buckets[it->bi] : CHAINP(it->tbl, it->obj);
-    while (it->obj == NULL) {
-        it->bi++;
-        it->obj = it->tbl->buckets[it->bi];
-    }
+
     it->cnt++;
+    if ((tmp = CHAINP(it->tbl, it->obj)) != NULL) {
+        it->ptr = &CHAINP(it->tbl, it->obj);
+        it->obj = tmp;
+    } else {
+        it->bi++;
+        iter_next_bucket(it);
+    }
+    return it->obj;
+}
+
+#include <stdio.h>
+
+struct _any *
+_htbl_iter_del(struct htbl_iter *it)
+{
+    struct _any *tmp;
+
+    it->tbl->size--;
+    if (it->cnt > it->tbl->size) {
+        *it->ptr = NULL;
+        return NULL;
+    }
+
+    if ((tmp = CHAINP(it->tbl, it->obj)) != NULL) {
+        *it->ptr = tmp;
+        it->obj = tmp;
+    } else {
+        *it->ptr = NULL;
+        it->bi++;
+        iter_next_bucket(it);
+    }
     return it->obj;
 }
