@@ -309,8 +309,8 @@ tlib_init(void)
     uint8_t hash[20];
     char file[PATH_MAX];
 
-    m_numtbl = numtbl_create(num_test, num_hash);
-    m_hashtbl = hashtbl_create(id_test, id_hash);
+    m_numtbl = numtbl_create(1, num_test, num_hash);
+    m_hashtbl = hashtbl_create(1, id_test, id_hash);
     if (m_numtbl == NULL || m_hashtbl == NULL)
         btpd_err("Out of memory.\n");
 
