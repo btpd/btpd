@@ -2,7 +2,7 @@
 
                                 README
 
-                           btpd version 0.13
+                           btpd version 0.14
 
 
 Contents
@@ -18,19 +18,20 @@ Contents
 3               Building
 3.a               Requirements
 3.b               Standard build
-4               Upgrade notes
-4.a               btpd 0.12
+4               Additional notes
+4.a               Upgrade form old versions
+4.b               Pre exit mode
+4.c               Using both IPv6 and IPv4
 
 1. Introduction
 
 1.a What is btpd?
 
-  btpd is a bittorrent client consisting of a daemon and client commands,
-  which can be used to read and/or manipulate the daemon state. The daemon
-  is capable of running several torrents simultaneously and only uses one
-  tcp port. It's fairly low on resource usage and should be perfect for
-  file distribution sites. Efficient downloads and ease of use makes this
-  client a good choice for the casual user as well.
+  Btpd is a utility for sharing files over the BitTorrent network protocol.
+  It runs in daemon mode, thus needing no controlling terminal or gui.
+  Instead, the daemon is controlled by btcli, its command line utility,
+  or other programs capable of sending commands and queries on the control
+  socket.
 
 1.b The programs
 
@@ -73,8 +74,7 @@ Contents
   display the state of a torrent:
   +     the torrent is starting. This may take time if btpd needs to test
         the content of this torrent or one started before it.
-  -     the torrent is being stopped. May take time if the tracker is
-        unresponsive. 
+  -     the torrent is being stopped.
   I     the torrent is inactive.
   S     btpd is seeding the torrent.
   L     btpd is leeching the torrent.
@@ -184,10 +184,27 @@ Contents
 
   See './configure --help' for available build options if the above fails.
 
-4. Upgrade notes
+4. Additional notes
 
-4.a btpd 0.12
+4.a Upgrade from old version
 
   The layout of the torrents directory in the btpd directory has changed
-  since previous versions. Please remove the torrents directory before
-  running 0.12 or later.
+  since btpd 0.11. Please remove the torrents directory before running
+  later versions.
+
+4.b Pre exit mode
+
+  If btpd needs to send stop messages to trackers before shutting down,
+  it will enter the pre exit mode. A btpd process in this mode can safely
+  be ignored and will not interfere with any new btpd started in the same
+  directory.
+
+4.c Using both IPv6 and IPv4
+
+  Unfortunately enabling both IPv6 and IPv4 in btpd is less useful than it
+  should be. The problem is that some sites have trackers for both versions
+  and it's likely that the IPv6 one, which probably has less peers, will be
+  used in favour of the IPv4 one.
+
+  In order to fix this problem, the IP version options should be changed to
+  be per torrent, in some future version of btpd.

@@ -1,3 +1,27 @@
+btpd 0.14:
+----------
+
+Misc:
+- IPv6 support.
+- Bans peers with bad data.
+- Better tracker compatability and more reliable tracker communication.
+- Show tracker counts in btcli stat.
+- Compiles on Solaris 10.
+- Btpd will now signal startup failures via the process exit value and
+  print the failure reason to stdout.
+- Better shutdown and torrent stop behaviour.
+- Needs pthreads again.
+- Removed libevent in favour of own event loop code.
+
+Bug fixes:
+- An integer array was misaligned, which could cause crashes on systems
+  with alignment requirements. E.g., on XScale arm.
+- An error in the torrent parsing code could cause crashes.
+- The '--topdir' option to btcli add didn't work properly for single file
+  torrents.
+- The system name lookup scheme is now used. In btpd 0.13 only dns lookups
+  were performed.
+
 btpd 0.13:
 ----------
 
