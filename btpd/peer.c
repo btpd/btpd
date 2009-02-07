@@ -26,6 +26,7 @@ mp_drop(struct meta_peer *mp, struct net *n)
     assert(mp->refs > 0);
     mp->refs--;
     if (mp->refs == 0) {
+        assert(mp->p == NULL);
         if (mp->flags & PF_ATTACHED)
             assert(mptbl_remove(n->mptbl, mp->id) == mp);
         mp_kill(mp);
@@ -70,6 +71,8 @@ peer_kill(struct peer *p)
         free(p->in.buf);
     if (p->piece_field != NULL)
         free(p->piece_field);
+    if (p->bad_field != NULL)
+        free(p->bad_field);
     free(p);
     net_npeers--;
 }
@@ -257,9 +260,14 @@ peer_choke(struct peer *p)
 void
 peer_want(struct peer *p, uint32_t index)
 {
+    if (!has_bit(p->piece_field, index) || peer_has_bad(p, index))
+        return;
     assert(p->nwant < p->npieces);
     p->nwant++;
     if (p->nwant == 1) {
+        p->mp->flags |= PF_I_WANT;
+        if (p->mp->flags & PF_SUSPECT)
+            return;
         if (p->nreqs_out == 0) {
             assert((p->mp->flags & PF_DO_UNWANT) == 0);
             int unsent = 0;
@@ -272,17 +280,20 @@ peer_want(struct peer *p, uint32_t index)
             assert((p->mp->flags & PF_DO_UNWANT) != 0);
             p->mp->flags &= ~PF_DO_UNWANT;
         }
-        p->mp->flags |= PF_I_WANT;
     }
 }
 
 void
 peer_unwant(struct peer *p, uint32_t index)
 {
+    if (!has_bit(p->piece_field, index) || peer_has_bad(p, index))
+        return;
     assert(p->nwant > 0);
     p->nwant--;
     if (p->nwant == 0) {
         p->mp->flags &= ~PF_I_WANT;
+        if (p->mp->flags & PF_SUSPECT)
+            return;
         p->t_nointerest = btpd_seconds;
         if (p->nreqs_out == 0)
             peer_send(p, nb_create_uninterest());
@@ -568,6 +579,8 @@ peer_on_cancel(struct peer *p, uint32_t index, uint32_t begin,
 void
 peer_on_tick(struct peer *p)
 {
+    if (p->mp->flags & PF_BANNED)
+        goto kill;
     if (p->mp->flags & PF_ATTACHED) {
         if (BTPDQ_EMPTY(&p->outq)) {
             if (btpd_seconds - p->t_lastwrite >= 120)
@@ -590,6 +603,52 @@ kill:
     peer_kill(p);
 }
 
+void
+peer_bad_piece(struct peer *p, uint32_t index)
+{
+    if (p->npcs_bad == 0) {
+        assert(p->bad_field == NULL);
+        p->bad_field = btpd_calloc(ceil(p->n->tp->npieces / 8.0), 1);
+    }
+    assert(!has_bit(p->bad_field, index));
+    set_bit(p->bad_field, index);
+    p->npcs_bad++;
+    p->suspicion++;
+    if (p->suspicion == 3) {
+        btpd_log(BTPD_L_BAD, "suspect peer %p.\n", p);
+        p->mp->flags |= PF_SUSPECT;
+        if (p->nwant > 0) {
+            p->mp->flags &= ~PF_DO_UNWANT;
+            peer_send(p, nb_create_uninterest());
+        }
+    }
+}
+
+void
+peer_good_piece(struct peer *p, uint32_t index)
+{
+    if (peer_has_bad(p, index)) {
+        assert(p->npcs_bad > 0);
+        p->npcs_bad--;
+        if (p->npcs_bad == 0) {
+            free(p->bad_field);
+            p->bad_field = NULL;
+        } else
+            clear_bit(p->bad_field, index);
+    }
+    p->suspicion = 0;
+    if (p->mp->flags & PF_SUSPECT) {
+        btpd_log(BTPD_L_BAD, "unsuspect peer %p.\n", p);
+        p->mp->flags &= ~PF_SUSPECT;
+        if (p->nwant > 0) {
+            assert(p->mp->flags & PF_I_WANT);
+            peer_send(p, nb_create_interest());
+        }
+        if (peer_leech_ok(p))
+            dl_on_download(p);
+    }
+}
+
 int
 peer_chokes(struct peer *p)
 {
@@ -600,6 +659,12 @@ int
 peer_has(struct peer *p, uint32_t index)
 {
     return has_bit(p->piece_field, index);
+}
+
+int
+peer_has_bad(struct peer *p, uint32_t index)
+{
+    return p->bad_field != NULL && has_bit(p->bad_field, index);
 }
 
 int
@@ -617,7 +682,8 @@ peer_wanted(struct peer *p)
 int
 peer_leech_ok(struct peer *p)
 {
-    return (p->mp->flags & (PF_I_WANT|PF_P_CHOKE)) == PF_I_WANT;
+    return (p->mp->flags & (PF_BANNED|PF_SUSPECT|PF_I_WANT|PF_P_CHOKE))
+        == PF_I_WANT && !peer_laden(p);
 }
 
 int
@@ -637,4 +703,10 @@ int
 peer_full(struct peer *p)
 {
     return p->npieces == p->n->tp->npieces;
+}
+
+int
+peer_requestable(struct peer *p, uint32_t index)
+{
+    return peer_has(p, index) && !peer_has_bad(p, index);
 }

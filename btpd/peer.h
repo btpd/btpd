@@ -11,6 +11,8 @@
 #define PF_NO_REQUESTS   0x80
 #define PF_INCOMING     0x100
 #define PF_DO_UNWANT    0x200
+#define PF_SUSPECT      0x400
+#define PF_BANNED       0x800
 
 #define MAXPIECEMSGS 128
 #define MAXPIPEDREQUESTS 10
@@ -61,9 +63,15 @@ int peer_chokes(struct peer *p);
 int peer_wanted(struct peer *p);
 int peer_laden(struct peer *p);
 int peer_has(struct peer *p, uint32_t index);
+int peer_has_bad(struct peer *p, uint32_t index);
 int peer_leech_ok(struct peer *p);
 int peer_full(struct peer *p);
+void peer_bad_piece(struct peer *p, uint32_t index);
+void peer_good_piece(struct peer *p, uint32_t index);
+int peer_requestable(struct peer *p, uint32_t index);
 
+void mp_hold(struct meta_peer *mp);
+void mp_drop(struct meta_peer *mp, struct net *n);
 void mp_kill(struct meta_peer *mp);
 
 #endif

@@ -83,6 +83,8 @@ logtype_str(uint32_t type)
     case BTPD_L_CONN:  return "conn";
     case BTPD_L_TR:    return "tracker";
     case BTPD_L_MSG:   return "msg";
+    case BTPD_L_POL:   return "policy";
+    case BTPD_L_BAD:   return "bad";
     }
     return "";
 }

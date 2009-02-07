@@ -58,6 +58,7 @@
 #define BTPD_L_MSG      0x00000008
 #define BTPD_L_BTPD     0x00000010
 #define BTPD_L_POL      0x00000020
+#define BTPD_L_BAD      0x00000040
 
 extern long btpd_seconds;
 
@@ -89,6 +90,9 @@ int btpd_id_eq(const void *k1, const void *k2);
 uint32_t btpd_id_hash(const void *k);
 
 const uint8_t *btpd_get_peer_id(void);
+
+int btpd_id_eq(const void *id1, const void *id2);
+uint32_t btpd_id_hash(const void *id);
 
 void td_acquire_lock(void);
 void td_release_lock(void);

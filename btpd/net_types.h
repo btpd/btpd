@@ -4,6 +4,8 @@
 BTPDQ_HEAD(peer_tq, peer);
 BTPDQ_HEAD(piece_tq, piece);
 BTPDQ_HEAD(block_request_tq, block_request);
+BTPDQ_HEAD(blog_tq, blog);
+BTPDQ_HEAD(blog_record_tq, blog_record);
 
 struct net {
     struct torrent *tp;
@@ -47,8 +49,11 @@ HTBL_TYPE(mptbl, meta_peer, uint8_t, id, chain);
 struct peer {
     int sd;
     uint8_t *piece_field;
+    uint8_t *bad_field;
     uint32_t npieces;
     uint32_t nwant;
+    uint32_t npcs_bad;
+    int suspicion;
 
     struct net *n;
     struct meta_peer *mp;
@@ -102,11 +107,24 @@ struct piece {
 
     struct net_buf **eg_reqs;
     struct block_request_tq reqs;
+    struct blog_tq logs;
 
     const uint8_t *have_field;
     uint8_t *down_field;
 
     BTPDQ_ENTRY(piece) entry;
+};
+
+struct blog {
+    BTPDQ_ENTRY(blog) entry;
+    struct blog_record_tq records;
+    uint8_t *hashes;
+};
+
+struct blog_record {
+    BTPDQ_ENTRY(blog_record) entry;
+    struct meta_peer *mp;
+    uint8_t down_field[];
 };
 
 struct block_request {

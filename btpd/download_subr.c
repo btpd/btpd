@@ -24,6 +24,135 @@
 #include <openssl/sha.h>
 #include <stream.h>
 
+static void
+piece_new_log(struct piece *pc)
+{
+    struct blog *log = btpd_calloc(1, sizeof(*log));
+    BTPDQ_INIT(&log->records);
+    BTPDQ_INSERT_HEAD(&pc->logs, log, entry);
+}
+
+static void
+piece_log_hashes(struct piece *pc)
+{
+    uint8_t *buf;
+    struct torrent *tp = pc->n->tp;
+    struct blog *log = BTPDQ_FIRST(&pc->logs);
+    log->hashes = btpd_malloc(20 * pc->nblocks);
+    for (unsigned i = 0; i < pc->nblocks; i++) {
+        uint32_t bsize = torrent_block_size(tp, pc->index, pc->nblocks, i);
+        cm_get_bytes(tp, pc->index, i * PIECE_BLOCKLEN, bsize, &buf);
+        SHA1(buf, bsize, &log->hashes[i * 20]);
+        free(buf);
+    }
+}
+
+static void
+piece_log_free(struct piece *pc, struct blog *log)
+{
+    struct blog_record *r, *rnext;
+    BTPDQ_FOREACH_MUTABLE(r, &log->records, entry, rnext) {
+        mp_drop(r->mp, pc->n);
+        free(r);
+    }
+    if (log->hashes != NULL)
+        free(log->hashes);
+    free(log);
+}
+
+static void
+piece_kill_logs(struct piece *pc)
+{
+    struct blog *log, *lnext;
+    BTPDQ_FOREACH_MUTABLE(log, &pc->logs, entry, lnext)
+        piece_log_free(pc, log);
+    BTPDQ_INIT(&pc->logs);
+}
+
+void
+piece_log_bad(struct piece *pc)
+{
+    struct blog *log = BTPDQ_FIRST(&pc->logs);
+    struct blog_record *r = BTPDQ_FIRST(&log->records);
+    struct meta_peer *culprit = NULL;
+
+    if (r == BTPDQ_LAST(&log->records, blog_record_tq)) {
+        unsigned i;
+        for (i = 0; i < pc->nblocks; i++)
+            if (!has_bit(r->down_field, i))
+                break;
+        if (i == pc->nblocks)
+            culprit = r->mp;
+    }
+    if (culprit != NULL) {
+        if (pc->n->endgame && culprit->p != NULL)
+            peer_unwant(culprit->p, pc->index);
+        net_ban_peer(pc->n, culprit);
+        BTPDQ_REMOVE(&pc->logs, log, entry);
+        piece_log_free(pc, log);
+    } else {
+        BTPDQ_FOREACH(r, &log->records, entry) {
+            if (r->mp->p != NULL) {
+                if (pc->n->endgame)
+                    peer_unwant(r->mp->p, pc->index);
+                peer_bad_piece(r->mp->p, pc->index);
+            }
+        }
+        piece_log_hashes(pc);
+    }
+    piece_new_log(pc);
+}
+
+void
+piece_log_good(struct piece *pc)
+{
+    struct blog_record *r;
+    struct blog *log = BTPDQ_FIRST(&pc->logs), *bad = BTPDQ_NEXT(log, entry);
+
+    BTPDQ_FOREACH(r, &log->records, entry)
+        if (r->mp->p != NULL)
+            peer_good_piece(r->mp->p, pc->index);
+
+    if (bad != NULL)
+        piece_log_hashes(pc);
+
+    while (bad != NULL) {
+        BTPDQ_FOREACH(r, &bad->records, entry) {
+            int culprit = 0;
+            for (unsigned i = 0; i < pc->nblocks && !culprit; i++)
+                if (has_bit(r->down_field, i) && (
+                        bcmp(&log->hashes[i*20], &bad->hashes[i*20], 20) != 0))
+                    culprit = 1;
+            if (culprit)
+                net_ban_peer(pc->n, r->mp);
+            else if (r->mp->p != NULL)
+                peer_good_piece(r->mp->p, pc->index);
+        }
+
+        bad = BTPDQ_NEXT(bad, entry);
+    }
+}
+
+void
+piece_log_block(struct piece *pc, struct peer *p, uint32_t begin)
+{
+    struct blog_record *r;
+    struct blog *log = BTPDQ_FIRST(&pc->logs);
+    BTPDQ_FOREACH(r, &log->records, entry)
+        if (r->mp == p->mp)
+            break;
+    if (r == NULL) {
+        r = btpd_calloc(1, sizeof(*r) + ceil(pc->nblocks / 8.0));
+        r->mp = p->mp;
+        mp_hold(r->mp);
+        BTPDQ_INSERT_HEAD(&log->records, r, entry);
+    } else {
+        BTPDQ_REMOVE(&log->records, r, entry);
+        BTPDQ_INSERT_HEAD(&log->records, r, entry);
+    }
+    set_bit(r->down_field, begin / PIECE_BLOCKLEN);
+}
+
 static struct piece *
 piece_alloc(struct net *n, uint32_t index)
 {
@@ -54,10 +183,13 @@ piece_alloc(struct net *n, uint32_t index)
     assert(pc->ngot < pc->nblocks);
 
     BTPDQ_INIT(&pc->reqs);
+    BTPDQ_INIT(&pc->logs);
+
+    piece_new_log(pc);
 
     n->npcs_busy++;
     set_bit(n->busy_field, index);
-    BTPDQ_INSERT_HEAD(&n->getlst, pc, entry);
+    BTPDQ_INSERT_TAIL(&n->getlst, pc, entry);
     return pc;
 }
 
@@ -74,6 +206,7 @@ piece_free(struct piece *pc)
         nb_drop(req->msg);
         free(req);
     }
+    piece_kill_logs(pc);
     if (pc->eg_reqs != NULL) {
         for (uint32_t i = 0; i < pc->nblocks; i++)
             if (pc->eg_reqs[i] != NULL)
@@ -170,11 +303,9 @@ dl_enter_endgame(struct net *n)
     }
     BTPDQ_FOREACH(p, &n->peers, p_entry) {
         assert(p->nwant == 0);
-        BTPDQ_FOREACH(pc, &n->getlst, entry) {
-            if (peer_has(p, pc->index))
-                peer_want(p, pc->index);
-        }
-        if (p->nwant > 0 && peer_leech_ok(p) && !peer_laden(p))
+        BTPDQ_FOREACH(pc, &n->getlst, entry)
+            peer_want(p, pc->index);
+        if (peer_leech_ok(p))
             dl_assign_requests_eg(p);
     }
 }
@@ -192,7 +323,7 @@ dl_find_piece(struct net *n, uint32_t index)
 static int
 dl_piece_startable(struct peer *p, uint32_t index)
 {
-    return peer_has(p, index) && !cm_has_piece(p->n->tp, index)
+    return peer_requestable(p, index) && !cm_has_piece(p->n->tp, index)
         && !has_bit(p->n->busy_field, index);
 }
 
@@ -252,23 +383,12 @@ static void
 dl_on_piece_full(struct piece *pc)
 {
     struct peer *p;
-    BTPDQ_FOREACH(p, &pc->n->peers, p_entry) {
-        if (peer_has(p, pc->index))
-            peer_unwant(p, pc->index);
-    }
+    BTPDQ_FOREACH(p, &pc->n->peers, p_entry)
+        peer_unwant(p, pc->index);
     if (dl_should_enter_endgame(pc->n))
         dl_enter_endgame(pc->n);
 }
 
-/*
- * Allocate the piece indicated by the index for download.
- * There's a small possibility that a piece is fully downloaded
- * but haven't been tested. If such is the case the piece will
- * be tested and NULL will be returned. Also, we might then enter
- * end game.
- *
- * Return the piece or NULL.
- */
 struct piece *
 dl_new_piece(struct net *n, uint32_t index)
 {
@@ -291,11 +411,10 @@ dl_on_piece_unfull(struct piece *pc)
     struct peer *p;
     assert(!piece_full(pc) && n->endgame == 0);
     BTPDQ_FOREACH(p, &n->peers, p_entry)
-        if (peer_has(p, pc->index))
-            peer_want(p, pc->index);
+        peer_want(p, pc->index);
     p = BTPDQ_FIRST(&n->peers);
     while (p != NULL && !piece_full(pc)) {
-        if (peer_leech_ok(p) && !peer_laden(p))
+        if (peer_leech_ok(p) && peer_requestable(p, pc->index))
             dl_piece_assign_requests(pc, p); // Cannot provoke end game here.
         p = BTPDQ_NEXT(p, p_entry);
     }
@@ -368,12 +487,12 @@ dl_piece_assign_requests(struct piece *pc, struct peer *p)
 unsigned
 dl_assign_requests(struct peer *p)
 {
-    assert(!p->n->endgame && !peer_laden(p));
+    assert(!p->n->endgame && peer_leech_ok(p));
     struct piece *pc;
     struct net *n = p->n;
     unsigned count = 0;
     BTPDQ_FOREACH(pc, &n->getlst, entry) {
-        if (piece_full(pc) || !peer_has(p, pc->index))
+        if (piece_full(pc) || !peer_requestable(p, pc->index))
             continue;
         count += dl_piece_assign_requests(pc, p);
         if (n->endgame)
@@ -455,7 +574,7 @@ dl_piece_assign_requests_eg(struct piece *pc, struct peer *p)
 void
 dl_assign_requests_eg(struct peer *p)
 {
-    assert(!peer_laden(p));
+    assert(peer_leech_ok(p));
     struct net *n = p->n;
     struct piece_tq tmp;
     BTPDQ_INIT(&tmp);
@@ -463,7 +582,7 @@ dl_assign_requests_eg(struct peer *p)
     struct piece *pc = BTPDQ_FIRST(&n->getlst);
     while (!peer_laden(p) && pc != NULL) {
         struct piece *next = BTPDQ_NEXT(pc, entry);
-        if (peer_has(p, pc->index) && pc->nblocks != pc->ngot) {
+        if (peer_requestable(p, pc->index) && pc->nblocks != pc->ngot) {
             dl_piece_assign_requests_eg(pc, p);
             BTPDQ_REMOVE(&n->getlst, pc, entry);
             BTPDQ_INSERT_HEAD(&tmp, pc, entry);

@@ -6,6 +6,10 @@
 int piece_full(struct piece *pc);
 void piece_free(struct piece *pc);
 
+void piece_log_bad(struct piece *pc);
+void piece_log_good(struct piece *pc);
+void piece_log_block(struct piece *pc, struct peer *p, uint32_t begin);
+
 void dl_on_piece_unfull(struct piece *pc);
 
 struct piece *dl_new_piece(struct net *n, uint32_t index);

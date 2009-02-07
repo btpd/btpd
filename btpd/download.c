@@ -17,18 +17,17 @@ dl_on_piece_ann(struct peer *p, uint32_t index)
     if (n->endgame) {
         assert(pc != NULL);
         peer_want(p, index);
-        if (!peer_chokes(p) && !peer_laden(p))
+        if (peer_leech_ok(p))
             dl_assign_requests_eg(p);
     } else if (pc == NULL) {
         peer_want(p, index);
-        if (!peer_chokes(p) && !peer_laden(p)) {
+        if (peer_leech_ok(p)) {
             pc = dl_new_piece(n, index);
-            if (pc != NULL)
-                dl_piece_assign_requests(pc, p);
+            dl_piece_assign_requests(pc, p);
         }
     } else if (!piece_full(pc)) {
         peer_want(p, index);
-        if (!peer_chokes(p) && !peer_laden(p))
+        if (peer_leech_ok(p))
             dl_piece_assign_requests(pc, p);
     }
 }
@@ -36,21 +35,17 @@ dl_on_piece_ann(struct peer *p, uint32_t index)
 void
 dl_on_download(struct peer *p)
 {
-    assert(peer_wanted(p));
     struct net *n = p->n;
-    if (n->endgame) {
+    if (n->endgame)
         dl_assign_requests_eg(p);
-    } else {
-        unsigned count = dl_assign_requests(p);
-        if (count == 0 && !p->n->endgame) // We may have entered end game.
-            assert(!peer_wanted(p) || peer_laden(p));
-    }
+    else
+        dl_assign_requests(p);
 }
 
 void
 dl_on_unchoke(struct peer *p)
 {
-    if (peer_wanted(p))
+    if (peer_leech_ok(p))
         dl_on_download(p);
 }
 
@@ -90,8 +85,9 @@ dl_on_ok_piece(struct net *n, uint32_t piece)
 
     if (n->endgame)
         BTPDQ_FOREACH(p, &n->peers, p_entry)
-            if (peer_has(p, pc->index))
-                peer_unwant(p, pc->index);
+            peer_unwant(p, pc->index);
+
+    piece_log_good(pc);
 
     assert(pc->nreqs == 0);
     piece_free(pc);
@@ -114,14 +110,16 @@ dl_on_bad_piece(struct net *n, uint32_t piece)
     pc->ngot = 0;
     pc->nbusy = 0;
 
+    piece_log_bad(pc);
+
     if (n->endgame) {
         struct peer *p;
         BTPDQ_FOREACH(p, &n->peers, p_entry) {
-            if (peer_has(p, pc->index) && peer_leech_ok(p) && !peer_laden(p))
+            if (peer_leech_ok(p) && peer_requestable(p, pc->index))
                 dl_assign_requests_eg(p);
         }
     } else
-        dl_on_piece_unfull(pc); // XXX: May get bad data again.
+        dl_on_piece_unfull(pc);
 }
 
 void
@@ -149,6 +147,7 @@ dl_on_block(struct peer *p, struct block_request *req,
     struct net *n = p->n;
     struct piece *pc = dl_find_piece(n, index);
 
+    piece_log_block(pc, p, begin);
     cm_put_bytes(p->n->tp, index, begin, data, length);
     pc->ngot++;
 
@@ -170,7 +169,7 @@ dl_on_block(struct peer *p, struct block_request *req,
                 continue;
             BTPDQ_REMOVE(&pc->reqs, req, blk_entry);
             nb_drop(req->msg);
-            if (peer_leech_ok(req->p) && !peer_laden(req->p))
+            if (peer_leech_ok(req->p))
                 dl_assign_requests_eg(req->p);
             free(req);
         }
@@ -186,7 +185,7 @@ dl_on_block(struct peer *p, struct block_request *req,
         pc->nbusy--;
         if (pc->ngot == pc->nblocks)
             cm_test_piece(pc->n->tp, pc->index);
-        if (peer_leech_ok(p) && !peer_laden(p))
+        if (peer_leech_ok(p))
             dl_assign_requests(p);
     }
 }

@@ -23,6 +23,16 @@ struct peer_tq net_bw_readq = BTPDQ_HEAD_INITIALIZER(net_bw_readq);
 struct peer_tq net_bw_writeq = BTPDQ_HEAD_INITIALIZER(net_bw_writeq);
 struct peer_tq net_unattached = BTPDQ_HEAD_INITIALIZER(net_unattached);
 
+void
+net_ban_peer(struct net *n, struct meta_peer *mp)
+{
+    if (mp->flags & PF_BANNED)
+        return;
+    mp_hold(mp); // Keep the meta peer alive
+    mp->flags |= PF_BANNED;
+    btpd_log(BTPD_L_BAD, "banned peer %p.\n", mp);
+}
+
 int
 net_torrent_has_peer(struct net *n, const uint8_t *id)
 {

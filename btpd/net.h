@@ -29,6 +29,7 @@ void net_start(struct torrent *tp);
 void net_stop(struct torrent *tp);
 int net_active(struct torrent *tp);
 
+void net_ban_peer(struct net *n, struct meta_peer *mp);
 int net_torrent_has_peer(struct net *n, const uint8_t *id);
 
 void net_io_cb(int sd, short type, void *arg);
