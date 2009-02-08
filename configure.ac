@@ -13,6 +13,8 @@ AC_USE_SYSTEM_EXTENSIONS
 AC_DEFUN([PROG_SILENT_IFELSE],
 ac_output=`$1 2>&1`
 if test x"$ac_output" != x; then
+echo $1 nonsilent >&AS_MESSAGE_LOG_FD
+echo $ac_output >&AS_MESSAGE_LOG_FD
 [$3]
 else
 [$2]
