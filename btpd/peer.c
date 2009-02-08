@@ -358,13 +358,15 @@ peer_create_out_compact(struct net *n, int family, const char *compact)
     struct sockaddr_storage addr;
     struct sockaddr_in *a4;
     struct sockaddr_in6 *a6;
-    
+    socklen_t addrlen;
+
     switch (family) {
     case AF_INET:
         if (!net_ipv4)
             return;
         a4 = (struct sockaddr_in *)&addr;
         a4->sin_family = AF_INET;
+        addrlen = sizeof(*a4);
         bcopy(compact, &a4->sin_addr.s_addr, 4);
         bcopy(compact + 4, &a4->sin_port, 2);
         break;
@@ -373,14 +375,14 @@ peer_create_out_compact(struct net *n, int family, const char *compact)
             return;
         a6 = (struct sockaddr_in6 *)&addr;
         a6->sin6_family = AF_INET6;
+        addrlen = sizeof(*a6);
         bcopy(compact, &a6->sin6_addr, 16);
         bcopy(compact + 16, &a6->sin6_port, 2);
         break;
     default:
         abort();
     }
-    if (net_connect_addr(family, (struct sockaddr *)&addr,
-            sizeof(addr), &sd) != 0)
+    if (net_connect_addr(family, (struct sockaddr *)&addr, addrlen, &sd) != 0)
         return;
 
     p = peer_create_common(sd);
