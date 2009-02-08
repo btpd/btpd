@@ -25,12 +25,15 @@ int
 evtimer_gettime(struct timespec *ts)
 {
     uint64_t nsecs;
+    static double nsmul;
     static mach_timebase_info_data_t nsratio = { 0, 0 };
-    if (nsratio.denom == 0)
+    if (nsratio.denom == 0) {
         mach_timebase_info(&nsratio);
-    nsecs = mach_absolute_time() * nsratio.numer / nsratio.denom;
-    ts->tv_sec = nsecs / 1000000000;
-    ts->tv_nsec = nsecs - ts->tv_sec * 1000000000;
+	nsmul = (double)nsratio.numer / nsratio.denom;
+    }
+    nsecs = mach_absolute_time() * nsmul;
+    ts->tv_sec = nsecs / 1000000000ULL;
+    ts->tv_nsec = nsecs - ts->tv_sec * 1000000000ULL;
     return 0;
 }
 
