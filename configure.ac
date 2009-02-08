@@ -115,7 +115,7 @@ else
     AC_MSG_NOTICE(selected evloop method $EVLOOP_METHOD)
 fi
 
-for i in 0 1 2 3 4 5 6; do
+for i in 0 1 2 3 4 5 6 7; do
     case $i in
     0) if test x"$TD_CFLAGS$TD_LIBS" == x; then continue; fi;;
     1) TD_CFLAGS=-pthread;;
@@ -123,7 +123,8 @@ for i in 0 1 2 3 4 5 6; do
     3) TD_CFLAGS=-kthread;;
     4) TD_CFLAGS=-mt;;
     5) TD_LIBS=-lpthread;;
-    6) AC_MSG_FAILURE(how do you build with pthreads on this system?);;
+    6) ;;
+    7) AC_MSG_FAILURE(how do you build with pthreads on this system?);;
     esac
     AC_MSG_CHECKING(whether pthreads compiles with flags \"$TD_CFLAGS $TD_LIBS\")
     CC_ARGS_OK_IFELSE($TD_CFLAGS $CFLAGS $TD_LIBS $LIBS,,
