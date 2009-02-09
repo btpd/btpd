@@ -1,3 +1,11 @@
+btpd 0.15:
+----------
+
+Bug fixes:
+- The event loop could busy loop for up to a millisecond sometimes.
+- On some platforms btpd couldn't initiate connections to other peers.
+- The timer code was broken on MacOS X.
+
 btpd 0.14:
 ----------
 
