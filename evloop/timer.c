@@ -106,7 +106,7 @@ evtimers_run(void)
     evtimer_gettime(&now);
     while (timeheap_size() > 0) {
         struct timespec diff = subtime(timeheap_top(), now);
-        if (diff.tv_sec < 0) {
+        if (diff.tv_sec < 0 || (diff.tv_sec == 0 && diff.tv_nsec < 1000000)) {
             struct timeout *t = timeheap_remove_top();
             t->th.i = -1;
             t->cb(-1, EV_TIMEOUT, t->arg);
