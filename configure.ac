@@ -56,7 +56,7 @@ AC_COMPILE_IFELSE([
     int main(void) { return clock_gettime(CLOCK_MONOTONIC, (void *)0); }
 ],  clock_gettime=yes, clock_gettime=no)
 AC_MSG_RESULT($clock_gettime)
-if test $clock_gettime == yes; then
+if test $clock_gettime = yes; then
     old_LIBS=$LIBS
     LIBS=""
     AC_SEARCH_LIBS(clock_gettime,rt,clock_gettime=yes,clock_gettime=no)
@@ -64,7 +64,7 @@ if test $clock_gettime == yes; then
     LIBS=$old_LIBS
     AC_DEFINE(HAVE_CLOCK_MONOTONIC)
 fi
-if test $clock_gettime == no; then
+if test $clock_gettime = no; then
     AC_CHECK_FUNCS(mach_absolute_time,,
         AC_MSG_FAILURE(no supported time mechanism found))
 fi
@@ -108,7 +108,7 @@ for m in $evloop_methods; do
         ;;
     esac
 done
-if test x"$EVLOOP_METHOD" == x; then
+if test x"$EVLOOP_METHOD" = x; then
     AC_MSG_FAILURE(no suitable evloop method found)
     exit 1
 else
@@ -117,7 +117,7 @@ fi
 
 for i in 0 1 2 3 4 5 6 7; do
     case $i in
-    0) if test x"$TD_CFLAGS$TD_LIBS" == x; then continue; fi;;
+    0) if test x"$TD_CFLAGS$TD_LIBS" = x; then continue; fi;;
     1) TD_CFLAGS=-pthread;;
     2) TD_CFLAGS=-pthreads;;
     3) TD_CFLAGS=-kthread;;
