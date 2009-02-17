@@ -19,7 +19,12 @@ struct fdev {
     void *arg;
     int fd;
     uint16_t flags;
+#ifdef EVLOOP_EPOLL
     int16_t index;
+#else
+    int16_t rdidx;
+    int16_t wridx;
+#endif
 };
 
 #elif defined(EVLOOP_POLL)

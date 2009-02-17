@@ -29,7 +29,8 @@ fdev_new(struct fdev *ev, int fd, uint16_t flags, evloop_cb_t cb, void *arg)
     ev->cb = cb;
     ev->arg = arg;
     ev->flags = 0;
-    ev->index = -1;
+    ev->rdidx = -1;
+    ev->wridx = -1;
     return fdev_enable(ev, flags);
 }
 
@@ -78,8 +79,10 @@ fdev_disable(struct fdev *ev, uint16_t flags)
 int
 fdev_del(struct fdev *ev)
 {
-    if (ev->index >= 0)
-        m_valid[ev->index] = 0;
+    if (ev->rdidx >= 0)
+        m_valid[ev->rdidx] = 0;
+    if (ev->wridx >= 0)
+        m_valid[ev->wridx] = 0;
     return fdev_disable(ev, EV_READ|EV_WRITE);
 }
 
@@ -100,23 +103,38 @@ evloop(void)
         }
         memset(m_valid, 1, nev);
         for (i = 0; i < nev; i++) {
-            struct fdev *ev = (struct fdev *)m_evs[i].udata;
-            ev->index = i;
-        }
-        for (i = 0; i < nev; i++) {
             if (m_evs[i].flags & EV_ERROR) {
                 errno = m_evs[i].data;
                 return -1;
             }
             struct fdev *ev = (struct fdev *)m_evs[i].udata;
-            if (m_valid[i] && ev->flags & EV_READ &&
-                m_evs[i].filter == EVFILT_READ)
-                ev->cb(ev->fd, EV_READ, ev->arg);
-            if (m_valid[i] && ev->flags & EV_WRITE &&
-                m_evs[i].filter == EVFILT_WRITE)
-                ev->cb(ev->fd, EV_WRITE, ev->arg);
-            if (m_valid[i])
-                ev->index = -1;
+            switch (m_evs[i].filter) {
+            case EVFILT_READ:
+                ev->rdidx = i;
+                break;
+            case EVFILT_WRITE:
+                ev->wridx = i;
+                break;
+            }
+        }
+        for (i = 0; i < nev; i++) {
+            if (!m_valid[i])
+                continue;
+            struct fdev *ev = (struct fdev *)m_evs[i].udata;
+            switch (m_evs[i].filter) {
+            case EVFILT_READ:
+                if (ev->flags & EV_READ)
+                    ev->cb(ev->fd, EV_READ, ev->arg);
+                if (m_valid[i])
+                    ev->rdidx = -1;
+                break;
+            case EVFILT_WRITE:
+                if (ev->flags & EV_WRITE)
+                    ev->cb(ev->fd, EV_WRITE, ev->arg);
+                if (m_valid[i])
+                    ev->wridx = -1;
+                break;
+            }
         }
     }
 }
