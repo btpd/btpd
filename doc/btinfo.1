@@ -1,0 +1,47 @@
+.TH BTINFO "1" "2010\-07\-15" "BitTorrent Protocol Daemon 0.15" "User Commands"
+.\" disable hyphenation
+.nh
+.\" adjust text to left margin only
+.ad l
+.\" -----------------------------------------------------------------
+.\" MAIN CONTENT
+.\" -----------------------------------------------------------------
+.SH "NAME"
+btinfo \- BitTorrent Protocol Daemon information
+.SH "SYNOPSIS"
+.B btinfo
+\fIfile\fR
+.SH "EXAMPLE"
+List the torrent information for \fBosol\-0906\-x86.iso.torrent\fR
+.PP
+.nf
+.B $ btinfo /var/torrents/osol\-0906\-x86.iso.torrent
+Name: osol\-0906\-x86.iso
+Info hash: 58aca632a9f68427a8ac8f58cafa7a72ca067dba
+Tracker URLs: [ [ http://dlc.sun.com:6969/announce ] [ http://dlc.sun.com:16969/announce ] ]
+Number of pieces: 1354
+Piece size: 524288
+Total size: 709871616
+Number of files: 1
+Files:
+osol-0906-x86.iso (709871616)
+.fi
+.SH "TROUBLESHOOTING"
+If \fBbtpd\fR has shut down for some unknown reason, check the logfile for possible clues.
+.SH "BUGS"
+Known bugs are listed at \fIhttp://github.com/queueRAM/btpd/issues\fR
+.sp
+Before submitting a bug report, please verify that you are running the latest version of btpd.
+.SH "AUTHORS"
+.sp
+Current maintainers:
+.sp
+\- Marq Schneider <\fIqueueRAM@gmail.com\fR>
+.sp
+Past contributors:
+.sp
+\- Richard Nyberg <\fIbtpd@murmeldjur.se\fR> 
+.SH "SEE ALSO"
+.BR \fBbtpd\fR(1)
+.BR \fBbtcli\fR(1)
+

@@ -4,12 +4,13 @@ AM_LDFLAGS=@openssl_LDFLAGS@
 
 bin_PROGRAMS=btpd/btpd cli/btcli cli/btinfo
 noinst_LIBRARIES=misc/libmisc.a evloop/libevloop.a
+dist_man1_MANS=doc/btcli.1 doc/btinfo.1 doc/btpd.1
 
 EXTRA_DIST=COPYRIGHT CHANGES
 
 # btpd
 btpd_btpd_SOURCES=\
-        btpd/active.c btpd/active.h btpd/addrinfo.c\
+	btpd/active.c btpd/active.h btpd/addrinfo.c\
 	btpd/btpd.c btpd/btpd.h\
 	btpd/cli_if.c btpd/content.c btpd/content.h\
 	btpd/download.c btpd/download_subr.c btpd/download.h\

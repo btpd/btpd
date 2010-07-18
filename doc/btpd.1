@@ -1,0 +1,134 @@
+.TH BTPD "1" "2010\-07\-15" "BitTorrent Protocol Daemon 0.15" "User Commands"
+.\" disable hyphenation
+.nh
+.\" adjust text to left margin only
+.ad l
+.\" -----------------------------------------------------------------
+.\" MAIN CONTENT
+.\" -----------------------------------------------------------------
+.SH "NAME"
+btpd \- BitTorrent Protocol Daemon
+.SH "SYNOPSIS"
+.B btpd
+[\fB\-d\fR \fIdir\fR]
+[\fB\-p\fR \fIport\fR]
+[\fBOPTIONS\fR...] 
+.SH "DESCRIPTION"
+Btpd is a utility for sharing files over the BitTorrent network protocol.  It runs in daemon mode, thus needing no controlling terminal or gui.  Instead, the daemon is controlled by \fBbtcli\fR, its control utility, or other programs capable of sending commands and queries on the control socket.
+.PP
+btpd consists of the following programs:
+.RS 4
+\fBbtpd\fR \- The bittorrent client.
+.br
+\fBbtcli\fR \- Command line interface to btpd.
+.br
+\fBbtinfo\fR \- Shows information from a torrent file.
+.RE
+.PP
+All programs accept the \fB\-\-help\fR option.
+
+.SH "OPTIONS"
+.TP
+\fB\-d\fR \fIdir\fR
+The path for the btpd directory.  Default is \fI$HOME/.btpd\fR.
+.TP
+\fB\-p\fR \fIn\fR, \fB\-\-port\fR \fIn\fR 
+Listen at port \fIn\fR. Default is 6881.
+.TP
+\fB\-\-help\fR [\fImode\fR] 
+Show this text or help for the specified mode.
+.TP
+.B \-4
+Use IPv4. If given in conjunction with \fB\-6\fR, both versions are used.
+.TP
+.B \-6
+Use IPv6. By default IPv4 is used.
+Unfortunately enabling both IPv6 and IPv4 in btpd is less useful than it should be. The problem is that some sites have trackers for both versions and it's likely that the IPv6 one, which probably has less peers, will be used in favour of the IPv4 one.
+.TP
+.B \-\-bw\-in \fIn\fR
+Limit incoming BitTorrent traffic to \fIn\fR kB/s.  Default is 0 which means unlimited.
+.TP
+.B \-\-bw\-out \fIn\fR
+Limit outgoing BitTorrent traffic to \fIn\fR kB/s.  Default is 0 which means unlimited.
+.TP
+.B \-\-empty\-start
+Start btpd without any active torrents.
+.TP
+.B \-\-ip \fIaddr\fR
+Let the tracker distribute the given address instead of the one it sees btpd connect from.
+.TP
+.B \-\-ipcprot \fImode\fR
+Set the protection mode of the command socket.  The mode is specified by an octal number. Default is 0600.
+.TP
+.B \-\-logfile \fIfile\fR
+Where to put the logfile. By default it's put in the btpd dir.
+.TP
+.B \-\-max-peers \fIn\fR
+Limit the amount of peers to \fIn\fR.
+.TP
+.B \-\-max\-uploads n
+Controls the number of simultaneous uploads.  The possible values are:
+.RS
+\fIn\fR < \-1 : Choose \fIn\fR >= 2 based on \fB\-\-bw\-out\fR (default).
+.br
+\fIn\fR = \-1 : Upload to every interested peer.
+.br
+\fIn\fR =  0 : Dont't upload to anyone.
+.br
+\fIn\fR >  0 : Upload to at most n peers simultaneously.
+.RE
+.TP
+.B \-\-no\-daemon
+Keep the btpd process in the foregorund and log to std{out,err}.  This option is intended for debugging purposes.
+.TP
+.B \-\-prealloc \fIn\fR
+Preallocate disk space in chunks of \fIn\fR kB. Default is 2048.  Note that \fIn\fR will be rounded up to the closest multiple of the torrent piece size. If \fIn\fR is zero no preallocation will be done.
+.SH "STARTING BTPD"
+To start btpd with default settings you only need to run it. However, there are many useful options you may want to use. To see a full list run \fBbtpd \-\-help\fR. If you didn't specify otherwise,  btpd starts with the same set of active torrents as it had the last time it was shut down.
+.PP
+\fBbtdp\fR will store information and write its log in \fI$HOME/.btpd\fR. Therefore it needs to be able to write there during its execution. You can specify another directory via the \fB\-d\fR option or the \fI$BTPD_HOME\fR variable.
+.PP
+It is recommended to specifiy the maximum number of uploads. Bittorrent employs a tit for tat algorithm, so uploading at good rates allows for downloading.  Try to find a balance between uploads/outgoing bandwidth and the number of active torrents.
+.PP
+.B Note: 
+You should only need one instance of btpd regardless of how many torrents you want to share.
+.SH "EXAMPLES"
+Start btpd with all options set to their default values.
+.RS 4
+.nf
+.B $ btpd
+.fi
+.RE
+.PP
+Start btpd as above, but with torrent data in the directory /var/torrents
+.RS 4
+.nf
+.B $ btpd \-d /var/torrents
+.fi
+.RE
+.PP
+Start btpd and make it listen on port 12345, limit outgoing bandwidth to 200kB/s, limit the number of peers to 40 and not start any torrents that were active the last time btpd was shut down.
+.RS 4
+.nf
+.B $ btpd \-p 12345 \-\-bw\-out 200 \-\-max\-peers 40 \-\-empty\-start
+.fi
+.RE
+.SH "TROUBLESHOOTING"
+If \fBbtpd\fR has shut down for some unknown reason, check the logfile for possible clues.
+.SH "BUGS"
+Known bugs are listed at \fIhttp://github.com/queueRAM/btpd/issues\fR
+.sp
+Before submitting a bug report, please verify that you are running the latest version of btpd.
+.SH "AUTHORS"
+.sp
+Current maintainers:
+.sp
+\- Marq Schneider <\fIqueueRAM@gmail.com\fR>
+.sp
+Past contributors:
+.sp
+\- Richard Nyberg <\fIbtpd@murmeldjur.se\fR> 
+.SH "SEE ALSO"
+.BR \fBbtcli\fR(1)
+.BR \fBbtinfo\fR(1)
+
