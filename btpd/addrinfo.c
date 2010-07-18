@@ -52,7 +52,7 @@ addrinfo_td_cb(void *arg)
     struct ai_ctx *ctx = arg;
     if (!ctx->cancel)
         ctx->cb(ctx->arg, ctx->error, ctx->res);
-    else if (ctx->error != 0)
+    else if (ctx->res != NULL)
         freeaddrinfo(ctx->res);
     free(ctx);
 }

@@ -213,7 +213,7 @@ static int
 http_parse(struct http_req *req, int len)
 {
     char *end, *numend;
-    size_t dlen;
+    size_t dlen, consumed;
     struct http_response res;
 again:
     switch (req->pstate) {
@@ -230,6 +230,11 @@ again:
             else
                 goto error;
         }
+
+        /* req->rbuf.buf may be reallocated inside iobuf_write()
+         * so calculate the offset before that is called */
+        consumed = end - (char *)req->rbuf.buf + dlen;
+
         if (!iobuf_write(&req->rbuf, "", 1))
             goto error;
         req->rbuf.off--;
@@ -237,7 +242,7 @@ again:
             goto error;
         if (req->cancel)
             goto cancel;
-        iobuf_consumed(&req->rbuf, end - (char *)req->rbuf.buf + dlen);
+        iobuf_consumed(&req->rbuf, consumed);
         goto again;
     case PS_CHUNK_SIZE:
         assert(req->chunked);
