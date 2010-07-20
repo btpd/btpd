@@ -378,7 +378,7 @@ char *
 mi_load(const char *path, size_t *size)
 {
     char *res;
-    size_t mi_size = (1 << 21);
+    size_t mi_size = 0;
 
     if ((res = read_file(path, NULL, &mi_size)) == NULL)
         return NULL;
