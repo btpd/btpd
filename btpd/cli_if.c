@@ -324,6 +324,30 @@ cmd_start(struct cli *cli, int argc, const char *args)
 }
 
 static int
+cmd_start_all(struct cli *cli, int argc, const char *args)
+{
+    struct htbl_iter it;
+    struct tlib *tl;
+    enum ipc_err last_code, ret_code= IPC_OK;
+
+    if (btpd_is_stopping())
+        return write_code_buffer(cli, IPC_ESHUTDOWN);
+
+    for (tl = tlib_iter_first(&it); tl != NULL; tl = tlib_iter_next(&it)) {
+        if (torrent_startable(tl)) {
+            if ((last_code = torrent_start(tl)) == IPC_OK) {
+                active_add(tl->hash);
+            } else {
+                btpd_err("torrent_start(%d) failed.\n", tl->num);
+                ret_code = last_code;
+            }
+        }
+    }
+
+    return write_code_buffer(cli, ret_code);
+}
+
+static int
 cmd_stop(struct cli *cli, int argc, const char *args)
 {
     if (argc != 1)
@@ -355,6 +379,7 @@ cmd_stop_all(struct cli *cli, int argc, const char *args)
 {
     struct torrent *tp, *next;
     int ret = write_code_buffer(cli, IPC_OK);
+
     active_clear();
     BTPDQ_FOREACH_MUTABLE(tp, torrent_get_all(), entry, next)
         torrent_stop(tp, 0);
@@ -381,6 +406,7 @@ static struct {
     { "del",    3, cmd_del },
     { "die",    3, cmd_die },
     { "start",  5, cmd_start },
+    { "start-all", 9, cmd_start_all},
     { "stop",   4, cmd_stop },
     { "stop-all", 8, cmd_stop_all},
     { "tget",   4, cmd_tget }

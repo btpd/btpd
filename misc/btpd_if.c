@@ -303,6 +303,14 @@ btpd_start(struct ipc *ipc, struct ipc_torrent *tp)
 }
 
 enum ipc_err
+btpd_start_all(struct ipc *ipc)
+{
+    struct iobuf iob = iobuf_init(16);
+    iobuf_swrite(&iob, "l9:start-alle");
+    return ipc_buf_req_code(ipc, &iob);
+}
+
+enum ipc_err
 btpd_stop(struct ipc *ipc, struct ipc_torrent *tp)
 {
     return simple_treq(ipc, "stop", tp);
