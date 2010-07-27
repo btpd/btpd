@@ -76,6 +76,7 @@ addrinfo_td(void *arg)
         td_post(addrinfo_td_cb, ctx);
         td_post_end();
     }
+    pthread_exit(NULL);
 }
 
 static void
