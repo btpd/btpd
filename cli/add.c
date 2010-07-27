@@ -6,7 +6,7 @@ usage_add(void)
     printf(
         "Add torrents to btpd.\n"
         "\n"
-        "Usage: add [--topdir] -d dir file\n"
+        "Usage: add [-n name] [-T] [-N] -d dir file(s)\n"
         "\n"
         "Arguments:\n"
         "file\n"
@@ -22,7 +22,7 @@ usage_add(void)
         "--nostart, -N\n"
         "\tDon't activate the torrent after adding it.\n"
         "\n"
-        "--topdir\n"
+        "--topdir, -T\n"
         "\tAppend the torrent top directory (if any) to the content path.\n"
         "\n"
         );
@@ -39,11 +39,11 @@ static struct option add_opts [] = {
 void
 cmd_add(int argc, char **argv)
 {
-    int ch, topdir = 0, start = 1;
+    int ch, topdir = 0, start = 1, nfile, nloaded = 0;
     size_t dirlen = 0;
     char *dir = NULL, *name = NULL;
 
-    while ((ch = getopt_long(argc, argv, "Nd:n:", add_opts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "NTd:n:", add_opts, NULL)) != -1) {
         switch (ch) {
         case 'N':
             start = 0;
@@ -66,7 +66,7 @@ cmd_add(int argc, char **argv)
     argc -= optind;
     argv += optind;
 
-    if (argc != 1 || dir == NULL)
+    if (argc < 1 || dir == NULL)
         usage_add();
 
     btpd_connect();
@@ -76,29 +76,42 @@ cmd_add(int argc, char **argv)
     char dpath[PATH_MAX];
     struct iobuf iob;
 
-    if ((mi = mi_load(argv[0], &mi_size)) == NULL)
-        diemsg("error loading '%s' (%s).\n", argv[0], strerror(errno));
+    for (nfile = 0; nfile < argc; nfile++) {
+       if ((mi = mi_load(argv[nfile], &mi_size)) == NULL) {
+           fprintf(stderr, "error loading '%s' (%s).\n", argv[nfile], strerror(errno));
+           continue;
+       }
+       iob = iobuf_init(PATH_MAX);
+       iobuf_write(&iob, dir, dirlen);
+       if (topdir && !mi_simple(mi)) {
+           size_t tdlen;
+           const char *td =
+               benc_dget_mem(benc_dget_dct(mi, "info"), "name", &tdlen);
+           iobuf_swrite(&iob, "/");
+           iobuf_write(&iob, td, tdlen);
+       }
+       iobuf_swrite(&iob, "\0");
+       if ((errno = make_abs_path(iob.buf, dpath)) != 0) {
+           fprintf(stderr, "make_abs_path '%s' failed (%s).\n", dpath, strerror(errno));
+           iobuf_free(&iob);
+           continue;
+       }
+       code = btpd_add(ipc, mi, mi_size, dpath, name);
+       if ((code == IPC_OK) && start) {
+           struct ipc_torrent tspec;
+           tspec.by_hash = 1;
+           mi_info_hash(mi, tspec.u.hash);
+           code = btpd_start(ipc, &tspec);
+       }
+       if (code != IPC_OK) {
+           fprintf(stderr, "command failed for '%s' (%s).\n", argv[nfile], ipc_strerror(code));
+       } else {
+           nloaded++;
+       }
+       iobuf_free(&iob);
+    }
 
-    iob = iobuf_init(PATH_MAX);
-    iobuf_write(&iob, dir, dirlen);
-    if (topdir && !mi_simple(mi)) {
-        size_t tdlen;
-        const char *td =
-            benc_dget_mem(benc_dget_dct(mi, "info"), "name", &tdlen);
-        iobuf_swrite(&iob, "/");
-        iobuf_write(&iob, td, tdlen);
+    if (nloaded != nfile) {
+       diemsg("error loaded %d of %d files.\n", nloaded, nfile);
     }
-    iobuf_swrite(&iob, "\0");
-    if ((errno = make_abs_path(iob.buf, dpath)) != 0)
-        diemsg("make_abs_path '%s' failed (%s).\n", dpath, strerror(errno));
-    code = btpd_add(ipc, mi, mi_size, dpath, name);
-    if (code == 0 && start) {
-        struct ipc_torrent tspec;
-        tspec.by_hash = 1;
-        mi_info_hash(mi, tspec.u.hash);
-        code = btpd_start(ipc, &tspec);
-    }
-    if (code != IPC_OK)
-        diemsg("command failed (%s).\n", ipc_strerror(code));
-    return;
 }
