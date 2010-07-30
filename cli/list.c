@@ -113,7 +113,7 @@ print_items(struct items* itms, char *format)
                             case 'D': printf("%lld", p->downloaded);     break;
                             case 'H': printf("%u",   p->pieces_have);    break;
                             case 'P': printf("%u",   p->peers);          break;
-                            case 'S': printf("%c",   p->st);             break;
+                            case 'S': printf("%lld", p->csize);          break;
                             case 'U': printf("%lld", p->uploaded);       break;
                             case 'T': printf("%u",   p->torrent_pieces); break;
 
@@ -124,7 +124,7 @@ print_items(struct items* itms, char *format)
                             case 'p': print_percent(p->cgot, p->csize);  break;
                             case 'r': print_ratio(p->totup, p->csize);   break;
                             case 's': print_size(p->csize);              break;
-                            case 't': printf("%lld", p->csize);          break;
+                            case 't': printf("%c",   p->st);             break;
                             case 'u': printf("%lld", p->totup);          break;
                             case 'v': printf("%lld", p->rate_down);      break;
 
