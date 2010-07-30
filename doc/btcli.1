@@ -56,6 +56,52 @@ List active torrents.
 .TP
 \fB\-i\fR
 List inactive torrents.
+.TP
+\fB\-f\fR format
+Specifies a custom format to use while displaying torrents.  The following is a
+list of the characters that can be used:
+.RS 8
+.PP
+\fB%n\fR - torrent name
+.br
+\fB%#\fR - torrent number
+.br
+\fB%h\fR - torrent hash
+.br
+\fB%d\fR - download directory
+.br
+\fB%t\fR - state
+.br
+\fB%P\fR - peer count
+.PP
+\fB%^\fR - upload rate
+.br
+\fB%v\fR - download rate
+.PP
+\fB%D\fR - downloaded bytes
+.br
+\fB%U\fR - uploaded bytes
+.br
+\fB%g\fR - bytes got
+.br
+\fB%u\fR - bytes uploaded
+.br
+\fB%s\fR - total size, (formatted: prints K, M, G)
+.br
+\fB%S\fR - total size, in bytes
+.PP
+\fB%A\fR - available pieces
+.br
+\fB%T\fR - total pieces
+.br
+\fB%H\fR - have pieces
+.PP
+\fB%p\fR - percent have (formatted)
+.br
+\fB%r\fR - ratio
+.PP
+\fB%%\fR - a percent symbol: '%'
+.RE
 .SH "STAT OPTIONS"
 .TP
 \fB\-i\fR
@@ -63,6 +109,10 @@ Display individual lines for each torrent.
 .TP
 \fB\-n\fR
 Display the name of each torrent.  Implies '-i'.
+.SH "START OPTIONS"
+.TP
+\fB\-a\fR
+Activate all non-active torrents.
 .SH "STOP OPTIONS"
 .TP
 \fB\-a\fR
