@@ -2,7 +2,7 @@
 
                                 README
 
-                           btpd version 0.15
+                           btpd version 0.16
 
 
 Contents
@@ -129,6 +129,9 @@ Contents
   
   Same as above but only for active torrents.
   # btcli list -a
+
+  Same as above, but print using a custom format
+  # btcli list -a -f "btcli list -f "%n\t%#\t%p%s\t%r\n"
 
   Add foo.torrent, with content dir foo.torrent.d, and start it.
   # btcli add -d foo.torrent.d foo.torrent
