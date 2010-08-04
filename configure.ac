@@ -1,5 +1,5 @@
 AC_PREREQ(2.61)
-AC_INIT(btpd, 0.15, btpd@murmeldjur.se)
+AC_INIT(btpd, 0.16, btpd-users@googlegroups.com)
 
 AM_INIT_AUTOMAKE([1.10 foreign subdir-objects])
 

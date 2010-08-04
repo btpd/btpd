@@ -1,3 +1,16 @@
+btpd 0.16:
+----------
+
+Misc:
+- Added "start all" (start -a) command.
+- Allow adding multiple torrents at once.
+- Custom list formatting options.
+- Man pages for btpd, btcli, and btinfo.
+
+Bug fixes:
+- Handle .torrent files larger than 2MB.
+- http parsing and addrinfo freeing fixes.
+
 btpd 0.15:
 ----------
 
