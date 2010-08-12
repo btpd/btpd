@@ -297,6 +297,14 @@ btpd_del(struct ipc *ipc, struct ipc_torrent *tp)
 }
 
 enum ipc_err
+btpd_rate(struct ipc *ipc, unsigned up, unsigned down)
+{
+    struct iobuf iob = iobuf_init(32);
+    iobuf_print(&iob, "l4:ratei%iei%iee", up, down);
+    return ipc_buf_req_code(ipc, &iob);
+}
+
+enum ipc_err
 btpd_start(struct ipc *ipc, struct ipc_torrent *tp)
 {
     return simple_treq(ipc, "start", tp);

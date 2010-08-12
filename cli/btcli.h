@@ -45,6 +45,8 @@ void usage_stat(void);
 void cmd_stat(int argc, char **argv);
 void usage_kill(void);
 void cmd_kill(int argc, char **argv);
+void usage_rate(void);
+void cmd_rate(int argc, char **argv);
 void usage_start(void);
 void cmd_start(int argc, char **argv);
 void usage_stop(void);

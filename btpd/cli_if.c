@@ -387,6 +387,33 @@ cmd_stop_all(struct cli *cli, int argc, const char *args)
 }
 
 static int
+cmd_rate(struct cli *cli, int argc, const char *args)
+{
+    unsigned up, down;
+
+    if (argc != 2)
+        return IPC_COMMERR;
+    if (btpd_is_stopping())
+        return write_code_buffer(cli, IPC_ESHUTDOWN);
+
+    if (benc_isint(args))
+        up = (unsigned)benc_int(args, &args);
+    else
+        return IPC_COMMERR;
+
+    if (benc_isint(args))
+        down = (unsigned)benc_int(args, &args);
+    else
+        return IPC_COMMERR;
+
+    net_bw_limit_out = up;
+    net_bw_limit_in  = down;
+    ul_set_max_uploads();
+
+    return write_code_buffer(cli, IPC_OK);
+}
+
+static int
 cmd_die(struct cli *cli, int argc, const char *args)
 {
     int err = write_code_buffer(cli, IPC_OK);
@@ -405,6 +432,7 @@ static struct {
     { "add",    3, cmd_add },
     { "del",    3, cmd_del },
     { "die",    3, cmd_die },
+    { "rate",   4, cmd_rate },
     { "start",  5, cmd_start },
     { "start-all", 9, cmd_start_all},
     { "stop",   4, cmd_stop },

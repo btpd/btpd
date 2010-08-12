@@ -114,6 +114,7 @@ static struct {
     { "del", cmd_del, usage_del },
     { "kill", cmd_kill, usage_kill },
     { "list", cmd_list, usage_list },
+    { "rate", cmd_rate, usage_rate },
     { "start", cmd_start, usage_start },
     { "stop", cmd_stop, usage_stop },
     { "stat", cmd_stat, usage_stat }
@@ -141,6 +142,7 @@ usage(void)
         "del\t- Remove torrents from btpd.\n"
         "kill\t- Shut down btpd.\n"
         "list\t- List torrents.\n"
+        "rate\t- Set up/download rate limits.\n"
         "start\t- Activate torrents.\n"
         "stat\t- Display stats for active torrents.\n"
         "stop\t- Deactivate torrents.\n"

@@ -32,7 +32,7 @@ cli_btinfo_SOURCES=cli/btinfo.c
 cli_btinfo_LDADD=misc/libmisc.a -lcrypto -lm
 
 # btcli
-cli_btcli_SOURCES=cli/btcli.c cli/btcli.h cli/add.c cli/del.c cli/list.c cli/kill.c cli/start.c cli/stop.c cli/stat.c
+cli_btcli_SOURCES=cli/btcli.c cli/btcli.h cli/add.c cli/del.c cli/list.c cli/rate.c cli/kill.c cli/start.c cli/stop.c cli/stat.c
 cli_btcli_LDADD=misc/libmisc.a -lcrypto -lm @INETLIBS@
 
 # libmisc

@@ -173,7 +173,7 @@ ul_on_uninterest(struct peer *p)
 }
 
 void
-ul_init(void)
+ul_set_max_uploads(void)
 {
     if (net_max_uploads >= -1)
         m_max_uploads = net_max_uploads;
@@ -189,6 +189,12 @@ ul_init(void)
         else
             m_max_uploads = 5 + (net_bw_limit_out / (100 << 10));
     }
+}
+
+void
+ul_init(void)
+{
+    ul_set_max_uploads();
 
     evtimer_init(&m_choke_timer, choke_cb, NULL);
     btpd_timer_add(&m_choke_timer, CHOKE_INTERVAL);
