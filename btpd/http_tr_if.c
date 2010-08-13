@@ -215,11 +215,11 @@ httptr_req(struct torrent *tp, struct tr_tier *tr, const char *aurl,
 
     snprintf(url, sizeof(url),
         "%s%cinfo_hash=%s&peer_id=%s&key=%ld%s%s&port=%d&uploaded=%llu"
-        "&downloaded=%llu&left=%llu&compact=1%s%s",
+        "&downloaded=%llu&left=%llu&compact=1&numwant=%u%s%s",
         aurl, qc, e_hash, e_id, tr_key,
         tr_ip_arg == NULL ? "" : "&ip=", tr_ip_arg == NULL ? "" : tr_ip_arg,
         net_port, tp->net->uploaded, tp->net->downloaded,
-        (long long)tp->total_length - cm_content(tp),
+        (long long)tp->total_length - cm_content(tp), net_numwant,
         event == TR_EV_EMPTY ? "" : "&event=", m_tr_events[event]);
 
     struct httptr_req *treq = btpd_calloc(1, sizeof(*treq));

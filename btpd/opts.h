@@ -13,5 +13,6 @@ extern int ipcprot;
 extern int empty_start;
 extern const char *tr_ip_arg;
 extern int net_ipv4, net_ipv6;
+extern unsigned net_numwant;
 
 #endif

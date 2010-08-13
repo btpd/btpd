@@ -159,6 +159,9 @@ usage(void)
         "\tPreallocate disk space in chunks of n kB. Default is 2048.\n"
         "\tNote that n will be rounded up to the closest multiple of the\n"
         "\ttorrent piece size. If n is zero no preallocation will be done.\n"
+        "\n"
+        "--numwant n\n"
+        "\tSet the number of peers to fetch on each request. Default is 50.\n"
         "\n");
     exit(1);
 }
@@ -178,6 +181,7 @@ static struct option longopts[] = {
     { "empty-start", no_argument,       &longval,       9 },
     { "ip", required_argument,          &longval,       10 },
     { "logmask", required_argument,     &longval,       11 },
+    { "numwant", required_argument,     &longval,       12 },
     { "help",   no_argument,            &longval,       128 },
     { NULL,     0,                      NULL,           0 }
 };
@@ -238,6 +242,9 @@ main(int argc, char **argv)
                 break;
             case 11:
                 btpd_logmask = atoi(optarg);
+                break;
+            case 12:
+                net_numwant = (unsigned)atoi(optarg);
                 break;
             default:
                 usage();
