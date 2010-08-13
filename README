@@ -50,6 +50,7 @@ Contents
   * del      - Remove torrents from btpd.
   * kill     - Shut down btpd.
   * list     - List torrents.
+  * rate     - Set the global up and download rates in KB/s.
   * start    - Activate torrents.
   * stat     - Display stats for active torrents.
   * stop     - Deactivate torrents.
@@ -159,6 +160,9 @@ Contents
 
   Same as above, but also display individual stats for each active torrent.
   # btcli stat -w 5 -i
+
+  Set the global upload rate to 20KB/s and download rate to 1MB/s.
+  # btcli rate 20K 1M
 
   Shut down btpd.
   # btcli kill

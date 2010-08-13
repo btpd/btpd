@@ -63,10 +63,13 @@ Set the protection mode of the command socket.  The mode is specified by an octa
 .B \-\-logfile \fIfile\fR
 Where to put the logfile. By default it's put in the btpd dir.
 .TP
+.B \-\-logmask \fImask\fR
+Bitfield to specify which data to record in the btpd log (dev info).
+.TP
 .B \-\-max\-peers \fIn\fR
 Limit the amount of peers to \fIn\fR.
 .TP
-.B \-\-max\-uploads n
+.B \-\-max\-uploads \fIn\fR
 Controls the number of simultaneous uploads.  The possible values are:
 .RS
 \fIn\fR < \-1 : Choose \fIn\fR >= 2 based on \fB\-\-bw\-out\fR (default).
@@ -83,6 +86,9 @@ Keep the btpd process in the foregorund and log to std{out,err}.  This option is
 .TP
 .B \-\-prealloc \fIn\fR
 Preallocate disk space in chunks of \fIn\fR kB. Default is 2048.  Note that \fIn\fR will be rounded up to the closest multiple of the torrent piece size. If \fIn\fR is zero no preallocation will be done.
+.TP
+.B \-\-numwant \fIn\fR
+Specify the number of wanted peers 'numwant' tracker request parameter. Default is 50.
 .SH "STARTING BTPD"
 To start btpd with default settings you only need to run it. However, there are many useful options you may want to use. To see a full list run \fBbtpd \-\-help\fR. If you didn't specify otherwise,  btpd starts with the same set of active torrents as it had the last time it was shut down.
 .PP

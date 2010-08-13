@@ -27,6 +27,8 @@ One of the following operations must be specified when running btcli:
 .TP
 \fBlist\fR \- List torrents.
 .TP
+\fBrate\fR \- Set the global up and download rates in KB/s.
+.TP
 \fBstart\fR \- Activate torrents.
 .TP
 \fBstat\fR \- Display stats for active torrents.
@@ -223,6 +225,12 @@ Same as above, but also display individual stats for each active torrent.
 .br
 .RS 4
 .B $ btcli stat \-w 5 \-i
+.RE
+.PP
+Set the global upload rate to 20KB/s and download rate to 1MB/s.
+.br
+.RS 4
+.B $ btcli rate 20K 1M
 .RE
 .PP
 Shut down btpd.
