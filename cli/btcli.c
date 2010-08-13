@@ -1,6 +1,7 @@
 #include <stdarg.h>
 
 #include "btcli.h"
+#include "utils.h"
 
 const char *btpd_dir;
 struct ipc *ipc;
@@ -120,8 +121,6 @@ static struct {
     { "stat", cmd_stat, usage_stat }
 };
 
-int ncmds = sizeof(cmd_table) / sizeof(cmd_table[0]);
-
 static void
 usage(void)
 {
@@ -191,7 +190,7 @@ main(int argc, char **argv)
 
     optind = 0;
     int found = 0;
-    for (int i = 0; !found && i < ncmds; i++) {
+    for (int i = 0; !found && i < ARRAY_COUNT(cmd_table); i++) {
         if (strcmp(argv[0], cmd_table[i].name) == 0) {
             found = 1;
             if (help)

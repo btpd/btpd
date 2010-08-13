@@ -1,4 +1,5 @@
 #include "btcli.h"
+#include "utils.h"
 
 void
 usage_list(void)
@@ -170,7 +171,7 @@ cmd_list(int argc, char **argv)
            IPC_TVAL_PCCOUNT, IPC_TVAL_PCSEEN, IPC_TVAL_PCGOT,   IPC_TVAL_SESSUP,
            IPC_TVAL_SESSDWN, IPC_TVAL_RATEUP, IPC_TVAL_RATEDWN, IPC_TVAL_IHASH,
            IPC_TVAL_DIR };
-    size_t nkeys = sizeof(keys) / sizeof(keys[0]);
+    size_t nkeys = ARRAY_COUNT(keys);
     struct items itms;
     while ((ch = getopt_long(argc, argv, "aif:", list_opts, NULL)) != -1) {
         switch (ch) {

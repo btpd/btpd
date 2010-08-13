@@ -1,4 +1,5 @@
 #include "btpd.h"
+#include "utils.h"
 
 #include <sys/un.h>
 #include <iobuf.h>
@@ -440,8 +441,6 @@ static struct {
     { "tget",   4, cmd_tget }
 };
 
-static int ncmds = sizeof(cmd_table) / sizeof(cmd_table[0]);
-
 static int
 cmd_dispatch(struct cli *cli, const char *buf)
 {
@@ -451,7 +450,7 @@ cmd_dispatch(struct cli *cli, const char *buf)
 
     cmd = benc_mem(benc_first(buf), &cmdlen, &args);
 
-    for (int i = 0; i < ncmds; i++) {
+    for (int i = 0; i < ARRAY_COUNT(cmd_table); i++) {
         if ((cmdlen == cmd_table[i].nlen &&
                 strncmp(cmd_table[i].name, cmd, cmdlen) == 0)) {
             return cmd_table[i].fun(cli, benc_nelems(buf) - 1, args);

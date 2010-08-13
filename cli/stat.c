@@ -1,4 +1,5 @@
 #include "btcli.h"
+#include "utils.h"
 
 void
 usage_stat(void)
@@ -56,7 +57,7 @@ static enum ipc_tval stkeys[] = {
     IPC_TVAL_CSIZE
 };
 
-static size_t nstkeys = sizeof(stkeys) / sizeof(stkeys[0]);
+#define NSTKEYS ARRAY_COUNT(stkeys)
 
 static void
 print_stat(struct btstat *st)
@@ -129,10 +130,10 @@ again:
     bzero(&cba.tot, sizeof(cba.tot));
     cba.tot.state = IPC_TSTATE_INACTIVE;
     if (tps == NULL)
-        err = btpd_tget_wc(ipc, IPC_TWC_ACTIVE, stkeys, nstkeys,
+        err = btpd_tget_wc(ipc, IPC_TWC_ACTIVE, stkeys, NSTKEYS,
             stat_cb, &cba);
     else
-        err = btpd_tget(ipc, tps, ntps, stkeys, nstkeys, stat_cb, &cba);
+        err = btpd_tget(ipc, tps, ntps, stkeys, NSTKEYS, stat_cb, &cba);
     if (err != IPC_OK)
         diemsg("command failed (%s).\n", ipc_strerror(err));
     if (names)
