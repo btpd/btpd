@@ -132,6 +132,7 @@ torrent_start(struct tlib *tl)
         benc_dget_mem(benc_dget_dct(mi, "info"), "pieces", NULL) - mi;
 
     btpd_log(BTPD_L_BTPD, "Starting torrent '%s'.\n", torrent_name(tp));
+    hook_run(HOOK_STARTED, torrent_name(tp));
     tr_create(tp, mi);
     tl->tp = tp;
     net_create(tp);
@@ -151,6 +152,7 @@ static
 void become_ghost(struct torrent *tp)
 {
     btpd_log(BTPD_L_BTPD, "Stopped torrent '%s'.\n", torrent_name(tp));
+    hook_run(HOOK_STOPPED, torrent_name(tp));
     tp->state = T_GHOST;
     if (tp->delete)
         tlib_del(tp->tl);
@@ -208,6 +210,7 @@ torrent_on_tick(struct torrent *tp)
             tp->state = T_SEED;
             btpd_log(BTPD_L_BTPD, "Finished downloading '%s'.\n",
                 torrent_name(tp));
+            hook_run(HOOK_FINISHED, torrent_name(tp));
             tr_complete(tp);
             BTPDQ_FOREACH_MUTABLE(p, &tp->net->peers, p_entry, next) {
                 assert(p->nwant == 0);

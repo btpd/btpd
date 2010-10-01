@@ -14,3 +14,5 @@ const char *tr_ip_arg;
 int net_ipv4 = 1;
 int net_ipv6 = 0;
 unsigned net_numwant = 50;
+const char *hook_script;
+

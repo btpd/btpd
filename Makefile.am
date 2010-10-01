@@ -20,6 +20,7 @@ btpd_btpd_SOURCES=\
 	btpd/net_buf.c btpd/net_buf.h\
 	btpd/opts.c btpd/opts.h\
 	btpd/peer.c btpd/peer.h\
+	btpd/hook.c btpd/hook.h \
 	btpd/thread_cb.c btpd/tlib.c btpd/tlib.h btpd/torrent.c btpd/torrent.h\
 	btpd/tracker_req.c btpd/tracker_req.h\
 	btpd/upload.c btpd/upload.h\
