@@ -8,3 +8,11 @@ config.sub
 depcomp
 install-sh
 missing
+*.o
+*.lo
+*.a
+btpd/btpd
+cli/btcli
+cli/btinfo
+.dirstamp
+.deps
