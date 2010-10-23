@@ -8,6 +8,12 @@
 typedef char hook_t;
 
 void
-hook_run(hook_t type, const char *tr_name);
+hook_shutdown(void);
+
+void
+hook_init(void);
+
+void
+hook_exec(hook_t type, const char *tr_name);
 
 #endif
