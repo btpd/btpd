@@ -126,6 +126,9 @@ usage(void)
         "--help\n"
         "\tShow this text.\n"
         "\n"
+        "--hook-script file\n"
+        "\tRun the specified file when certain actions happened.\n"
+        "\n"
         "--ip addr\n"
         "\tLet the tracker distribute the given address instead of the one\n"
         "\tit sees btpd connect from.\n"
@@ -182,6 +185,7 @@ static struct option longopts[] = {
     { "ip", required_argument,          &longval,       10 },
     { "logmask", required_argument,     &longval,       11 },
     { "numwant", required_argument,     &longval,       12 },
+    { "hook-script", required_argument, &longval,       13 },
     { "help",   no_argument,            &longval,       128 },
     { NULL,     0,                      NULL,           0 }
 };
@@ -245,6 +249,9 @@ main(int argc, char **argv)
                 break;
             case 12:
                 net_numwant = (unsigned)atoi(optarg);
+                break;
+            case 13:
+                hook_script = strdup(optarg);
                 break;
             default:
                 usage();

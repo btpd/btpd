@@ -54,6 +54,9 @@ Limit outgoing BitTorrent traffic to \fIn\fR kB/s.  Default is 0 which means unl
 .B \-\-empty\-start
 Start btpd without any active torrents.
 .TP
+.B \-\-hook\-script \fIfile\fR
+Run an specified script on certain actions, which finished download.
+.TP
 .B \-\-ip \fIaddr\fR
 Let the tracker distribute the given address instead of the one it sees btpd connect from.
 .TP
@@ -98,6 +101,21 @@ It is recommended to specifiy the maximum number of uploads. Bittorrent employs 
 .PP
 .B Note: 
 You should only need one instance of btpd regardless of how many torrents you want to share.
+.SH "HOOKING BTPD"
+Using parameter \fI--hook-script\fR in command line, we can set a path to
+script to be executed when certain actions, for example when starting
+a download, when stopping one or when it's finished.
+.PP
+The script will be received two arguments, the first one is a character
+which indicates the status, and could be one of the following:
+.TP
+\fBS\fR \- Start a new leech.
+.TP
+\fBT\fR \- Stop a leech.
+.TP
+\fBF\fR \- Download finished.
+.PP
+The second argument is the torrent name, without .torrent extension.
 .SH "EXAMPLES"
 Start btpd with all options set to their default values.
 .RS 4

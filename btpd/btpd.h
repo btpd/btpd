@@ -48,6 +48,7 @@
 #include "content.h"
 #include "opts.h"
 #include "tracker_req.h"
+#include "hook.h"
 
 #define BTPD_VERSION PACKAGE_NAME "/" PACKAGE_VERSION
 

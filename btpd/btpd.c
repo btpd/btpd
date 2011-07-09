@@ -30,6 +30,7 @@ death_procedure(void)
         btpd_exit(0);
     if (!m_ghost && torrent_count() == torrent_ghosts()) {
         btpd_log(BTPD_L_BTPD, "Entering pre exit mode. Bye!\n");
+        hook_shutdown();
         fclose(stderr);
         fclose(stdout);
         net_shutdown();
@@ -129,6 +130,7 @@ btpd_init(void)
     cm_init();
     tr_init();
     tlib_init();
+    hook_init();
 
     evtimer_init(&m_heartbeat, heartbeat_cb, NULL);
     btpd_timer_add(&m_heartbeat, (& (struct timespec) { 1, 0 }));
