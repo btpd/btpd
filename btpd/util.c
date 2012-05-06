@@ -95,7 +95,7 @@ log_common(uint32_t type, const char *fmt, va_list ap)
     if (type & btpd_logmask) {
         char tbuf[20];
         time_t tp = time(NULL);
-        strftime(tbuf, 20, "%b %e %T", localtime(&tp));
+        strftime(tbuf, 20, "%Y %b %e %T", localtime(&tp));
         printf("%s %s: ", tbuf, logtype_str(type));
         vprintf(fmt, ap);
     }
