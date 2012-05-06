@@ -233,10 +233,8 @@ benc_dget_any(const char *p, const char *key)
         cmp = strncmp(bstr, key, blen);
         if (cmp == 0 && len == blen)
             return p;
-        else if (cmp <= 0)
-            p = benc_next(p);
         else
-            return NULL;
+            p = benc_next(p);
     }
     return NULL;
 }
