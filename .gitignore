@@ -1,10 +1,19 @@
-*.in
-aclocal.m4
-autom4te.cache
-compile
-configure
-config.guess
-config.sub
-depcomp
-install-sh
-missing
+# http://www.gnu.org/software/automake
+Makefile.in
+
+# http://www.gnu.org/software/autoconf
+/autom4te.cache
+/aclocal.m4
+/compile
+/configure
+/depcomp
+/install-sh
+/missing
+
+# Dependency files
+.deps
+
+# Object files and libraries
+*.o
+*.a
+
