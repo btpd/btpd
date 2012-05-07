@@ -158,6 +158,12 @@ write_ans(struct iobuf *iob, struct tlib *tl, enum ipc_tval val)
         iobuf_print(iob, "i%dei%de", IPC_TYPE_NUM,
             tl->tp == NULL ? 0 : tr_good_count(tl->tp));
         return;
+    case IPC_TVAL_LABEL:
+        if (tl->label != NULL)
+            iobuf_print(iob, "i%de%d:%s", IPC_TYPE_STR, (int)strlen(tl->label), tl->label);
+        else
+            iobuf_print(iob, "i%dei%de", IPC_TYPE_ERR, IPC_EBADTENT);
+       return;
     case IPC_TVALCOUNT:
         break;
     }
@@ -261,10 +267,12 @@ cmd_add(struct cli *cli, int argc, const char *args)
         return write_code_buffer(cli, IPC_ETENTEXIST);
     if (tl != NULL) {
         tl = tlib_readd(tl, hash, mi, mi_size, content,
-            benc_dget_str(args, "name", NULL));
+            benc_dget_str(args, "name", NULL),
+            benc_dget_str(args, "label", NULL));
     } else {
         tl = tlib_add(hash, mi, mi_size, content,
-            benc_dget_str(args, "name", NULL));
+            benc_dget_str(args, "name", NULL),
+            benc_dget_str(args, "label", NULL));
     }
     return write_add_buffer(cli, tl->num);
 }

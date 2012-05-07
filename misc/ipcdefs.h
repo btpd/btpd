@@ -41,7 +41,8 @@ TVDEF(STATE,    TSTATE,         "state")
 TVDEF(TOTDWN,   NUM,            "total_down")
 TVDEF(TOTUP,    NUM,            "total_up")
 TVDEF(TRERR,    NUM,            "tr_errors")
-TVDEF(TRGOOD, NUM,              "tr_good")
+TVDEF(TRGOOD,   NUM,            "tr_good")
+TVDEF(LABEL,    STR,            "label")
 #ifdef __IPCTV
 #undef __IPCTV
 #undef TVDEF

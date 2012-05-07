@@ -51,6 +51,8 @@ tlib_kill(struct tlib *tl)
         free(tl->name);
     if (tl->dir != NULL)
         free(tl->dir);
+    if (tl->label != NULL)
+        free(tl->label);
     free(tl);
     m_ntlibs--;
 }
@@ -166,6 +168,7 @@ load_info(struct tlib *tl, const char *path)
 
     info = benc_dget_dct(buf, "info");
     tl->name = benc_dget_str(info, "name", NULL);
+    tl->label = benc_dget_str(info, "label", NULL);
     tl->dir = benc_dget_str(info, "dir", NULL);
     tl->tot_up = benc_dget_int(info, "total upload");
     tl->tot_down = benc_dget_int(info, "total download");
@@ -186,10 +189,12 @@ save_info(struct tlib *tl)
         "d4:infod"
         "12:content havei%llde12:content sizei%llde"
         "3:dir%d:%s4:name%d:%s"
+        "5:label%d:%s"
         "14:total downloadi%llde12:total uploadi%llde"
         "ee",
         (long long)tl->content_have, (long long)tl->content_size,
         (int)strlen(tl->dir), tl->dir, (int)strlen(tl->name), tl->name,
+        (int)strlen(tl->label), tl->label,
         tl->tot_down, tl->tot_up);
     if (iob.error)
         btpd_err("Out of memory.\n");
@@ -245,7 +250,7 @@ err:
 
 struct tlib *
 tlib_add(const uint8_t *hash, const char *mi, size_t mi_size,
-    const char *content, char *name)
+    const char *content, char *name, char *label)
 {
     struct tlib *tl = tlib_create(hash);
     char relpath[RELPATH_SIZE], file[PATH_MAX];
@@ -257,6 +262,7 @@ tlib_add(const uint8_t *hash, const char *mi, size_t mi_size,
 
     tl->content_size = mi_total_length(mi);
     tl->name = name;
+    tl->label = label;
     tl->dir = strdup(content);
     if (tl->name == NULL || tl->dir == NULL)
         btpd_err("out of memory.\n");
@@ -272,13 +278,13 @@ tlib_add(const uint8_t *hash, const char *mi, size_t mi_size,
 
 struct tlib *
 tlib_readd(struct tlib *tl, const uint8_t *hash, const char *mi,
-    size_t mi_size, const char *content, char *name)
+    size_t mi_size, const char *content, char *name, char *label)
 {
     struct tlib *tln;
     struct torrent *tp = tl->tp;
     tp->delete = 0;
     tlib_kill(tl);
-    tln = tlib_add(hash, mi, mi_size, content, name);
+    tln = tlib_add(hash, mi, mi_size, content, name, label);
     tln->tp = tp;
     return tln;
 }

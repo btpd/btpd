@@ -8,6 +8,7 @@ struct tlib {
 
     char *name;
     char *dir;
+    char *label;
 
     unsigned long long tot_up, tot_down;
     off_t content_size, content_have;
@@ -27,9 +28,9 @@ struct tlib *tlib_iter_first(struct htbl_iter *it);
 struct tlib *tlib_iter_next(struct htbl_iter *it);
 
 struct tlib *tlib_add(const uint8_t *hash, const char *mi, size_t mi_size,
-    const char *content, char *name);
+    const char *content, char *name, char *label);
 struct tlib *tlib_readd(struct tlib *tl, const uint8_t *hash, const char *mi,
-    size_t mi_size, const char *content, char *name);
+    size_t mi_size, const char *content, char *name, char *label);
 int tlib_del(struct tlib *tl);
 void tlib_kill(struct tlib *tl);
 

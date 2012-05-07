@@ -75,7 +75,7 @@ void ipc_close(struct ipc *ipc);
 const char *ipc_strerror(enum ipc_err err);
 
 enum ipc_err btpd_add(struct ipc *ipc, const char *mi, size_t mi_size,
-    const char *content, const char *name);
+    const char *content, const char *name, const char *label);
 enum ipc_err btpd_del(struct ipc *ipc, struct ipc_torrent *tp);
 enum ipc_err btpd_rate(struct ipc *ipc, unsigned up, unsigned down);
 enum ipc_err btpd_start(struct ipc *ipc, struct ipc_torrent *tp);

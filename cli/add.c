@@ -40,10 +40,10 @@ void
 cmd_add(int argc, char **argv)
 {
     int ch, topdir = 0, start = 1, nfile, nloaded = 0;
-    size_t dirlen = 0;
-    char *dir = NULL, *name = NULL;
+    size_t dirlen = 0, labellen = 0;
+    char *dir = NULL, *name = NULL, *glabel = NULL, *label;
 
-    while ((ch = getopt_long(argc, argv, "NTd:n:", add_opts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "NTd:l:n:", add_opts, NULL)) != -1) {
         switch (ch) {
         case 'N':
             start = 0;
@@ -55,6 +55,11 @@ cmd_add(int argc, char **argv)
             dir = optarg;
             if ((dirlen = strlen(dir)) == 0)
                 diemsg("bad option value for -d.\n");
+            break;
+        case 'l':
+            glabel = optarg;
+            if ((labellen = strlen(dir)) == 0)
+                diemsg("bad option value for -l.\n");
             break;
         case 'n':
             name = optarg;
@@ -96,7 +101,11 @@ cmd_add(int argc, char **argv)
            iobuf_free(&iob);
            continue;
        }
-       code = btpd_add(ipc, mi, mi_size, dpath, name);
+       if(NULL == glabel)
+          label = benc_dget_str(mi, "announce", NULL);
+       else
+          label = glabel;
+       code = btpd_add(ipc, mi, mi_size, dpath, name, label);
        if ((code == IPC_OK) && start) {
            struct ipc_torrent tspec;
            tspec.by_hash = 1;

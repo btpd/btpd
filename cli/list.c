@@ -28,7 +28,7 @@ usage_list(void)
 
 struct item {
     unsigned num, peers;
-    char *name, *dir;
+    char *name, *dir, *label;
     char hash[SHAHEXSIZE];
     char st;
     long long cgot, csize, totup, downloaded, uploaded, rate_up, rate_down;
@@ -79,6 +79,11 @@ list_cb(int obji, enum ipc_err objerr, struct ipc_get_res *res, void *arg)
     else
         asprintf(&itm->dir, "%.*s", (int)res[IPC_TVAL_DIR].v.str.l,
             res[IPC_TVAL_DIR].v.str.p);
+    if (res[IPC_TVAL_LABEL].type == IPC_TYPE_ERR)
+        asprintf(&itm->label, "%s", ipc_strerror(res[IPC_TVAL_LABEL].v.num));
+    else
+        asprintf(&itm->label, "%.*s", (int)res[IPC_TVAL_LABEL].v.str.l,
+            res[IPC_TVAL_LABEL].v.str.p);
     bin2hex(res[IPC_TVAL_IHASH].v.str.p, itm->hash, 20);
     itm->cgot           = res[IPC_TVAL_CGOT].v.num;
     itm->csize          = res[IPC_TVAL_CSIZE].v.num;
@@ -121,6 +126,7 @@ print_items(struct items* itms, char *format)
                             case 'd': printf("%s",   p->dir);            break;
                             case 'g': printf("%lld", p->cgot);           break;
                             case 'h': printf("%s",   p->hash);           break;
+                            case 'l': printf("%s",   p->label);          break;
                             case 'n': printf("%s",   p->name);           break;
                             case 'p': print_percent(p->cgot, p->csize);  break;
                             case 'r': print_ratio(p->totup, p->csize);   break;
@@ -170,7 +176,7 @@ cmd_list(int argc, char **argv)
            IPC_TVAL_TOTUP,   IPC_TVAL_CSIZE,  IPC_TVAL_CGOT,    IPC_TVAL_PCOUNT,
            IPC_TVAL_PCCOUNT, IPC_TVAL_PCSEEN, IPC_TVAL_PCGOT,   IPC_TVAL_SESSUP,
            IPC_TVAL_SESSDWN, IPC_TVAL_RATEUP, IPC_TVAL_RATEDWN, IPC_TVAL_IHASH,
-           IPC_TVAL_DIR };
+           IPC_TVAL_DIR, IPC_TVAL_LABEL };
     size_t nkeys = ARRAY_COUNT(keys);
     struct items itms;
     while ((ch = getopt_long(argc, argv, "aif:", list_opts, NULL)) != -1) {

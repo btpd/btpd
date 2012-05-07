@@ -264,13 +264,15 @@ btpd_tget_wc(struct ipc *ipc, enum ipc_twc twc, enum ipc_tval *keys,
 
 enum ipc_err
 btpd_add(struct ipc *ipc, const char *mi, size_t mi_size, const char *content,
-    const char *name)
+    const char *name, const char *label)
 {
     struct iobuf iob = iobuf_init(1 << 10);
     iobuf_print(&iob, "l3:addd7:content%d:%s", (int)strlen(content),
         content);
     if (name != NULL)
         iobuf_print(&iob, "4:name%d:%s", (int)strlen(name), name);
+    if (label != NULL)
+        iobuf_print(&iob, "5:label%d:%s", (int)strlen(label), label);
     iobuf_print(&iob, "7:torrent%lu:", (unsigned long)mi_size);
     iobuf_write(&iob, mi, mi_size);
     iobuf_swrite(&iob, "ee");
