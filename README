@@ -132,7 +132,7 @@ Contents
   # btcli list -a
 
   Same as above, but print using a custom format
-  # btcli list -a -f "btcli list -f "%n\t%#\t%p%s\t%r\n"
+  # btcli list -a -f "%n\t%#\t%p%s\t%r\n"
 
   Add foo.torrent, with content dir foo.torrent.d, and start it.
   # btcli add -d foo.torrent.d foo.torrent
