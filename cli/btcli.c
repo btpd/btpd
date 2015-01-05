@@ -45,23 +45,46 @@ print_percent(long long part, long long whole)
     printf("%5.1f%% ", floor(1000.0 * part / whole) / 10);
 }
 
+char *bytestostr(double bytes, double prefix)
+{
+	int i;
+	int cols;
+	static char str[32];
+	static const char iec[][4] = { "B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB" };
+	static const char si[][3] = { "B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
+	const char *unit;
+	char *fmt;
+
+	if (siunits) {
+		prefix = 1000.0;
+		cols = LEN(si);
+	} else {
+		prefix = 1024.0;
+		cols = LEN(iec);
+	}
+
+	for (i = 0; bytes >= prefix && i < cols; i++)
+		bytes /= prefix;
+
+	fmt = i ? "%.2f %s" : "%.0f %s";
+	unit = siunits ? si[i] : iec[i];
+	snprintf(str, sizeof(str), fmt, bytes, unit);
+
+	return str;
+}
+
 void
 print_rate(long long rate)
 {
-    if (rate >= 999.995 * (1 << 10))
-        printf("%6.2fMB/s ", (double)rate / (1 << 20));
-    else
-        printf("%6.2fkB/s ", (double)rate / (1 << 10));
+	printf("%s/s ", bytestostr(rate, (1 << 10)));
 }
 
 void
 print_size(long long size)
 {
-    if (size >= 999.995 * (1 << 20))
-        printf("%6.2fG ", (double)size / (1 << 30));
-    else
-        printf("%6.2fM ", (double)size / (1 << 20));
+	printf("%s ", bytestostr(size), (1 << 10));
 }
+
 void
 print_ratio(long long part, long long whole)
 {
