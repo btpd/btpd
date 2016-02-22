@@ -18,6 +18,7 @@ Contents
 3               Building
 3.a               Requirements
 3.b               Standard build
+3.c               Git build
 4               Additional notes
 4.a               Upgrade form old versions
 4.b               Pre exit mode
@@ -182,6 +183,8 @@ Contents
   * OpenSSL   - Get at <URL:http://www.openssl.org/>
 
   You also need a c99 compiler. A non antique GCC should do.
+  
+  If building from git, you will also need autoconf and automake.
 
 3.b Standard build
 
@@ -190,6 +193,16 @@ Contents
   # make install
 
   See './configure --help' for available build options if the above fails.
+  
+3.c Git build
+
+  Building from git requires a few extra steps to generate the configure scripts first:
+  
+  # aclocal
+  # autoconf
+  # automake -ac
+  
+  You should now have the configure script generated and can follow the steps above for building from source tarballs.
 
 4. Additional notes
 
