@@ -165,7 +165,12 @@ mi_info_hash(const char *p, uint8_t *hash)
 char *
 mi_name(const char *p)
 {
-    return benc_dget_str(benc_dget_dct(p, "info"), "name", NULL);
+    const char *info = benc_dget_dct(p, "info");
+    char *name = benc_dget_str(info, "name.utf-8", NULL);
+    if (name == NULL)
+        return benc_dget_str(info, "name", NULL);
+    else
+        return name;
 }
 
 size_t
