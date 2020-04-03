@@ -1,0 +1,43 @@
+#!/bin/sh
+
+evloop=POLL
+
+for arg in "$@"; do
+    case "$arg" in
+    --with-evloop-method=*)
+        evloop=`echo $arg | sed 's/--with-evloop-method=//'`
+        ;;
+
+    --help|-h|*)
+        echo 'usage: ./configure [options]'
+        echo 'options:'
+        echo '  --with-evloop-method=<option>: select evloop method (EPOLL,POLL,KQUEUE)'
+        echo '  --help: show this'
+        exit 0
+        ;;
+    esac
+done
+
+case "$evloop" in
+	POLL|EPOLL|KQUEUE)
+		sed -i "s/DEVLOOP_.*/DEVLOOP_$evloop/g" config.mk
+		case "$evloop" in
+			POLL)
+				sed -i "s|filter-out .*|filter-out evloop/epoll.c evloop/kqueue.c, \${EVLOOP_SRC}}|g" config.mk
+				;;
+
+			EPOLL)
+				sed -i "s|filter-out .*|filter-out evloop/poll.c evloop/kqueue.c, \${EVLOOP_SRC}}|g" config.mk
+				;;
+
+			KQUEUE)
+				sed -i "s|filter-out .*|filter-out evloop/poll.c evloop/epoll.c, \${EVLOOP_SRC}}|g" config.mk
+				;;
+		esac
+		;;
+
+	*)
+		sed -i "s/DEVLOOP_.*/DEVLOOP_NONE/g" config.mk
+		sed -i "s|filter-out .*|filter-out evloop/poll.c evloop/epoll.c evloop/kqueue.c, \${EVLOOP_SRC}}|g" config.mk
+		;;
+esac
