@@ -215,6 +215,8 @@ Make sure you have recent versions of the following software:
 
 You also need a c99 compiler. A non antique GCC should do.
 
+To be able to open the manual located in `doc` you need to have `man-pages` installed.
+
 ### Standard build
 
 ```
