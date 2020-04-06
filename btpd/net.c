@@ -3,6 +3,10 @@
 #include <sys/uio.h>
 #include <netdb.h>
 
+#ifndef IOV_MAX
+#define IOV_MAX 1024
+#endif
+
 static unsigned long m_bw_bytes_in;
 static unsigned long m_bw_bytes_out;
 
