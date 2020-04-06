@@ -14,7 +14,7 @@ INCS = -I${MISC} -I${EVLOOP}
 LIBS = -lcrypto -lm -lpthread
 
 # flags
-CPPFLAGS = ${INCS} -DHAVE_CLOCK_MONOTONIC=1 -DEVLOOP_POLL
+CPPFLAGS = ${INCS} -DHAVE_CLOCK_MONOTONIC=1 -DEVLOOP_NONE
 CFLAGS = -march=native -pipe -O3 -fno-math-errno
 LDFLAGS = ${LIBS}
 DEFS = -DPACKAGE_NAME=\"${NAME}\" -DPACKAGE_VERSION=\"${VERSION}\"
@@ -23,4 +23,4 @@ DEFS = -DPACKAGE_NAME=\"${NAME}\" -DPACKAGE_VERSION=\"${VERSION}\"
 CC = gcc
 
 # excluded
-EVLOOP_SRC := ${filter-out evloop/epoll.c evloop/kqueue.c, ${EVLOOP_SRC}}
+EVLOOP_SRC := ${filter-out evloop/poll.c evloop/epoll.c evloop/kqueue.c, ${EVLOOP_SRC}}
