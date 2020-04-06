@@ -23,7 +23,7 @@ EVLOOP_OBJ  = ${EVLOOP_SRC:.c=.o}
 
 include config.mk
 
-all: options btpd btinfo btcli
+all: options btpd/btpd info/btinfo cli/btcli
 
 options:
 	@echo btpd build options:
@@ -36,20 +36,20 @@ options:
 
 ${%_OBJ}: ${%_DEPS}
 
-libmisc.a: ${MISC_OBJ}
-	ar rcs misc/$@ ${MISC_OBJ}
+misc/libmisc.a: ${MISC_OBJ}
+	ar rcs $@ ${MISC_OBJ}
 
-libevloop.a: ${EVLOOP_OBJ}
-	ar rcs evloop/$@ ${EVLOOP_OBJ}
+evloop/libevloop.a: ${EVLOOP_OBJ}
+	ar rcs $@ ${EVLOOP_OBJ}
 
-btpd: ${BTPD_OBJ} libmisc.a libevloop.a
-	${CC} ${CFLAGS} -o btpd/$@ ${BTPD_OBJ}	 misc/libmisc.a evloop/libevloop.a ${LDFLAGS}
+btpd/btpd: ${BTPD_OBJ} misc/libmisc.a evloop/libevloop.a
+	${CC} ${CFLAGS} -o $@ ${BTPD_OBJ}	 misc/libmisc.a evloop/libevloop.a ${LDFLAGS}
 
-btinfo: ${BTINFO_OBJ} libmisc.a
-	${CC} ${CFLAGS} -o info/$@ ${BTINFO_OBJ} misc/libmisc.a ${LDFLAGS}
+info/btinfo: ${BTINFO_OBJ} misc/libmisc.a
+	${CC} ${CFLAGS} -o $@ ${BTINFO_OBJ} misc/libmisc.a ${LDFLAGS}
 
-btcli: ${BTCLI_OBJ} libmisc.a
-	${CC} ${CFLAGS} -o cli/$@  ${BTCLI_OBJ}  misc/libmisc.a ${LDFLAGS}
+cli/btcli: ${BTCLI_OBJ} misc/libmisc.a
+	${CC} ${CFLAGS} -o $@  ${BTCLI_OBJ}  misc/libmisc.a ${LDFLAGS}
 
 clean:
 	rm -f btpd/btpd cli/btcli info/btinfo\
