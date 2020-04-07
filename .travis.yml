@@ -1,0 +1,13 @@
+language: c
+os:
+    - linux
+compiler:
+    - gcc
+env:
+    - METHOD=POLL
+    - METHOD=EPOLL
+before_install:
+    - sudo apt update
+    - sudo apt -y install openssl
+script:
+    ./configure --with-evloop-method=${METHOD} && make
