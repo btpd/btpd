@@ -6,7 +6,7 @@ usage_add(void)
     printf(
         "Add torrents to btpd.\n"
         "\n"
-        "Usage: add [-n name] [-T] [-N] -d dir file(s)\n"
+        "Usage: add [-n name] [-T] [-N] [-d dir] file(s)\n"
         "\n"
         "Arguments:\n"
         "file\n"
@@ -74,7 +74,7 @@ cmd_add(int argc, char **argv)
     argc -= optind;
     argv += optind;
 
-    if (argc < 1 || dir == NULL)
+    if (argc < 1)
         usage_add();
 
     btpd_connect();
@@ -88,6 +88,13 @@ cmd_add(int argc, char **argv)
        if ((mi = mi_load(argv[nfile], &mi_size)) == NULL) {
            fprintf(stderr, "error loading '%s' (%s).\n", argv[nfile], strerror(errno));
            continue;
+       }
+       if (dir == NULL) {
+           dir = dirname(argv[nfile]);
+           if ((dirlen = strlen(dir)) == 0) {
+                fprintf(stderr, "error obtaining dirname for '%s'.\n", argv[nfile]);
+                continue;
+           }
        }
        iob = iobuf_init(PATH_MAX);
        iobuf_write(&iob, dir, dirlen);

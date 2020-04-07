@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
+#include <libgen.h>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
