@@ -165,7 +165,12 @@ mi_info_hash(const char *p, uint8_t *hash)
 char *
 mi_name(const char *p)
 {
-    return benc_dget_str(benc_dget_dct(p, "info"), "name", NULL);
+    const char *info = benc_dget_dct(p, "info");
+    char *name = benc_dget_str(info, "name.utf-8", NULL);
+    if (name == NULL)
+        return benc_dget_str(info, "name", NULL);
+    else
+        return name;
 }
 
 size_t
@@ -235,7 +240,10 @@ mi_files(const char *p)
             return NULL;
         for (fdct = benc_first(files); fdct != NULL; fdct = benc_next(fdct)) {
             fi[i].length = benc_dget_int(fdct, "length");
-            fi[i].path = mi_filepath(benc_dget_lst(fdct, "path"));
+            if (benc_dget_lst(fdct, "path.utf-8") != NULL)
+                fi[i].path = mi_filepath(benc_dget_lst(fdct, "path.utf-8"));
+            else
+                fi[i].path = mi_filepath(benc_dget_lst(fdct, "path"));
             if (fi[i].path == NULL) {
                 mi_free_files(nfiles, fi);
                 return NULL;
@@ -246,7 +254,9 @@ mi_files(const char *p)
         if ((fi = calloc(1, sizeof(*fi))) == NULL)
             return NULL;
         fi[0].length = benc_dget_int(info, "length");
-        fi[0].path = benc_dget_str(info, "name", NULL);
+        fi[0].path = benc_dget_str(info, "name.utf-8", NULL);
+        if (fi[0].path == NULL)
+            fi[0].path = benc_dget_str(info, "name", NULL);
         if (fi[0].path == NULL) {
             free(fi);
             return NULL;
