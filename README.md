@@ -69,14 +69,12 @@ don't have to keep the torrent file once you've added it.
 The up- and download progress can be followed by using the `btcli stat`
 command. Both the list and stat commands use the following indicators to
 display the state of a torrent:
-```
-+     the torrent is starting. This may take time if btpd needs to test
-      the content of this torrent or one started before it.
--     the torrent is being stopped.
-I     the torrent is inactive.
-S     btpd is seeding the torrent.
-L     btpd is leeching the torrent.
-```
+
+* `+`     - the torrent is starting. This may take time if btpd needs to test the content of this torrent or one started before it.
+* `-`     - the torrent is being stopped.
+* `I`     - the torrent is inactive.
+* `S`     - btpd is seeding the torrent.
+* `L`     - btpd is leeching the torrent.
 
 You can stop an active torrent with `btcli stop` and, of course,
 start an inactive torrent by using `btcli start`.
