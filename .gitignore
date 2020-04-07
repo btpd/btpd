@@ -4,3 +4,9 @@
 # Object files and libraries
 *.o
 *.a
+
+# Target binaries
+btpd/btpd
+cli/btcli
+info/btinfo
+
