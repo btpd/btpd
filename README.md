@@ -20,6 +20,7 @@ BitTorrent Protocol Daemon
 	* [Upgrade from old versions](#upgrade-from-old-versions)
 	* [Pre exit mode](#pre-exit-mode)
 	* [Using both IPv6 and IPv4](#using-both-ipv6-and-ipv4)
+5. [Contact](#contact)
 
 ## Introduction
 
@@ -206,7 +207,7 @@ possible clues.
 
 ### Requirements
 
-You should have a *BSD, Linux or sufficiently similar system.
+You should have a BSD, Linux or sufficiently similar system.
 
 Make sure you have recent versions of the following software:
 * OpenSSL   - Get at http://www.openssl.org/
@@ -249,3 +250,8 @@ used in favour of the IPv4 one.
 
 In order to fix this problem, the IP version options should be changed to
 be per torrent, in some future version of btpd.
+
+## Contact
+
+If you wish to get in touch to get help, contribute or just say hi, don't
+hesitate to come to our IRC channel [#btpd on freenode](irc://chat.freenode.net/%23btpd).
