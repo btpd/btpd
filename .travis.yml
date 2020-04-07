@@ -1,0 +1,10 @@
+language: c
+os:
+    - linux
+compiler:
+    - gcc
+before_install:
+    - sudo apt update
+    - sudo apt -y install openssl
+script:
+    ./configure && make
