@@ -6,11 +6,10 @@
 #include <string.h>
 #include <strings.h>
 
-#include <openssl/sha.h>
-
 #include "benc.h"
 #include "metainfo.h"
 #include "subr.h"
+#include "sha1.h"
 
 /*
  * d
@@ -159,7 +158,7 @@ mi_info_hash(const char *p, uint8_t *hash)
     if (hash == NULL)
         if ((hash = malloc(20)) == NULL)
             return NULL;
-    return SHA1(info, benc_length(info), hash);
+    return quicksha1(info, benc_length(info), hash);
 }
 
 char *

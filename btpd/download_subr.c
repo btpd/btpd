@@ -21,7 +21,6 @@
 
 #include "btpd.h"
 
-#include <openssl/sha.h>
 #include <stream.h>
 
 static void
@@ -42,7 +41,7 @@ piece_log_hashes(struct piece *pc)
     for (unsigned i = 0; i < pc->nblocks; i++) {
         uint32_t bsize = torrent_block_size(tp, pc->index, pc->nblocks, i);
         cm_get_bytes(tp, pc->index, i * PIECE_BLOCKLEN, bsize, &buf);
-        SHA1(buf, bsize, &log->hashes[i * 20]);
+        quicksha1(buf, bsize, &log->hashes[i * 20]);
         free(buf);
     }
 }

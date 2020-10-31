@@ -5,8 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <openssl/sha.h>
-
+#include "sha1.h"
 #include "metainfo.h"
 #include "subr.h"
 #include "stream.h"
@@ -161,21 +160,21 @@ bts_put(struct bt_stream *bts, off_t off, const uint8_t *buf, size_t len)
 int
 bts_sha(struct bt_stream *bts, off_t start, off_t length, uint8_t *hash)
 {
-    SHA_CTX ctx;
+    struct sha1 ctx;
     char buf[SHAFILEBUF];
     size_t wantread;
     int err = 0;
 
-    SHA1_Init(&ctx);
+    sha1_init(&ctx);
     while (length > 0) {
         wantread = min(length, SHAFILEBUF);
         if ((err = bts_get(bts, start, buf, wantread)) != 0)
             break;
         length -= wantread;
         start += wantread;
-        SHA1_Update(&ctx, buf, wantread);
+        sha1_update(&ctx, buf, wantread);
     }
-    SHA1_Final(hash, &ctx);
+    sha1_sum(&ctx, hash);
     return err;
 }
 

@@ -1,7 +1,5 @@
 #include "btpd.h"
 
-#include <openssl/sha.h>
-
 #define SAVE_INTERVAL 300
 
 static unsigned m_nghosts;
