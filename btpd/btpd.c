@@ -1,6 +1,5 @@
 #include "btpd.h"
 
-#include <openssl/sha.h>
 #include <signal.h>
 
 static uint8_t m_peer_id[20];
@@ -114,7 +113,7 @@ btpd_init(void)
     idcon[sizeof(idcon) - 1] = '\0';
     n = strlen(idcon);
 
-    SHA1(idcon, n, m_peer_id);
+    quicksha1(idcon, n, m_peer_id);
     bcopy(m_peer_id, &seed, sizeof(seed));
     bcopy(BTPD_VERSION, m_peer_id, sizeof(BTPD_VERSION) - 1);
     m_peer_id[sizeof(BTPD_VERSION) - 1] = '|';

@@ -11,7 +11,7 @@ EVLOOP = ./evloop
 
 # includes and libs
 INCS = -I${MISC} -I${EVLOOP}
-LIBS = -lcrypto -lm -lpthread
+LIBS = -lm -lpthread
 
 # flags
 CPPFLAGS = ${INCS} -DHAVE_CLOCK_MONOTONIC=1 -DEVLOOP_NONE
