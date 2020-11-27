@@ -156,7 +156,7 @@ benc_next(const char *p)
 }
 
 const char *
-benc_mem(const char *p, size_t *len, const char**next)
+benc_mem(const char *p, size_t *len, const char **next)
 {
     if (!benc_isstr(p))
         return NULL;
