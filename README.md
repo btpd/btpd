@@ -84,7 +84,7 @@ start an inactive torrent by using `btcli start`.
 
 The `btcli del` command should only be used when you're totally finished
 with sharing a torrent. The command will remove the torrent and its
-associated data from btpd. It's an escpecially bad idea to remove a not
+associated data from btpd. It's an especially bad idea to remove a not
 fully downloaded torrent and then adding it again, since btpd has lost
 information on the not fully downloaded pieces and will need to download
 the data again.
