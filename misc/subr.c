@@ -327,6 +327,12 @@ error:
 char *
 find_btpd_dir(void)
 {
+    char *xdg = getenv("XDG_DATA_HOME");
+    if (xdg != NULL) {
+        char *res;
+        asprintf(&res, "%s/btpd", xdg);
+        return res;
+    }
     char *res = getenv("BTPD_HOME");
     if (res != NULL)
         return strdup(res);
